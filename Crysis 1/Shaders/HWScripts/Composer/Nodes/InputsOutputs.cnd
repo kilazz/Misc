@@ -1,0 +1,253 @@
+//==============================================================================
+// Vertex inputs
+//==============================================================================
+Block 'VertexInput'
+{
+  Type = VertexInput
+
+  Node 'Position'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexPosition
+  }
+  Node 'Color'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = Color0
+  }
+  Node 'Normal'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexNormal
+  }
+  Node 'TexCoord0'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord0
+  }
+  Node 'TexCoord1'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord1
+  }
+}
+
+//==============================================================================
+// Vertex outputs
+//==============================================================================
+Block 'VertexOutput'
+{
+  Type = VertexOutput
+
+  Node 'Position'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexPosition
+  }
+  Node 'Color0'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = Color0
+  }
+  Node 'Color1'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = Color1
+  }
+  Node 'Normal'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexNormal
+  }
+  Node 'TexCoord0'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord0
+  }
+  Node 'TexCoord1'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord1
+  }
+  Node 'TexCoord2'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord2
+  }
+  Node 'TexCoord3'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord3
+  }
+  Node 'TexCoord4'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord4
+  }
+  Node 'TexCoord5'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord5
+  }
+  Node 'TexCoord6'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord6
+  }
+  Node 'TexCoord7'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord7
+  }
+}
+
+//============================================================================
+
+//==============================================================================
+// Vertex outputs
+//==============================================================================
+Block 'PixelInput'
+{
+  Type = PixelInput
+  Node 'Color0'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = Color0
+  }
+  Node 'Color1'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = Color1
+  }
+  Node 'TexCoord0'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord0
+  }
+  Node 'TexCoord1'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord1
+  }
+  Node 'TexCoord2'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord2
+  }
+  Node 'TexCoord3'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord3
+  }
+  Node 'TexCoord4'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord4
+  }
+  Node 'TexCoord5'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord5
+  }
+  Node 'TexCoord6'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord6
+  }
+  Node 'TexCoord7'
+  {
+    Type       = Out
+    Format     = Vector
+    Editable   = false
+    IOSemantic = VertexTexCoord7
+  }
+}
+
+//==============================================================================
+// Pixel outputs
+//==============================================================================
+Block 'PixelOutput'
+{
+  Type = PixelOutput
+
+  Node 'Color0'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = Color0
+  }
+  Node 'Color1'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = Color1
+  }
+  Node 'Color2'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = Color2
+  }
+  Node 'Color3'
+  {
+    Type       = In
+    Format     = Vector
+    Editable   = false
+    IOSemantic = Color3
+  }
+}

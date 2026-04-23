@@ -1,0 +1,385 @@
+#include "Common.cfi"
+#include "ModificatorVT.cfi"
+#include "ModificatorTC.cfi"
+#include "ShadeLib.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "ForceDrawAfterWater;"
+           "Refractive;"
+           "NoPreview;"
+           "ShaderDrawType = General;"
+           "ShaderType = FX;"
+>;
+
+/// Un-Tweakables //////////////////////
+float4x4 vpMatrixComp  : PI_Composite; // View*Projection
+float4x4 vpMatrixI : PB_UnProjMatrix; // invert( View * projection )
+
+float4x4 mWorldT : PI_TransObjMatrix;
+
+float4x4 TexProjMatrix : PI_TexMatrix
+<
+  string Sampler = envMapSamplerRefl;
+>;
+
+float4 _CameraRightVector : PB_CameraRight;
+float4x4 mCamera      : PB_CameraMatrix;
+
+// water waves parameters
+//float4 OceanParams0 = { PI_FromObject[0], PI_FromObject[1], PI_FromObject[2], PI_FromObject[3] };
+//float4 OceanParams1 = { PI_FromObject[4], PI_FromObject[5], PI_FromObject[6], PI_FromObject[7] };
+
+float4 TerrainLMParams : PB_TerrainLMParams;
+
+// Tweakables /////////////////
+
+float BigWavesScale
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Scales big waves bump map";
+  string UIName   = "Big waves scale";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 4.0;
+  float UIStep    = 0.005;
+> = 2.0;
+
+float SmallWavesScale
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Scales small waves bump map";
+  string UIName   = "Small waves scale";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 4.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float FresnelBias
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIHelp   = "Make specular and reflection more visible";
+  string UIName   = "Fresnel bias";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.05;
+> = 0.0;
+
+float SunShinePow
+<
+  psregister      = PS_REG_PM_3.w;
+  string UIHelp   = "Changes sun shine strenght/sharpness";
+  string UIName   = "Sun glossiness";
+  string UIWidget = "slider";
+  float UIMin     = 1.0;
+  float UIMax     = 256.0;
+  float UIStep    = 0.05;
+> = 128.0;
+
+float SoftIntersectionFactor
+<
+  psregister      = PS_REG_PM_4.x;
+  string UIHelp   = "Controls softness of water surface intersection with other opaque scene geometry";
+  string UIName   = "Soft intersection factor";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.1;
+> = 1.0;
+
+// General procedural wind support
+
+float ReflectionAmount
+<
+  psregister      = PS_REG_PM_4.z;
+  string UIHelp   = "Set reflection scale";
+  string UIName   = "Reflection Amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.001;
+> = 0.5;
+
+float WhiteCapsAmount
+<
+  psregister      = PS_REG_PM_4.w;
+  string UIHelp   = "Set white caps";
+  string UIName   = "WhiteCaps Amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.001;
+> = 0.75;
+
+float SunMultiplier
+<
+  psregister      = PS_REG_PM_5.x;
+  string UIName   = "Sun multiplier";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 1.5;
+
+float FresnelScale
+<
+  psregister      = PS_REG_PM_5.y;
+  string UIName   = "Fresnel scale";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 32.0;
+  float UIStep    = 0.05;
+> = 1.0;
+
+////////////////////////////////////////////////////////////////
+
+sampler2D waveSampler = sampler_state
+{
+  Texture = textures/defaults/water_wave.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Clamp;
+};
+
+sampler2D waveBumpSampler = sampler_state
+{
+  Texture = textures/defaults/water_wave_ddn.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Clamp;
+};
+
+sampler2D glossMapSamplerCustom
+{
+  Texture = Textures/defaults/water_gloss.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D foamSampler = sampler_state
+{
+  Texture = textures/defaults/water_foam.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D sunSampler = sampler_state
+{
+  Texture = textures/defaults/water_sun_spec.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D envMapSamplerRefl
+<
+  string Script = 
+      "RenderOrder=PreProcess;"
+      "ProcessOrder=WaterReflection;"
+      "RenderCamera=WaterPlaneReflected;"
+      "RenderTarget_IDPool = _RT2D_WATER_ID;"
+      "RenderTarget_Width=512;"
+      "RenderTarget_Height=512;"
+      "RenderTarget_UpdateType=WaterReflect;"
+      "RenderDepthStencilTarget=DepthBuffer;"
+      "ClearSetColor=FogColor;"
+      "ClearSetDepth=1;"
+      "ClearTarget=Color;"
+      "ClearTarget=Depth;";
+>
+{
+  Texture = $RT_2D;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler2D envMapSamplerRefr
+{
+  Texture = $SceneTarget;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler2D sceneDepthSampler = sampler_state
+{
+  Texture = $ZTarget;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+/////////////////////////////
+
+struct v2fWater
+{
+  float4 HPosition  : POSITION;
+  float4 baseTC0    : TEXCOORDN;
+  float4 baseTC    : TEXCOORDN;
+  float4 baseTC1   : TEXCOORDN;
+
+  float4 vTangent : TEXCOORDN;
+  float4 vBinormal : TEXCOORDN;
+  float4 vNormal : TEXCOORDN;
+  float4 vView   : TEXCOORDN;
+  float4 screenProj : TEXCOORDN;
+
+};
+
+///////////////// vertex shader //////////////////
+v2fWater WaterVS(app2vertGeneral IN)
+{
+
+  v2fWater OUT;
+#ifndef OPENGL
+  OUT = (v2fWater)1;
+#endif
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  OUT.baseTC0 = IN.baseTC;
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);  // Pos_VS_General(vPos, vNorm, g_VS_ViewProjZeroMatr, InstMatrix, vertPassPos, objToTangentSpace);
+
+  float3 worldTangentS = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]) );
+  float3 worldTangentT = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]) );
+  float3 worldTangentN = normalize(cross(worldTangentS, worldTangentT)) * IN.Tangent.w;
+
+  OUT.vTangent = float4(worldTangentS, IN.Tangent.w);
+  OUT.vBinormal.xyz = worldTangentT;
+  OUT.vNormal.xyz = worldTangentN;
+
+  float3 vWorldPos = mul(vertPassPos.InstMatrix, vertPassPos.Position).xyz;
+  OUT.vView.xyz = vWorldPos;
+
+  // Output projected refraction texture coordinates
+  OUT.screenProj = HPosToScreenTC( OUT.HPosition );                                                  // 2 alu
+
+  // Pass fog color
+
+  // Output bump layers texture coordinates
+  //float2 vTranslation= ( g_VS_AnimGenParams.z * OceanParams0.y  *  0.0025)* FlowDir;
+  float2 vTranslation= ( g_VS_AnimGenParams.z * 1  *  0.04);//* FlowDir;
+
+  OUT.baseTC.xy = IN.baseTC.xy*2 + vTranslation*4; //yx * FlowTilling;
+  OUT.baseTC.wz = IN.baseTC.xy*2 + vTranslation* 2; //yx * FlowTilling;
+
+  OUT.baseTC1.xy = IN.baseTC.xy*4+vTranslation*2; //yx * FlowTilling;
+  OUT.baseTC1.wz = IN.baseTC.xy*4 + vTranslation*3; //yx * FlowTilling;
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout WaterPS(v2fWater IN)
+{
+  pixout OUT = (pixout) 0;
+
+  int nQuality = GetShaderQuality();                                                                // shader quality level
+
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, IN.baseTC);
+   return OUT;
+ #endif
+
+   half3 eyeVec = normalize(-IN.vView.xyz);
+
+  //get shadow from sun
+  half fShadowOccl = 1.0f - tex2Dproj(shadowOccludeMapSampler, IN.screenProj.xyzw).x;
+
+  float3x3 mTangentToWS = float3x3(IN.vTangent.xyz, IN.vBinormal.xyz, IN.vNormal.xyz);
+
+  // Make procedural bump
+  half2 bump01 = tex2D(bumpMapSampler, IN.baseTC.xy).xy;
+  half2 bump02 = tex2D(bumpMapSampler, IN.baseTC.wz).xy;
+  half2 bump03 = tex2D(bumpMapSampler, IN.baseTC1.xy).xy;
+  half2 bump04 = tex2D(bumpMapSampler, IN.baseTC1.wz).xy;
+  half3 vMergedBump = float3(0,0,1);
+  vMergedBump.xy = bump01.xy + bump02.xy + bump03.xy + bump04.xy;                           // 3 alu
+  vMergedBump.xy = vMergedBump * 2.0 - 4.0;                                                            // 1 alu
+  //vMergedBump.z = 1;
+
+  half4 cDifmap = tex2D(diffuseMapSampler, IN.baseTC0.xy + vMergedBump.xy*0.005);
+  half4 cSpecmap = tex2D(glossMapSampler, IN.baseTC0.xy+ vMergedBump.xy*0.005);
+
+  vMergedBump.xyz = normalize( mul( vMergedBump.xyz, mTangentToWS) );
+
+  // Store some constant coeficients
+  half fNdotE = ( dot(eyeVec.xyz, vMergedBump.xyz));                                        // 1 alu
+  half3 vReflVec = (2.0 * fNdotE* vMergedBump.xyz) - eyeVec.xyz;                      // 2 alu
+
+  half fFoam = 4 *saturate(vMergedBump.z*0.5+0.5);
+  //fFoam = 1- fFoam;
+
+  half fDiffuse = saturate( dot(vMergedBump.xyz, g_PS_SunLightDir) );
+  half fSpecular = pow( saturate(dot( vReflVec, g_PS_SunLightDir)), 16);
+
+  // Use refraction vector as texture lookup
+  float sceneDepth = tex2D( sceneDepthSampler, (IN.screenProj.xy/IN.screenProj.w)  + vMergedBump.xy*0.025 ).x * PS_NearFarClipDist.y;
+  float fRefractionMask =  IN.screenProj.w < sceneDepth;
+
+  half4 refrColor = tex2D(envMapSamplerRefr, (IN.screenProj.xy/IN.screenProj.w)+fRefractionMask * vMergedBump.xy*0.07 );
+
+  half fFresnel = GetFresnelTex(fNdotE, 0.2).w; // 1 alu
+  //fFoam +  fFresnel;//
+  //
+  OUT.Color.xyz = refrColor + 0.5 * saturate((1-IN.baseTC0.x)*10) * cDifmap * g_PS_SunColor.xyz *(  0.25*fDiffuse + fSpecular );// * saturate(cDifmap.w*10);
+  OUT.Color.w = 1;
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script = 
+  "TechniqueZ=ZPass;"
+>
+{
+  pass p0
+  {
+
+    ZEnable = true;
+    ZFunc = LEqual;
+    ZWriteEnable = true;
+    CullMode = None;
+
+    SrcBlend = ONE;
+    DestBlend = ONE;
+//    AlphaBlendEnable = true;
+    //IgnoreMaterialState = true;
+
+    VertexShader = compile vs_Auto WaterVS();
+    PixelShader = compile ps_Auto WaterPS();
+  }
+}
+
+#include "CommonZPass.cfi"
+
+/////////////////////// eof ///

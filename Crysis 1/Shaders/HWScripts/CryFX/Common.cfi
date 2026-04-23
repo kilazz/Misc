@@ -1,0 +1,582 @@
+//=== FX config =================================================================
+#include "FXSetupEnvVars.cfi"
+
+#define INST_STREAM_CUSTOM   \
+
+//=== Render targets custom ID's ================================================
+
+#define _RT2D_WATER_ID 0
+#define _RT2D_DEPTH_ID 1
+#define _RT2D_SCREEN_ID 2
+#define _RT2D_REFRACT_ID 3
+#define _RT2D_TRANSLUCENCE_ID 4
+#define _RT2D_SILHOUETTE_ID 5
+
+// === HDR fake definitions =====================================================
+
+#define HDR_OVERBRIGHT 8
+#define HDR_FAKE_MAXOVERBRIGHT 16
+#define HDR_EXP_OFFSET 128
+#define HDR_EXP_BASE   1.06
+
+// === Lights definitions ========================================================
+
+#define LT_DIRECTIONAL 0
+#define LT_OMNI        1
+#define LT_PROJECTED   2
+
+//=== Common definitions =========================================================
+
+#include "FXStreamDefs.cfi"
+#include "FXConstantDefs.cfi"
+#include "FXSamplerDefs.cfi"
+
+//=== Common functions ===========================================================
+
+void ComputeGlobalFogPS(inout float3 cOut, float fDist)
+{
+#if %_RT_FOG
+  cOut.xyz = lerp(g_PS_FogColor.xyz, cOut.xyz, fDist);
+#endif
+}
+
+// Common functions
+half4 EXPAND( half4 a )
+{
+  return a * 2 - 1;
+}
+half3 EXPAND( half3 a )
+{
+  return a * 2 - 1;
+}
+half EXPAND( half a )
+{
+  return a * 2 - 1;
+}
+half2 EXPAND( half2 a )
+{
+  return a * 2 - 1;
+}
+
+float3 TangNormal(float4 Tangent, float4 Binormal)
+{
+  return normalize(cross(Tangent.xyz, Binormal.xyz)) * Tangent.w;
+}
+
+half Luminance(half3 color)
+{
+  return dot(color, half3(0.30f, 0.59f, 0.11f));
+}
+
+//========================================================
+
+half4 EncodeHDR_RGB_RGBE8(in float3 rgb)
+{
+  // Compute a common exponent
+  half fLen = dot(rgb.rgb, 1.0);
+  half fExp = LOG(HDR_EXP_BASE, fLen);
+
+  half4 ret;
+  ret.a = (fExp + HDR_EXP_OFFSET) / 256;
+  ret.rgb = rgb / fLen;
+
+  return ret;
+}
+
+half3 DecodeHDR_RGBE8_RGB(in float4 rgbe)
+{
+  half fExp = rgbe.a * 256 - HDR_EXP_OFFSET;
+  half fScale = pow(HDR_EXP_BASE, fExp);
+
+  return rgbe.rgb * fScale);
+}
+
+void HDREncode(inout float4 Color, out float4 Color1)
+{
+  half4 origColor = Color;
+
+  Color.xyz /= HDR_FAKE_MAXOVERBRIGHT;
+  Color.xyz = floor(Color.xyz * 255) / 255;
+  Color1.xyz = origColor.xyz - Color.xyz*HDR_FAKE_MAXOVERBRIGHT;
+  Color1.a = Color.a;
+}
+
+float4 HDREncode_ToLDR_RGBK(float4 Color)
+{
+  Color.rgb = min(Color.rgb, HDR_FAKE_MAXOVERBRIGHT);
+  half fMax = max(Color.r, max(Color.g, Color.b));
+  Color.xyz /= fMax;
+  Color.a = fMax / HDR_FAKE_MAXOVERBRIGHT;
+
+  return Color;
+}
+
+float4 HDRDecode_FromLDR_RGBK(float4 Color)
+{
+  Color.rgb *= Color.a * HDR_FAKE_MAXOVERBRIGHT;
+
+  return Color;
+}
+
+void HDRFogOutput( out pixout OUT, half4 Color, half fDepth, half3 FogColor, half fFogFactor )
+{
+  Color.xyz = lerp(FogColor.xyz, Color.xyz, fFogFactor);
+  OUT.Color = Color;
+
+#if %_RT_HDR_ENCODE
+  OUT.Color = HDREncode_ToLDR_RGBK(OUT.Color);
+#endif
+}
+
+void HDROutput( out pixout OUT, half4 Color, half fDepth)
+{
+  OUT.Color = Color;
+
+#if %_RT_HDR_ENCODE
+  OUT.Color = HDREncode_ToLDR_RGBK(OUT.Color);
+#endif
+}
+
+half3 GetNormalDiffuseWorldSpaceMap(sampler2D bumpMap, float2 bumpTC, half3x3 mMatrix)
+{
+  // unoccluded area direction - not normalized
+  half3 vNormalTS = EXPAND(tex2D(bumpMap, bumpTC).xyz);
+
+  return mul(vNormalTS, mMatrix);
+}
+
+half3 GetNormalMap(sampler2D bumpMap, float2 bumpTC)
+{
+  half3 bumpNormal;
+  bumpNormal.xy = EXPAND(tex2D(bumpMap, bumpTC.xy).xy);
+
+#if %_RT_NORMAL_DXT5
+  bumpNormal.xy = EXPAND(tex2D(bumpMap, bumpTC.xy).ga);
+#else
+ #if D3D10
+  bumpNormal.xy = bumpNormal.yx;
+ #endif
+#endif
+
+  bumpNormal.z = sqrt(saturate(1 - dot(bumpNormal.xy, bumpNormal.xy)));
+
+  return bumpNormal;
+}
+
+half3 GetNormalMapLod(sampler2D bumpMap, float4 bumpTC)
+{
+  half3 bumpNormal;
+  bumpNormal.xy = EXPAND(tex2Dlod(bumpMap, bumpTC).xy);
+
+#if %_RT_NORMAL_DXT5
+  bumpNormal.xy = EXPAND(tex2Dlod(bumpMap, bumpTC).ga);
+#else
+ #if D3D10
+  bumpNormal.xy = bumpNormal.yx;
+ #endif
+#endif
+
+  bumpNormal.z = sqrt(saturate(1 - dot(bumpNormal.xy, bumpNormal.xy)));
+
+  return bumpNormal;
+}
+
+half3 GetNormalMapGrad(sampler2D bumpMap, float2 bumpTC, float4 ddx_bumpTC, float4 ddy_bumpTC)
+{
+  half3 bumpNormal;
+  bumpNormal.xy = EXPAND(tex2Dgrad(bumpMap, bumpTC, ddx_bumpTC, ddy_bumpTC).xy);
+
+#if %_RT_NORMAL_DXT5
+  bumpNormal.xy = EXPAND(tex2Dgrad(bumpMap, bumpTC, ddx_bumpTC, ddy_bumpTC).ga);
+#else
+ #if D3D10
+  bumpNormal.xy = bumpNormal.yx;
+ #endif
+#endif
+
+  bumpNormal.z = sqrt(saturate(1 - dot(bumpNormal.xy, bumpNormal.xy)));
+
+  return bumpNormal;
+}
+
+half2 FetchNormalMap(sampler2D bumpMap, float2 bumpTC)
+{
+  half2 bumpNormal;
+
+  bumpNormal.xy = tex2D(bumpMap, bumpTC.xy).xy;
+
+#if %_RT_NORMAL_DXT5
+  bumpNormal.xy = tex2D(bumpMap, bumpTC.xy).yw;
+#else
+ #if D3D10
+  bumpNormal.xy = bumpNormal.yx;
+ #endif
+#endif
+
+  return bumpNormal;
+}
+
+half4 GetEnvironmentCMap(samplerCUBE envMap, float3 envTC)
+{
+
+  half4 envColor = texCUBE(envMap, envTC.xyz);
+
+/* - feature cutted
+if %_RT_REALTIMECM
+
+  envColor = HDRDecode_FromLDR_RGBK(envColor);
+  if !%_RT_HDR_MODE
+    envColor = 1 - exp(-0.5*envColor);
+  endif
+
+endif
+*/
+
+  return envColor;
+}
+
+half4 GetEnvironment2DMap(sampler2D envMap, float2 envTC)
+{
+  half4 envColor = tex2D(envMap, envTC.xy);
+
+/* - feature cutted
+if %_RT_REALTIMECM
+
+  envColor = HDRDecode_FromLDR_RGBK(envColor);
+  if !%_RT_HDR_MODE
+    envColor = 1 - exp(-0.5*envColor);
+  endif
+
+endif
+*/
+  return envColor;
+}
+
+half DepthBias(half fHeight, half3 vNormal, half3 vView, half2 vZW)
+{
+  half3 vN = vNormal * fHeight;
+  half fOffs = dot(vView, vN) * 0.02;
+  half fOrigZ = vZW.x;
+  return (fOrigZ - fOffs) / vZW.y;
+}
+
+half4 GetTexture2D(sampler2D MapSampler, float2 texTC)
+{
+  half4 texColor = tex2D(MapSampler, texTC.xy);
+
+  return texColor;
+}
+
+#include "VolumetricFog.cfi"
+
+// NOTE: float[X] was used in favor of half[X] as precision is curcial and half's is not sufficient!
+half4 EncodeSceneDepth( float depth )
+{
+  return half4(depth,depth,depth,depth);
+}
+
+// This function encodes a depth value so it can be stored in an ARGB8 rendertarget and sets a specific alpha value
+float4 EncodeSceneDepthWithAlpha( float depth, float alpha, float alphaTestRef, float3 WorldPos)
+{
+  float4 ret = EncodeSceneDepth( depth );
+  clip(alpha - alphaTestRef); //need to perform texkill in case of r16g16
+#if %_RT_FSAA
+  ret.a = sqrt(alpha) * 1.1;
+#endif
+
+  FogFSAA(ret, WorldPos);
+
+  return ret;
+}
+
+// This function encodes a depth value so it can be stored in an ARGB8 rendertarget and sets a specific alpha value
+float4 EncodeSceneDepthNoAlpha( float depth, float value, float3 WorldPos)
+{
+  float4 ret = EncodeSceneDepth( depth );
+  //ret.g = value;
+
+  FogFSAA(ret, WorldPos);
+
+  return ret;
+}
+
+// This function decodes a depth value coming from an ARGB8 rendertarget/texture
+// NOTE: 1) float[X] was used in favor of half[X] as precision is curcial and half's is not sufficient!
+//       2) smpDepth should be set up as follows...
+//
+float DecodeSceneDepth( sampler2D smpDepth, float4 homogeneousPositionTexProj )
+{
+   float depthNormalized = tex2Dproj( smpDepth, homogeneousPositionTexProj ).r;
+
+  // scale back to full range
+  return depthNormalized * PS_NearFarClipDist.y;
+}
+
+float4 HPosToScreenTC(float4 HPos)
+{
+  float4 ScrTC = HPos;
+  ScrTC.xy = (HPos.xy * float2(1,-1) + HPos.ww  ) * 0.5;
+
+  // No offsets required in d3d10
+#if !D3D10
+  ScrTC.xy += g_VS_ScreenSize.zw*HPos.w;
+#endif
+
+  return ScrTC;
+}
+
+//==========================================================================
+
+float  NumInstructions    : PI_NumInstructions;
+
+sampler2D DebugMipColorsDiffuseSampler = sampler_state
+{
+ Texture = $MipColors_Diffuse;
+};
+sampler2D DebugMipColorsBumpSampler = sampler_state
+{
+ Texture = $MipColors_Bump;
+};
+
+float4 DVColor(float2 d)
+{
+  float Reso = 512;
+  float TargetDeriv = 1.0f/Reso;
+  float HalfTD = (TargetDeriv*0.5);
+  float TwoTD = (TargetDeriv*2.0);
+
+  float4 dd = float4(0,0,0,1);
+  if (d.x > TwoTD) { dd.x = 1.0;}
+  if (d.y > TwoTD) { dd.y = 1.0;}
+  if (d.x < HalfTD) { dd.z = 1.0;}
+  return(dd);
+}
+
+void DebugOutput(out half4 Color, in float4 baseTC)
+{
+  Color = 0;
+ #if %_RT_DEBUG0 && !%_RT_DEBUG1 && !%_RT_DEBUG2 && !%_RT_DEBUG3
+  float2 dd = 64.0 * (abs(ddx(baseTC.xy)) + abs(ddy(baseTC.xy)));
+  Color = float4(dd, 0, 1);
+ #elif !%_RT_DEBUG0 && %_RT_DEBUG1 && !%_RT_DEBUG2 && !%_RT_DEBUG3
+  float2 dd = baseTC.xy;
+  Color = float4(dd, 0, 1);
+ #elif %_RT_DEBUG0 && %_RT_DEBUG1 && !%_RT_DEBUG2 && !%_RT_DEBUG3
+  Color = DVColor(abs(ddx(baseTC.xy)));
+ #elif !%_RT_DEBUG0 && !%_RT_DEBUG1 && %_RT_DEBUG2 && !%_RT_DEBUG3
+  Color = DVColor(abs(ddy(baseTC.xy)));
+ #elif %_RT_DEBUG0 && !%_RT_DEBUG1 && %_RT_DEBUG2 && %_RT_DEBUG3
+  Color = DVColor(abs(ddy(baseTC.xy)));
+ #elif !%_RT_DEBUG0 && %_RT_DEBUG1 && %_RT_DEBUG2 && !%_RT_DEBUG3
+  float Reso = 512;
+  float TargetDeriv = 1.0/Reso;
+  float Diagonal = sqrt(2.0*TargetDeriv*TargetDeriv);
+  float HalfDiag = (Diagonal*0.5);
+  float TwoDiag = (Diagonal*2.0);
+  float2 dx = ddx(baseTC.xy);
+  float2 dy = ddy(baseTC.xy);
+  float d = sqrt(dot(dx,dx) + dot(dy,dy));
+  float4 dd = float4(0,0,0,1);
+  if (d > TwoDiag) { dd.x = 1.0;}
+  if (d > TwoDiag) { dd.y = 1.0;}
+  if (d < HalfDiag) { dd.z = 1.0;}
+  Color = dd;
+ #elif %_RT_DEBUG0 && %_RT_DEBUG1 && %_RT_DEBUG2 && !%_RT_DEBUG3
+  float4 mipColor = tex2D(DebugMipColorsDiffuseSampler, baseTC.xy);
+  Color = mipColor;
+ #elif !%_RT_DEBUG0 && !%_RT_DEBUG1 && !%_RT_DEBUG2 && %_RT_DEBUG3
+  float4 mipColor = tex2D(DebugMipColorsBumpSampler, baseTC.xy);
+  Color = mipColor;
+ #elif %_RT_DEBUG0 && %_RT_DEBUG1 && %_RT_DEBUG2 && %_RT_DEBUG3
+  Color.xyz = NumInstructions;  // Measure overdraw
+ #endif
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Ambient occlusion research
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+half4 tex2DTerrain(sampler2D s, float2 terrainTC)
+{
+  half4 terrainColor = tex2D(s, terrainTC);
+
+  // blue stores brightness
+//  float fScale=terrainColor.b;
+//  terrainColor.b = (dot(terrainColor.rgb,float3(-1,-1,0))+62.0f/63.0f)*0.997f;
+//  terrainColor.rgb*=3.0f*63.0f/62.0f*fScale;
+
+  // improved color reproduction (prefect grey from a 565 DXT color)
+
+  float fScale=terrainColor.b;
+  // test grey
+//    terrainColor.r = 10.0f/31.0f;    // 1/3 = 10/30      Red range     0..30, 31 unused
+//    terrainColor.g = 21.0f/63.0f;    // 1/3 = 21/63      Green range   0..63
+  terrainColor.r += 0.001012;    // minor improvement in color reproduction
+  terrainColor.r *= 31.0f/30.0f;    //
+  terrainColor.g *= 63.0f/63.0f;    //
+  terrainColor.b = 1.0f-terrainColor.r-terrainColor.g;
+  terrainColor.rgb *= 3.0f*fScale;
+
+  return saturate(terrainColor);
+}
+
+sampler2D sRotSamplerCMTerrain = sampler_state
+{
+  Texture = Textures/Defaults/rotrandomCM.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D sceneDepthSamplerAO_ = sampler_state
+{
+  Texture = $ZTarget;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+float3 GetSkyAmount(sampler2D s0, sampler2D s1, float2 texCoords,
+                   float fSkyBr, float3 vNormal, float fPixelZ, float fPixelZRange, float fTexCoordsScale,
+                   float4 screenTexCoords)
+{
+  texCoords += 1.0f/256.f;
+
+  half4 terrainInfo = tex2DTerrain(s0, texCoords);
+
+  float fGroundAOLerped = lerp(terrainInfo.a,1.f,fSkyBr);
+
+#if %TEMP_TERRAIN
+  return fGroundAOLerped;
+#elif %GRASS
+  return fGroundAOLerped;
+#else
+
+//  float4 mapParams = float4(256.f, 256.f, 1.f/256.f, 1.f/256.f);
+
+//  float4 dataS1 = tex2D(s1, texCoords.xy);
+//  float fTerrainZ = dataS1.a*fPixelZRange + dataS1.g/256.f*fPixelZRange;
+
+  float4 dataS1 = tex2D( s1, texCoords.xy );
+  float fTerrainZ = dataS1.a*fPixelZRange;
+
+//  return saturate((fPixelZ>fTerrainZ+1));
+
+  float fGroundIsFar = sqrt(saturate(fPixelZ*0.5f-fTerrainZ*0.5f));
+
+#if !%DECAL
+  float fOffset = 1.f; // bigger number looks bad on faces
+  //texCoords += vNormal.yx*fTexCoordsScale*fOffset;
+  #if !%LEAVES
+//    fPixelZ += vNormal.z*fOffset; // island_v
+  #endif
+#endif
+
+  // get terrain and ao volume elevations
+//  dataS1 = tex2D(s1, texCoords.xy);
+//  dataS1 = tex2DBilinearElevations( s1, texCoords.xy, mapParams ).g;
+//  dataS1.a = dataS1.g;
+//  dataS1.g = dataS1.r;
+
+//  fTerrainZ = dataS1.a*fPixelZRange;
+  float fSolidZMax = fTerrainZ + dataS1.g*32.f;
+
+  // fade sky slowly depending on how depth pixel is in the AO volume
+  float fSkyAmount = lerp(saturate(1.f-0.125f*(fSolidZMax-fPixelZ)),1.f,fSkyBr);
+
+  // get lerp factor between sky and ground
+  float fNDotSky = saturate(vNormal.z*0.5f+0.5f);
+
+  // get color of the ground
+//  terrainInfo = tex2DTerrain(s0, texCoords);
+//  fGroundAOLerped = lerp(terrainInfo.a,1.f,fSkyBr);
+  terrainInfo.xyz = terrainInfo.xyz * fGroundAOLerped;
+
+  float3 col = lerp(terrainInfo.xyz*0.66f+fGroundAOLerped*0.33f, 1.f, fNDotSky*fSkyAmount);
+
+#if %TEMP_VEGETATION
+  // modulate by terrain color near the ground
+  col = lerp(col, terrainInfo.xyz, (1.f-fGroundIsFar)*(1.f-fSkyBr));
+#endif
+
+  // use only fGroundAOLerped on roads like objects
+  col = lerp(fGroundAOLerped, col, saturate(saturate(fPixelZ-fTerrainZ-0.25f) + saturate(1-vNormal.z)));
+
+//  return saturate((fPixelZ-fTerrainZ)/(fSolidZMax-fTerrainZ));
+
+  // screen space AO
+//  col *= lerp(GetSSAO(sceneDepthSamplerAO_, screenTexCoords),1.f,fSkyBr);
+
+  return col;
+
+#endif
+}
+
+float4 GetInputColor(in float4 Color)
+{
+ #if COLOR_SWAP
+  return Color.zyxw;
+ #else
+  return Color;
+ #endif
+}
+
+#define QUALITY_LOW      0
+#define QUALITY_MEDIUM   1
+#define QUALITY_HIGH      2
+#define QUALITY_VERYHIGH 3
+
+int GetShaderQuality()
+{
+  int nQuality;
+#if !%_RT_QUALITY && !%_RT_QUALITY1
+   nQuality = QUALITY_LOW;
+#elif %_RT_QUALITY && !%_RT_QUALITY1
+   nQuality = QUALITY_MEDIUM;
+#elif !%_RT_QUALITY && %_RT_QUALITY1
+   nQuality = QUALITY_HIGH;
+#else
+   // #warning Unknown shader quality mode
+   nQuality = QUALITY_HIGH;
+#endif
+  return nQuality;
+}
+
+float ComputeTextureLOD(in float2 uv, in float2 texDim)
+{
+  uv *= texDim;
+
+  float2 ddx_ = ddx(uv);
+  float2 ddy_ = ddy(uv);
+  //float2 mag = ddx_ * ddx_ + ddy_ * ddy_;
+  float2 mag = abs(ddx_) + abs(ddy_);
+
+  //float lod = max(0.5 * log2(max(mag.x, mag.y)), 0);
+  float lod = log2(max(mag.x, mag.y));
+  return lod;
+}
+
+float ComputeTextureLOD(in float2 uv, in float2 texDim, out float2 ddx_uv, out float2 ddy_uv)
+{
+  //float2 uvScaled = uv * texDim;
+  //float2 ddx_, ddy_;
+
+  //float4(ddx_, ddx_uv) = ddx(float4(uvScaled, uv));
+  //float4(ddy_, ddy_uv) = ddy(float4(uvScaled, uv));
+
+  ////float2 mag = ddx_ * ddx_ + ddy_ * ddy_;
+  //float2 mag = abs(ddx_uv) + abs(ddy_uv);
+
+  ddx_uv = ddx(uv);
+  ddy_uv = ddy(uv);
+  //float2 mag = (ddx_uv * ddx_uv + ddy_uv * ddy_uv) * texDim * texDim;
+  float2 mag = (abs(ddx_uv) + abs(ddy_uv)) * texDim;
+
+  //float lod = max(0.5 * log2(max(mag.x, mag.y)), 0);
+  float lod = log2(max(mag.x, mag.y));
+  return lod;
+}

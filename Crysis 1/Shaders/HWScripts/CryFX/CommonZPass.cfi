@@ -1,0 +1,197 @@
+////////////////////////////////////////////////////////////////////////////
+//
+//  Crytek Engine Source File.
+//  Shader extension
+//  Copyright (C), Crytek Studios, 2001-2004.
+// -------------------------------------------------------------------------
+//  File name:   CommonZPass.cfi
+//  Version:     v1.00
+//  Created:     23/11/2004 by Tiago Sousa
+//  Compilers:
+//  Description: Common/Shared passes bettwen shaders. Should be included after
+//    main shader technique
+//
+//  NOTE: ALWAYS MAKE SURE VERTEX INPUTS MATCH CORRECTLY BEFORE INCLUDING THIS!
+//  TODO: Add support for texture modifiers, since Illum and others require it
+//  "Common_" name convention - for shader sharing in cache files
+//
+//
+// -------------------------------------------------------------------------
+////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////
+//                Z PASS
+////////////////////////////////////////////////////////
+
+sampler2D noiseSampler = sampler_state
+{
+  Texture = textures/defaults/noise.dds;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+///////////////// vertex input/output //////////////////
+struct vert2fragZ
+{
+  float4 HPosition : POSITION;
+#if !%PARALLAX_OCCLUSION_MAPPING && !%_RT_FSAA
+  float  ZInfo     : TEXCOORD0_centroid;
+#else
+  float4 ZInfo     : TEXCOORD0_centroid;
+#endif
+#if (%_RT_ALPHATEST || %_RT_DISSOLVE || %PARALLAX_OCCLUSION_MAPPING) && !%TEMP_TERRAIN
+  float4 baseTC     : TEXCOORD1;
+#endif
+
+#if %PARALLAX_OCCLUSION_MAPPING
+  float3 viewTS   : TEXCOORD2;
+#endif
+
+// NORMAL_INTO_DEPTH_TARGET  float4 vScrTexCoord : TEXCOORD3;
+};
+
+///////////////// vertex shaders //////////////////
+vert2fragZ Common_ZPassVS(app2vertZGeneral IN)
+{
+  vert2fragZ OUT;
+#ifndef OPENGL
+  OUT = (vert2fragZ)0;
+#endif
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromZ(IN, vertPassPos);
+
+#if %TEMP_TERRAIN
+  OUT.HPosition = Pos_VS_Terrain(0.001f, g_VS_ViewProjZeroMatr, vertPassPos);
+#else
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+#endif
+
+#if %_RT_FSAA || %PARALLAX_OCCLUSION_MAPPING
+  OUT.ZInfo.yzw = mul(vertPassPos.InstMatrix, vertPassPos.Position).xyz;
+ #if !%_RT_OBJ_IDENTITY
+  OUT.ZInfo.yzw += g_VS_WorldViewPos.xyz;
+ #endif
+#endif
+
+#if %PARALLAX_OCCLUSION_MAPPING && !%TEMP_TERRAIN
+  float3 worldTangentS = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]);
+  float3 worldTangentT = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]);
+  float3 worldTangentN = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[2]);
+
+  OUT.viewTS = mul(float3x3(worldTangentS, worldTangentT, worldTangentN), OUT.ZInfo.yzw - g_VS_WorldViewPos.xyz);
+#endif
+
+#if (%_RT_ALPHATEST || %_RT_DISSOLVE || %PARALLAX_OCCLUSION_MAPPING) && !%TEMP_TERRAIN
+  float4 baseTC = IN.baseTC;
+
+ #if !%PARALLAX_OCCLUSION_MAPPING
+  _TCModify(baseTC, OUT.baseTC, vertPassPos.Position, vertPassPos.ObjToTangentSpace[2], TS_DIFFUSE);
+ #else
+  _TCModify(baseTC, OUT.baseTC, vertPassPos.Position, vertPassPos.ObjToTangentSpace[2], TS_BUMP);
+ #endif
+
+ #if %_RT_INSTANCING_ATTR && (%_RT_ALPHATEST || %_RT_DISSOLVE)
+  AlphaTest = IN.InstAlphaTest;
+ #endif
+  OUT.baseTC.w = AlphaTest.w;
+#endif
+
+  OUT.ZInfo.x = OUT.HPosition.w * g_VS_NearFarClipDist.w;
+
+#if %_RT_NEAREST
+  OUT.ZInfo.x *= g_VS_NearFarClipDist.z;
+#endif
+
+// NORMAL_INTO_DEPTH_TARGET  OUT.vScrTexCoord = HPosToScreenTC(OUT.HPosition);
+
+  return OUT;
+}
+
+///////////////// pixel shaders //////////////////
+pixout Common_ZPassPS(vert2fragZ IN)
+{
+  pixout OUT = (pixout)0;
+
+  float fZ = IN.ZInfo.x;
+
+#if %TEMP_TERRAIN
+  #if !%PARALLAX_OCCLUSION_MAPPING && !%_RT_FSAA
+    OUT.Color = EncodeSceneDepthNoAlpha(fZ, 0, half3(0,0,0));
+  #else
+    OUT.Color = EncodeSceneDepthNoAlpha(fZ, 0, IN.ZInfo.yzw);
+  #endif
+#else
+    #if !%TEMP_VEGETATION && %PARALLAX_OCCLUSION_MAPPING
+      float lod = ComputeTextureLOD(IN.baseTC.xy, ResInfoBump.xy);
+      //float2 ddx_baseTC, ddy_baseTC;
+      //float lod = ComputeTextureLOD(IN.baseTC.xy, ResInfoBump.xy, ddx_baseTC, ddy_baseTC);
+
+      float2 offsetBest = ParallaxOcclusionMap(IN.baseTC.xy, lod, normalize(IN.viewTS), 15, PomDisplacement);
+      fZ += 4 * saturate(length(offsetBest - IN.baseTC.xy)) * PS_NearFarClipDist.w;
+
+      // TODO: this is just some dummy code to make TCModify(TS_BUMP) work in the vertex shader
+      fZ += tex2D(bumpMapSampler, IN.baseTC.xy).w * 1e-10;
+    #endif
+
+    #if %_RT_ALPHATEST
+      float baseColor = tex2D(diffuseMapSampler, IN.baseTC.xy).w;
+#if !%_RT_FSAA
+      OUT.Color = EncodeSceneDepthWithAlpha(fZ, baseColor, IN.baseTC.w, half3(0,0,0));
+#else
+      OUT.Color = EncodeSceneDepthWithAlpha(fZ, baseColor, IN.baseTC.w, IN.ZInfo.yzw);
+#endif
+    #else
+
+#if !%_RT_FSAA
+      OUT.Color = EncodeSceneDepthNoAlpha(fZ, 1, half3(0,0,0));
+#else
+      OUT.Color = EncodeSceneDepthNoAlpha(fZ, 1, IN.ZInfo.yzw);
+#endif
+
+#if %_RT_DISSOLVE
+      float3 vNoise = tex2D(noiseSampler, IN.baseTC.xy*2.f) - 0.5f;
+      float fNoise = (vNoise.x + vNoise.y*2.f + vNoise.z*4.f)*0.25f;
+      clip(fNoise - IN.baseTC.w*1.78f + 0.9f);
+#endif
+
+    #endif
+
+  #endif
+
+/* NORMAL_INTO_DEPTH_TARGET
+  float fNormScale = 256.f;
+  float2 vTexCoord = float2( IN.vScrTexCoord.x / IN.vScrTexCoord.w / 2 + 0.5, (- IN.vScrTexCoord.y) / IN.vScrTexCoord.w / 2 + 0.5 );
+  half3 WSPos = float3(-vTexCoord, fZ*fNormScale);
+  float3 vNorm = -normalize(cross(ddx(WSPos),ddy(WSPos)));
+  OUT.Color.gba = vNorm;*/
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique ZPass
+{
+  pass p0
+  {
+#if %PARALLAX_OCCLUSION_MAPPING
+    VertexShader = compile vs_3_0 Common_ZPassVS() ZVS;
+    PixelShader = compile ps_3_0 Common_ZPassPS() ZPS;
+#else
+    VertexShader = compile vs_Auto Common_ZPassVS() ZVS;
+    PixelShader = compile ps_Auto Common_ZPassPS() ZPS;
+#endif
+    ZEnable = true;
+    ZWriteEnable = true;
+    CullMode = Back;
+
+#if %GRASS || %LEAVES || %HAIR_PASS
+    CullMode = None;
+#endif
+
+  }
+}

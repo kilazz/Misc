@@ -1,0 +1,249 @@
+#include "Common.cfi"
+#include "ModificatorVT.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "LocalConstants;"
+           "ShaderDrawType = Sky;"
+           "ShaderType = Sky;"
+>;
+
+/// Un-Tweakables //////////////////////
+float4 TFactor     : PB_TFactor;
+
+sampler2D skyDomeSamplerMie : register(s0);
+sampler2D skyDomeSamplerRayleigh : register(s1);
+sampler2D moonSampler : register(s2);
+
+/////////////////////////////
+
+struct a2v
+{
+  float4 Position : POSITION; //in object space
+  float2 baseTC    : TEXCOORD0;
+};
+
+struct v2f
+{
+  float4 Position  : POSITION;  //in projection space
+  float2 baseTC     : TEXCOORD0;
+  float3 viewDir   : TEXCOORD1;
+};
+
+struct v2f_hdr
+{
+  float4 Position   : POSITION;  //in projection space
+  float2 baseTC      : TEXCOORD0;
+  float3 skyDir      : TEXCOORD1;
+  float2 moonTC     : TEXCOORD2;
+};
+
+struct v2fZ
+{
+  float4 Position  : POSITION;  //in projection space
+  float4 ZInfo     : TEXCOORD0;
+};
+
+///////////////// shader constants //////////////////
+
+float2 SkyDome_TextureSize;
+float2 SkyDome_TexelSize;
+
+float3 SkyDome_PartialMieInScatteringConst;
+float3 SkyDome_PartialRayleighInScatteringConst;
+float3 SkyDome_SunDirection;
+float3 SkyDome_PhaseFunctionConstants;
+
+float3 SkyDome_NightSkyColBase;
+float3 SkyDome_NightSkyColDelta;
+float2 SkyDome_NightSkyZenithColShift;
+
+float4 SkyDome_NightMoonDirSize;
+float3 SkyDome_NightMoonColor;
+float4 SkyDome_NightMoonInnerCoronaColorScale;
+float4 SkyDome_NightMoonOuterCoronaColorScale;
+
+///////////////// vertex shader //////////////////
+
+v2f_hdr SkyHDRVS(a2v IN)
+{
+  v2f_hdr OUT = (v2f_hdr)0;
+
+  // Position in screen space.
+  float4 vPos = IN.Position;
+  OUT.Position = _pos_Common(vPos);
+  OUT.Position.z = OUT.Position.w;
+
+  OUT.baseTC.xy = IN.baseTC.xy;
+  OUT.skyDir = vPos;
+
+  float3 right = cross( SkyDome_NightMoonDirSize.xyz, float3( 0, 0, 1 ) );
+  float3 up = cross( SkyDome_NightMoonDirSize.xyz, right );
+  OUT.moonTC = float2( dot( right, vPos ), dot( up, vPos ) ) * SkyDome_NightMoonDirSize.w + 0.5;
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout SkyHDRPS(v2f_hdr IN)
+{
+  pixout OUT;
+
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, float4(IN.baseTC, 0, 1));
+   return OUT;
+ #endif
+
+#ifdef %BILINEAR_FP16
+  half4 ColorMie = tex2D( skyDomeSamplerMie, IN.baseTC.xy );
+  half4 ColorRayleigh = tex2D( skyDomeSamplerRayleigh, IN.baseTC.xy );
+#else
+  half2 f = frac( IN.baseTC.xy * SkyDome_TextureSize );
+
+  half2 tx00 = IN.baseTC.xy;
+  half2 tx10 = IN.baseTC.xy + half2( SkyDome_TexelSize.x, 0 );
+  half2 tx01 = IN.baseTC.xy + half2( 0, SkyDome_TexelSize.y );
+  half2 tx11 = IN.baseTC.xy + half2( SkyDome_TexelSize.x, SkyDome_TexelSize.y );
+
+  half4 ColorMie;
+  {
+    half4 t00 = tex2D( skyDomeSamplerMie, tx00 );
+    half4 t10 = tex2D( skyDomeSamplerMie, tx10 );
+    half4 tA = lerp( t00, t10, f.x );
+
+    half4 t01 = tex2D( skyDomeSamplerMie, tx01 );
+    half4 t11 = tex2D( skyDomeSamplerMie, tx11 );
+    half4 tB = lerp( t01, t11, f.x );
+
+    ColorMie = lerp( tA, tB, f.y );
+  }
+
+  half4 ColorRayleigh;
+  {
+    half4 t00 = tex2D( skyDomeSamplerRayleigh, tx00 );
+    half4 t10 = tex2D( skyDomeSamplerRayleigh, tx10 );
+    half4 tA = lerp( t00, t10, f.x );
+
+    half4 t01 = tex2D( skyDomeSamplerRayleigh, tx01 );
+    half4 t11 = tex2D( skyDomeSamplerRayleigh, tx11 );
+    half4 tB = lerp( t01, t11, f.x );
+
+    ColorRayleigh = lerp( tA, tB, f.y );
+  }
+#endif
+
+  float3 skyDir = normalize( IN.skyDir );
+
+  //float g = SkyDome_PhaseFunctionConstants.x;
+  //float g2 = SkyDome_PhaseFunctionConstants.y;
+  //float miePart = SkyDome_PhaseFunctionConstants.z;
+  float miePart_g_2 = SkyDome_PhaseFunctionConstants.x;  // = pow(miePart, -2/3) * ( -2*g )
+  float miePart_g2_1 = SkyDome_PhaseFunctionConstants.y; // = pow(miePart, -2/3) * ( 1 + g*g )
+
+  float cosine = -dot( SkyDome_SunDirection, skyDir );
+  float cosine2 = cosine * cosine;
+
+  //float miePhase = miePart * ( 1.0 + cosine2 ) / pow( 1.0 + g2 - 2.0 * g * cosine, 1.5 );
+  float miePhase = ( 1.0 + cosine2 ) * pow( miePart_g2_1 + miePart_g_2 * cosine, -1.5 );
+  float rayleighPhase = 0.75 * ( 1.0 + cosine2 );
+
+  float4 Color;
+  Color.xyz = ColorMie * SkyDome_PartialMieInScatteringConst * miePhase + ColorRayleigh * SkyDome_PartialRayleighInScatteringConst * rayleighPhase;
+  //Color.xyz = ( ColorRayleigh + ColorMie ) * ( SkyDome_PartialMieInScatteringConst * miePhase +  SkyDome_PartialRayleighInScatteringConst * rayleighPhase );
+
+  // add horizontal night sky gradient
+  float gr = saturate( skyDir.z * SkyDome_NightSkyZenithColShift.x + SkyDome_NightSkyZenithColShift.y );
+  gr *= 2 - gr;
+  Color.xyz += SkyDome_NightSkyColBase + SkyDome_NightSkyColDelta * gr;
+
+  // add moon
+  float4 moonAlbedo = tex2D( moonSampler, IN.moonTC.xy );
+  Color.xyz += SkyDome_NightMoonColor.xyz * moonAlbedo.xyz * moonAlbedo.a;
+
+  // add inner and outer moon corona
+  float m = 1 - dot( skyDir, SkyDome_NightMoonDirSize.xyz );
+  Color.xyz += SkyDome_NightMoonInnerCoronaColorScale.xyz * (1.0 / ( 1.05 + m * SkyDome_NightMoonInnerCoronaColorScale.w ));
+  Color.xyz += SkyDome_NightMoonOuterCoronaColorScale.xyz * (1.0 / ( 1.05 + m * SkyDome_NightMoonOuterCoronaColorScale.w ));
+
+#ifndef %_RT_HDR_MODE
+  Color.xyz = 1 - exp( -1 * Color.xyz );
+#else
+  Color.xyz = min(Color.xyz, (float3) 16384.0);
+#endif
+
+  Color.a = 128 / 255.0;  // set GBuffer default value
+
+  HDROutput( OUT, Color, 1 );
+  return OUT;
+}
+
+//=============================================================================
+
+v2fZ SkyZVS(a2v IN)
+{
+  v2fZ OUT = (v2fZ)0;
+
+  // Position in screen space.
+  float4 vPos = IN.Position;
+  OUT.Position = mul(vpMatrix, vPos);
+  OUT.Position.z = OUT.Position.w;
+
+  float3 viewDirNorm = IN.Position.xyz; // normalize(IN.Position.xyz);
+  float viewDirCorrection = 1.0 / dot(viewDirNorm, -miscCamFront.xyz);
+
+  OUT.ZInfo.xyz = vfViewPos.xyz + 2 * g_VS_NearFarClipDist.y * viewDirNorm * viewDirCorrection;
+  OUT.ZInfo.w = OUT.Position.w;
+
+  return OUT;
+}
+
+pixout SkyZPS(v2fZ IN)
+{
+  pixout OUT;
+
+  OUT.Color = float4( 2, 2, 2, 2 );
+
+  FogFSAA(OUT.Color, IN.ZInfo.xyz);
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script = 
+         "TechniqueZ=ZPass;"
+>
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto SkyHDRVS();
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = None;
+
+    PixelShader = compile ps_Auto SkyHDRPS();
+  }
+}
+
+technique ZPass
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto SkyZVS();
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = None;
+
+    PixelShader = compile ps_Auto SkyZPS();
+  }
+}
+
+/////////////////////// eof ///

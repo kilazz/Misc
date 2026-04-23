@@ -1,0 +1,56 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: Eye.ext
+// Created: 06/09/2005 by Tiago Sousa
+
+Version (1.00)
+
+Property
+{
+  Name        = %IRIS
+  Mask        = 0x1
+  Property    (Iris)
+  Description (Use for iris rendering)
+}
+
+Property
+{
+  Name            = %ENVIRONMENT_MAP
+  Mask            = 0x2
+  Property        (Environment map)
+  Description     (Use environment map as separate texture)
+  DependencyReset = $TEX_EnvCM
+}
+
+Property
+{
+  Name        = %EYE_OVERLAY
+  Mask        = 0x4
+  Property    (Eye overlay)
+  Description (Use for eye overlay rendering)
+}
+
+Property
+{
+  Name        = %DISABLE_RAIN_PASS
+  Mask        = 0x8
+  Property    (Disable rain layer)
+  Description (Disables rain layer)
+}
+
+Property
+{
+  Name            = %STAT_BRANCHING
+  Mask            = 0x10000000
+  DependencySet   = $HW_StaticBranching
+  DependencyReset = $HW_StaticBranching
+  Hidden
+}
+
+Property
+{
+  Name            = %DYN_BRANCHING
+  Mask            = 0x20000000
+  DependencySet   = $HW_DynamicBranching
+  DependencyReset = $HW_DynamicBranching
+  Hidden
+}

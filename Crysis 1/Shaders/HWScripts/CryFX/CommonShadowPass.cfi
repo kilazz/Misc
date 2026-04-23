@@ -1,0 +1,210 @@
+//===========================================================================
+// Basic shadow maps support
+
+float4 m_OcclusionChannelMask[4] : PB_OcclusionMasks;
+float4 m_vShadowOutputMask : PB_ShadowOutputChannelMask;
+float4 m_vOcclusionOutputChannelMask[4] : PB_OcclusionOutputChannelMask;
+
+float4 ShadowAmbient  : PI_AmbientOpacity;
+
+// Tweakables /////////////////
+
+///////////////////////////////
+// Samplers
+
+sampler2D ShadowDiffuseMapSampler { Texture = $Diffuse; };
+
+sampler2D occlusionMap = sampler_state
+{
+ Texture = $Occlusion;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D noiseMapSampler = sampler_state
+{
+  // must be 4x4, see _RT_SHADOW_JITTERING
+  Texture = Textures/defaults/dither_2.dds;
+
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+/*
+sampler2D bluredMapSampler0 = sampler_state
+{
+ Texture = $ShadowID1;
+ MinFilter = LINEAR;
+ MagFilter = LINEAR;
+ MipFilter = NONE;
+ AddressU = Clamp;
+ AddressV = Clamp;
+};
+
+sampler2D bluredMapSampler1 = sampler_state
+{
+ Texture = $ShadowID3;
+ MinFilter = LINEAR;
+ MagFilter = LINEAR;
+ MipFilter = NONE;
+ AddressU = Clamp;
+ AddressV = Clamp;
+};
+
+sampler2D bluredMapSampler2 = sampler_state
+{
+ Texture = $ShadowID5;
+ MinFilter = LINEAR;
+ MagFilter = LINEAR;
+ MipFilter = NONE;
+ AddressU = Clamp;
+ AddressV = Clamp;
+};
+
+sampler2D bluredMapSampler3 = sampler_state
+{
+ Texture = $ShadowID7;
+ MinFilter = LINEAR;
+ MagFilter = LINEAR;
+ MipFilter = NONE;
+ AddressU = Clamp;
+ AddressV = Clamp;
+};
+*/
+
+//=======================================================================
+//  Shadows
+//=======================================================================
+
+struct pixout_cl
+{
+  float4 Color  : COLOR0;
+};
+
+/////////////////////////////
+// structs
+struct vert2fragShadow
+{
+  float4 HPosition  : POSITION;
+
+  vert2fragShadowCommon shadowTC;
+
+#if %_RT_SHADOW_JITTERING
+#endif
+  float3 RandDirTC    : TEXCOORDN; //z for fading
+
+#ifdef %_RT_ALPHABLEND
+  float2 baseTC   : TEXCOORDN;
+#endif
+
+};
+
+///////////////// current vertex shader //////////////////
+vert2fragShadow Common_ShadowVS(app2vertZGeneral IN)
+{
+  vert2fragShadow OUT = (vert2fragShadow)0;
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromZ(IN, vertPassPos);
+
+#if %TEMP_TERRAIN
+  OUT.HPosition = Pos_VS_Terrain(0.001f, g_VS_ViewProjZeroMatr, vertPassPos);
+#else
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+#endif
+
+#ifdef %_RT_ALPHABLEND
+  OUT.baseTC.xy = IN.baseTC.xy;
+#endif
+
+//#if %_RT_SAMPLE0 && %_RT_SHADOW_JITTERING
+//#endif
+  float4x4 InstMatrixOrg = vertPassPos.InstMatrix;
+  InstMatrixOrg[0].w += g_VS_WorldViewPos.x;
+  InstMatrixOrg[1].w += g_VS_WorldViewPos.y;
+  InstMatrixOrg[2].w += g_VS_WorldViewPos.z;
+  float4x4 shadowM = mul(TexGen0, InstMatrixOrg);
+  OUT.RandDirTC.xy = mul((float3x3) shadowM, vertPassPos.Position.xyz).xy / 800;
+
+#ifndef %_RT_CUBEMAP0
+  //calculation gsm fading fistance
+  float3 viewVec = vertPassPos.WorldPos.xyz;
+  float fDist = length(viewVec);
+  //TOFIX: set fShadowFadingDist.x properly
+  fDist = pow(min(fDist/max(0.001, 256.0f/*fShadowFadingDist.x*/), 1), 4);
+  OUT.RandDirTC.z = /*fWeight * */(1-fDist);
+#endif
+
+  //  compute shadow tex coords and depth
+  GenShadowTC(vertPassPos.Position, InstMatrixOrg, OUT.shadowTC);
+
+  return OUT;
+}
+
+//------------------------------------------------------------------------------
+//  Pixel shader
+//------------------------------------------------------------------------------
+pixout_cl Common_ShadowPS(vert2fragShadow IN)
+{
+  pixout_cl OUT;
+
+  float4 vCompare = (float4)0;
+
+  half baseAlpha = 1;
+#if %_RT_ALPHABLEND
+  baseAlpha = tex2D(ShadowDiffuseMapSampler, IN.baseTC.xy).w;
+  baseAlpha *= ShadowAmbient.a;
+#endif
+
+#ifndef %_RT_GSM_COMBINED
+//non-combined GSM
+
+  vCompare = ShadowDepthTest(IN.shadowTC, IN.RandDirTC.xy);
+
+#else
+//GSM ATLAS
+
+  vCompare = ShadowDepthTestAtlas(IN.shadowTC, IN.RandDirTC.xy);
+
+//GSM ATLAS
+#endif
+
+#ifndef %_RT_CUBEMAP0
+  //shadow fading
+  vCompare *= IN.RandDirTC.z;
+#endif
+
+  OUT.Color = 1 - vCompare;
+#if %_RT_ALPHABLEND
+  OUT.Color.a = baseAlpha;
+#endif
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique ShadowPass
+<
+  string Script = 
+        "NoLights;"
+>
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto Common_ShadowVS() ShadowVS;
+    PixelShader = compile ps_Auto Common_ShadowPS() ShadowPS;
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    CullMode = Back;
+  }
+}

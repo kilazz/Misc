@@ -1,0 +1,157 @@
+//===========================================================================
+// Texture modificators general support (used in SandBox editor)
+// Handle texture coordinates generating/modification
+
+float4x4 _ModelView      : PB_View;
+float4x4 _ModelView_IT   : PB_View_IT;
+
+// Texture slots
+#define TS_DIFFUSE  0
+#define TS_BUMP     1
+#define TS_GLOSS    2
+#define TS_ENV      3
+
+// Texture gen types
+#define TCG_OBJECT  1
+#define TCG_REFLECT 2
+#define TCG_NORMAL  3
+#define TCG_SPHERE  4
+
+// Texture modificators/generators matrices
+float4x4 _TCMMatrixDif   : PI_TCMMatrix[0];
+float4x4 _TCMMatrixBump  : PI_TCMMatrix[1];
+float4x4 _TCMMatrixGloss : PI_TCMMatrix[2];
+float4x4 _TCMMatrixEnv   : PI_TCMMatrix[3];
+float4x4 _TCMMatrixDecal : PI_TCMMatrix[9];
+
+float4x4 _TCGMatrixDif   : PI_TCGMatrix[0];
+float4x4 _TCGMatrixBump  : PI_TCGMatrix[1];
+float4x4 _TCGMatrixGloss : PI_TCGMatrix[2];
+float4x4 _TCGMatrixEnv   : PI_TCGMatrix[3];
+
+float4 _TCModify(float4 vTC, float4 vPos, float3 vNorm, float4x4 TCMMatrix, float4x4 TCGMatrix, bool bTCM, bool bCM, int nTCGType)
+{
+#if %_TT0_TCM || %_TT1_TCM || %_TT2_TCM || %_TT3_TCM || %_TT0_TCG_TYPE || %_TT1_TCG_TYPE || %_TT2_TCG_TYPE || %_TT3_TCG_TYPE
+  if (nTCGType == TCG_OBJECT)
+    vTC = mul(TCGMatrix, vPos);
+  else
+  if (nTCGType == TCG_REFLECT)
+  {
+    float4 tcEPos = mul(_ModelView, vPos);
+    float3 tcCamVec = normalize(tcEPos.xyz);
+    float3 tcNormal = normalize(mul((float3x3)_ModelView_IT, vNorm.xyz));
+    float3 tcRef = reflect(tcCamVec, tcNormal.xyz);
+    vTC.xyzw = tcRef.xyzz;
+  }
+  else
+  if (nTCGType == TCG_NORMAL)
+  {
+    float3 tcNormal = normalize(mul((float3x3)_ModelView_IT, vNorm.xyz));
+    vTC.xyzw = tcNormal.xyzz;
+  }
+  else
+  if (nTCGType == TCG_SPHERE)
+  {
+    float4 tcEPos = mul(_ModelView, vPos);
+    float3 tcCamVec = normalize(tcEPos.xyz);
+    float3 tcNormal = normalize(mul((float3x3)_ModelView_IT, vNorm.xyz));
+    float3 tcRef = reflect(tcCamVec, tcNormal.xyz);
+
+    float3 tcEm = tcRef + float3(0,0,1);
+    tcEm.x = 2 * sqrt(dot(tcEm, tcEm));
+    vTC.xyz = tcRef.xyz/tcEm.x + 0.5;
+    vTC.w = vTC.z;
+  }
+  if (bTCM)
+    vTC.xyzw = mul(vTC, TCMMatrix);
+
+#endif
+
+  return vTC;
+}
+
+float4 _TCModify(float4 inTC, out float4 outTC, float4 vPos, float3 vNorm, int nTSlot)
+{
+  bool bTCM = false;
+  bool bCM = false;
+  bool bProj = false;
+  int nTCGType = 0;
+
+#if %_TT0_TCM || %_TT1_TCM || %_TT2_TCM || %_TT3_TCM || %_TT0_TCG_TYPE || %_TT1_TCG_TYPE || %_TT2_TCG_TYPE || %_TT3_TCG_TYPE
+  if (nTSlot == TS_DIFFUSE)
+  {
+#if %_TT0_TCM
+    bTCM = true;
+#endif
+#if %_TT0_TCUBE
+    bCM = true;
+#endif
+#if %_TT0_TCPROJ
+    bProj = true;
+#endif
+#ifdef %_TT0_TCG_TYPE
+    nTCGType = %_TT0_TCG_TYPE;
+#endif
+    inTC = _TCModify(inTC, vPos, vNorm, _TCMMatrixDif, _TCGMatrixDif, bTCM, bCM, nTCGType);
+
+  }
+
+  if (nTSlot == TS_BUMP)
+  {
+#if %_TT1_TCM
+    bTCM = true;
+#endif
+#if %_TT1_TCUBE
+    bCM = true;
+#endif
+#if %_TT1_TCPROJ
+    bProj = true;
+#endif
+#ifdef %_TT1_TCG_TYPE
+    nTCGType = %_TT1_TCG_TYPE;
+#endif
+    inTC = _TCModify(inTC, vPos, vNorm, _TCMMatrixBump, _TCGMatrixBump, bTCM, bCM, nTCGType);
+  }
+
+  if (nTSlot == TS_GLOSS)
+  {
+#if %_TT2_TCM
+    bTCM = true;
+#endif
+#if %_TT2_TCUBE
+    bCM = true;
+#endif
+#if %_TT2_TCPROJ
+    bProj = true;
+#endif
+#ifdef %_TT2_TCG_TYPE
+    nTCGType = %_TT2_TCG_TYPE;
+#endif
+    inTC = _TCModify(inTC, vPos, vNorm, _TCMMatrixGloss, _TCGMatrixGloss, bTCM, bCM, nTCGType);
+  }
+
+  if (nTSlot == TS_ENV)
+  {
+#if %_TT3_TCM
+    bTCM = true;
+#endif
+#if %_TT3_TCUBE
+    bCM = true;
+#endif
+#if %_TT3_TCPROJ
+    bProj = true;
+#endif
+#ifdef %_TT3_TCG_TYPE
+    nTCGType = %_TT3_TCG_TYPE;
+#endif
+    inTC = _TCModify(inTC, vPos, vNorm, _TCMMatrixEnv, _TCGMatrixEnv, bTCM, bCM, nTCGType);
+  }
+
+#endif
+
+  outTC.xyzw = inTC.xyzw;
+
+  return inTC;
+}
+
+//============================================================================================

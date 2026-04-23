@@ -1,0 +1,16 @@
+//===========================================================================
+// Validations
+// Removing of redundant and mutually exclusive flags to prevent generating
+// of the vertex/pixel shaders
+
+#if !%GRASS && !%LEAVES
+  #if %DETAIL_BENDING
+    #undefine %DETAIL_BENDING
+  #endif
+#endif
+
+#if %GRASS || %LEAVES
+  #if %DIFFUSE_BUMP_DETAIL_MAPPING
+    #undefine %DIFFUSE_BUMP_DETAIL_MAPPING
+  #endif
+#endif

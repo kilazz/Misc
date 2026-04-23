@@ -1,0 +1,29 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: FX_OuterSphere.ext
+// Created: 03/04/2006 by Tiago Sousa
+
+Version (1.00)
+
+Property
+{
+  Name        = %INSIDE_GEOMETRY
+  Mask        = 0x1
+  Property    (Inside Geometry)
+  Description (Render inside geometry)
+}
+
+Property
+{
+  Name        = %SUN_POSITION_BFH
+  Mask        = 0x2
+  Property    (Hack sun position)
+  Description (Hack the sun position for alien sphere)
+}
+
+Property
+{
+  Name        = %NO_DEPTH_BFH
+  Mask        = 0x10
+  Property    (No depth write)
+  Description (Hack depth for inside alien sphere)
+}

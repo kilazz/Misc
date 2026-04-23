@@ -1,0 +1,79 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: FrozenLayerWip.ext
+// Created: 10/07/2005 by Tiago Sousa
+
+Version (1.00)
+
+Property
+{
+  Name        = %LEAVES
+  Mask        = 0x1
+  Property    (Leaves)
+  Description (Activate for leaves only ! Use leaf shading and leaves animation)
+}
+
+Property
+{
+  Name        = %GRASS
+  Mask        = 0x2000
+  Property    (Grass)
+  Description (Activate for grass only ! Use simple grass rendering)
+}
+
+Property
+{
+  Name        = %DECAL
+  Mask        = 0x8
+  Property    (Decal)
+  Description (Use as Decal)
+}
+
+Property
+{
+  Name        = %CHARACTER_DECAL
+  Mask        = 0x10
+  Property    (Character Decal)
+  Description (Use as Character Decal)
+}
+
+Property
+{
+  Name            = %CUSTOM_MAP
+  Mask            = 0x20
+  Property        (Custom map)
+  Description     (Use custom slot)
+  DependencySet   = $TEX_Custom
+  DependencyReset = $TEX_Custom
+}
+
+Property
+{
+  Name            = %CUSTOM_SECONDARY_MAP
+  Mask            = 0x40
+  Property        (Custom secondary map)
+  Description     (Use custom secondary slot)
+  DependencySet   = $TEX_CustomSecondary
+  DependencyReset = $TEX_CustomSecondary
+}
+
+Property
+{
+  Name        = %TERRAINHEIGHTADAPTION
+  Mask        = 0x80
+  Property    (Fit to Terrain)
+  Description (Activate for grass only ! adapt object-height to terrainheight)
+}
+
+Property
+{
+  Name        = %VERTCOLORS
+  Mask        = 0x100
+  Property    (Vertex Colors)
+  Description (Use vertex colors)
+}
+
+Property
+{
+  Name = %TEMP_VEGETATION
+  Mask = 0x80000000
+}

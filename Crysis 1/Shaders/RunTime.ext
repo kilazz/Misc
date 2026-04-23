@@ -1,0 +1,665 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: Global.ext
+// Created: 16/2/2004 by Andrey Honich.
+
+Version (1.00)
+
+Property
+{
+  Name     = %_RT_FOG
+  Mask     = 0x1
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = IcePS
+  Precache = IceVS
+  Precache = RainLayerPS
+  Precache = RainLayerVS
+  Precache = TerrainPS
+  Precache = TerrainVS
+  Precache = VegetationPS
+  Precache = VegetationVS
+}
+
+Property
+{
+  Name     = %_RT_AMBIENT
+  Mask     = 0x2
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = IcePS
+  Precache = IceVS
+  Precache = TerrainPS
+  Precache = TerrainVS
+  Precache = VegetationPS
+  Precache = VegetationVS
+}
+
+Property
+{
+  Name     = %_RT_SHADOW_MIXED_MAP_G16R16
+  Mask     = 0x10
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = IcePS
+  Precache = IceVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+Property
+{
+  Name = %_RT_HDR_SYSLUMINANCE
+  Mask = 0x40
+}
+
+Property
+{
+  Name = %_RT_HDR_HISTOGRAMM
+  Mask = 0x80
+}
+
+Property
+{
+  Name     = %_RT_ALPHATEST
+  Mask     = 0x100
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = GlowPS
+  Precache = GlowVS
+  Precache = IcePS
+  Precache = IceVS
+  Precache = MotionBlurPS
+  Precache = MotionBlurVS
+  Precache = RainLayerPS
+  Precache = RainLayerVS
+  Precache = ShadowGenPS
+  Precache = ShadowGenVS
+  Precache = VegetationPS
+  Precache = VegetationVS
+  Precache = ZPS
+  Precache = ZVS
+}
+
+Property
+{
+  Name     = %_RT_FSAA
+  Mask     = 0x200
+  Precache = ZPS
+  Precache = ZVS
+}
+
+Property
+{
+  Name = %_RT_HDR_MODE
+  Mask = 0x400
+}
+
+Property
+{
+  Name     = %_RT_PARTICLE
+  Mask     = 0x800
+  Precache = ShadowPS
+}
+
+Property
+{
+  Name     = %_RT_SAMPLE1
+  Mask     = 0x1000
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = IcePS
+  Precache = IceVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+Property
+{
+  Name     = %_RT_SAMPLE2
+  Mask     = 0x2000
+  Precache = DetailPS
+  Precache = DetailVS
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = IcePS
+  Precache = IceVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+Property
+{
+  Name     = %_RT_SAMPLE3
+  Mask     = 0x4000
+  Precache = DetailPS
+  Precache = DetailVS
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = IcePS
+  Precache = IceVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+Property
+{
+  Name     = %_RT_POINT_LIGHT
+  Mask     = 0x8000
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+Property
+{
+  Name     = %_RT_ALPHABLEND
+  Mask     = 0x10000
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = RainLayerPS
+  Precache = RainLayerVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+  Precache = TerrainPS
+  Precache = VegetationPS
+  Precache = VegetationVS
+}
+
+Property
+{
+  Name                = %_RT_SPECULAR
+  Mask                = 0x20000
+  Precache            = GeneralPS
+  LowSpecAutoPrecache
+}
+
+Property
+{
+  Name         = %_RT_QUALITY
+  Mask         = 0x40000
+  Precache     = CausticsVS
+  Precache     = DetailVS
+  Precache     = GeneralPS
+  Precache     = GeneralVS
+  Precache     = IcePS
+  Precache     = IceVS
+  Precache     = MotionBlurPS
+  Precache     = MotionBlurVS
+  Precache     = RainLayerPS
+  Precache     = RainLayerVS
+  Precache     = ShadowGenVS
+  Precache     = ShadowPS
+  Precache     = ShadowVS
+  Precache     = TerrainPS
+  Precache     = TerrainVS
+  Precache     = VegetationPS
+  Precache     = VegetationVS
+  Precache     = ZPS
+  Precache     = ZVS
+  AutoPrecache
+}
+
+Property
+{
+  Name         = %_RT_QUALITY1
+  Mask         = 0x80000
+  Precache     = CausticsVS
+  Precache     = DetailVS
+  Precache     = GeneralPS
+  Precache     = GeneralVS
+  Precache     = IcePS
+  Precache     = IceVS
+  Precache     = MotionBlurPS
+  Precache     = MotionBlurVS
+  Precache     = RainLayerPS
+  Precache     = RainLayerVS
+  Precache     = ShadowGenVS
+  Precache     = ShadowPS
+  Precache     = ShadowVS
+  Precache     = TerrainPS
+  Precache     = TerrainVS
+  Precache     = VegetationPS
+  Precache     = VegetationVS
+  Precache     = ZPS
+  Precache     = ZVS
+  AutoPrecache
+}
+
+Property
+{
+  Name     = %_RT_INSTANCING_ROT
+  Mask     = 0x100000
+  Precache = CausticsVS
+  Precache = CustomRenderVS
+  Precache = DetailVS
+  Precache = GeneralVS
+  Precache = GlowVS
+  Precache = IceVS
+  Precache = MotionBlurVS
+  Precache = RainLayerVS
+  Precache = ShadowGenVS
+  Precache = ShadowVS
+  Precache = VegetationVS
+  Precache = ZVS
+}
+
+Property
+{
+  Name     = %_RT_INSTANCING_ATTR
+  Mask     = 0x200000
+  Precache = CausticsVS
+  Precache = CustomRenderVS
+  Precache = DetailVS
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = GlowVS
+  Precache = IceVS
+  Precache = MotionBlurVS
+  Precache = RainLayerVS
+  Precache = ShadowGenVS
+  Precache = ShadowVS
+  Precache = VegetationVS
+  Precache = ZVS
+}
+
+Property
+{
+  Name     = %_RT_SKYLIGHT_BASED_FOG
+  Mask     = 0x4000000
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = RainLayerPS
+  Precache = RainLayerVS
+  Precache = TerrainPS
+  Precache = TerrainVS
+  Precache = VegetationVS
+}
+
+Property
+{
+  Name     = %_RT_AMBIENT_OCCLUSION
+  Mask     = 0x8000000
+  Precache = DetailVS
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = IlluminationPS
+  Precache = IlluminationVS
+  Precache = SpritePS
+  Precache = TerrainPS //vlad: reguired for terrain base normal mapping
+  Precache = TerrainVS
+  Precache = VegetationPS
+  Precache = VegetationVS
+}
+
+Property
+{
+  Name     = %_RT_SHAPEDEFORM
+  Mask     = 0x20000000
+  Precache = CausticsVS
+  Precache = CustomRenderVS
+  Precache = DetailVS
+  Precache = GeneralVS
+  Precache = GlowVS
+  Precache = MotionBlurVS
+  Precache = RainLayerVS
+  Precache = ShadowGenVS
+  Precache = ShadowVS
+  Precache = ZVS
+}
+
+Property
+{
+  Name     = %_RT_MORPHTARGET
+  Mask     = 0x40000000
+  Precache = CausticsVS
+  Precache = CustomRenderVS
+  Precache = DetailVS
+  Precache = GeneralVS
+  Precache = GlowVS
+  Precache = MotionBlurVS
+  Precache = RainLayerVS
+  Precache = ShadowGenVS
+  Precache = ShadowVS
+  Precache = ZVS
+}
+
+Property
+{
+  Name     = %_RT_SKELETON_SSD
+  Mask     = 0x80000000
+  Precache = CausticsVS
+  Precache = CustomRenderVS
+  Precache = DetailVS
+  Precache = GeneralVS
+  Precache = GlowVS
+  Precache = MotionBlurVS
+  Precache = RainLayerVS
+  Precache = ShadowGenVS
+  Precache = ShadowVS
+  Precache = VegetationVS
+  Precache = ZVS
+}
+
+Property
+{
+  Name     = %_RT_SHADER_LOD
+  Mask     = 0x100000000
+  Precache = GeneralPS
+}
+
+Property
+{
+  Name     = %_RT_VARIANCE_SM
+  Mask     = 0x200000000
+  Precache = ShadowGenPS
+  Precache = ShadowGenVS
+}
+
+Property
+{
+  Name     = %_RT_BLEND_WITH_TERRAIN_COLOR
+  Mask     = 0x400000000
+  Precache = SpritePS
+  Precache = VegetationPS
+  Precache = VegetationVS
+}
+
+Property
+{
+  Name     = %_RT_NORMAL_DXT5
+  Mask     = 0x800000000
+  Precache = CausticsPS
+  Precache = GeneralPS
+  Precache = IcePS
+  Precache = TerrainPS
+  Precache = VegetationPS
+}
+
+Property
+{
+  Name     = %_RT_OCEAN_PARTICLE
+  Mask     = 0x2000000000
+  Precache = GeneralPS
+  Precache = GeneralVS
+}
+
+Property
+{
+  Name     = %_RT_OBJ_IDENTITY
+  Mask     = 0x4000000000
+  Precache = CausticsVS
+  Precache = CustomRenderVS
+  Precache = DetailVS
+  Precache = GeneralVS
+  Precache = GlowVS
+  Precache = IceVS
+  Precache = RainLayerVS
+  Precache = ShadowGenVS
+  Precache = ShadowVS
+  Precache = TerrainPS
+  Precache = TerrainVS
+  Precache = VegetationVS
+  Precache = ZVS
+}
+
+Property
+{
+  Name     = %_RT_NEAREST
+  Mask     = 0x8000000000
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = MotionBlurVS
+  Precache = RainLayerVS
+  Precache = ZVS
+}
+
+Property
+{
+  Name     = %_RT_NOZPASS
+  Mask     = 0x10000000000
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = SpritePS
+  Precache = SpriteVS
+  Precache = VegetationPS
+  Precache = VegetationVS
+}
+
+Property
+{
+  Name     = %_RT_DISSOLVE
+  Mask     = 0x20000000000
+  Precache = RainLayerPS
+  Precache = RainLayerVS
+  Precache = ZPS
+  Precache = ZVS
+}
+
+Property
+{
+  Name     = %_RT_SOFT_PARTICLE
+  Mask     = 0x40000000000
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+Property
+{
+  Name     = %_RT_SHADOW_JITTERING
+  Mask     = 0x80000000000
+  Precache = IcePS
+  Precache = IceVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+  Precache = TerrainPS
+}
+
+Property
+{
+  Name     = %_RT_HDR_ENCODE
+  Mask     = 0x100000000000
+  Precache = GeneralPS
+  Precache = IcePS
+  Precache = TerrainPS
+  Precache = VegetationPS
+}
+
+Property
+{
+  Name     = %_RT_SAMPLE0
+  Mask     = 0x200000000000
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = IcePS
+  Precache = IceVS
+  Precache = ShadowPS
+}
+
+Property
+{
+  Name     = %_RT_RAE_GEOMTERM
+  Mask     = 0x400000000000
+  Precache = GeneralPS
+  Precache = GeneralVS
+}
+
+Property
+{
+  Name     = %_RT_PSM
+  Mask     = 0x800000000000
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = ShadowGenPS
+  Precache = ShadowGenVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+//overlap with %_RT_PSM
+Property
+{
+  Name     = %_RT_HW_PCF_COMPARE
+  Mask     = 0x800000000000
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = ShadowGenPS
+  Precache = ShadowGenVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+Property
+{
+  Name     = %_RT_SCATTERSHADE
+  Mask     = 0x2000000000000
+  Precache = GeneralPS
+}
+
+Property
+{
+  Name = %_RT_GSM_COMBINED
+  Mask = 0x8000000000000
+}
+
+Property
+{
+  Name = %_RT_DEBUG0
+  Mask = 0x10000000000000
+}
+
+Property
+{
+  Name = %_RT_DEBUG1
+  Mask = 0x20000000000000
+}
+
+Property
+{
+  Name = %_RT_DEBUG2
+  Mask = 0x40000000000000
+}
+
+Property
+{
+  Name = %_RT_DEBUG3
+  Mask = 0x80000000000000
+}
+
+Property
+{
+  Name     = %_RT_CUBEMAP0
+  Mask     = 0x100000000000000
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = IcePS
+  Precache = IceVS
+  Precache = ShadowGenPS
+  Precache = ShadowGenVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+Property
+{
+  Name     = %_RT_LIGHT_TEX_PROJ
+  Mask     = 0x200000000000000
+  Precache = IcePS
+  Precache = IceVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+Property
+{
+  Name     = %_RT_CUBEMAP1
+  Mask     = 0x200000000000000
+  Precache = IcePS
+  Precache = IceVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+Property
+{
+  Name     = %_RT_TEX_ARR_SAMPLE
+  Mask     = 0x400000000000000
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+Property
+{
+  Name     = %_RT_CUBEMAP2
+  Mask     = 0x400000000000000
+  Precache = IcePS
+  Precache = IceVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+Property
+{
+  Name     = %_RT_SHADOW_FILTER
+  Mask     = 0x800000000000000
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+Property
+{
+  Name     = %_RT_CUBEMAP3
+  Mask     = 0x800000000000000
+  Precache = IcePS
+  Precache = IceVS
+  Precache = ShadowPS
+  Precache = ShadowVS
+}
+
+Property
+{
+  Name     = %_RT_SAMPLE4
+  Mask     = 0x1000000000000000
+  Precache = GeneralPS
+  Precache = GeneralVS
+}
+
+Property
+{
+  Name     = %_RT_VEGETATION
+  Mask     = 0x2000000000000000
+  Precache = CausticsVS
+  Precache = DetailVS
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = MotionBlurVS
+  Precache = RainLayerVS
+  Precache = ShadowGenVS
+  Precache = ShadowVS
+  Precache = VegetationVS
+  Precache = ZVS
+}
+
+Property
+{
+  Name     = %_RT_DECAL_TEXGEN_2D
+  Mask     = 0x4000000000000000
+  Precache = CausticsVS
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = GlowPS
+  Precache = GlowVS
+}
+
+Property
+{
+  Name     = %_RT_DECAL_TEXGEN_3D
+  Mask     = 0x8000000000000000
+  Precache = CausticsVS
+  Precache = GeneralPS
+  Precache = GeneralVS
+  Precache = GlowPS
+  Precache = GlowVS
+}

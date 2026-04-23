@@ -1,0 +1,958 @@
+#include "Common.cfi"
+
+// some bug with RT flags not being active
+#define %TEMP_VEGETATION 0x80000000
+
+#define INST_STREAM_CUSTOM                          \
+#if %_RT_INSTANCING_ATTR                            \
+  float4 InstAmbientOp  : TEXCOORDN;                \
+  float4 InstFrozenLayerParams : TEXCOORDN;      \
+  #if %_RT_VEGETATION                               \
+    float4 InstAmbientObjectCol : TEXCOORDN;        \
+  #endif                                            \
+  #if %_RT_FOG                                      \
+   float4 InstAvgFogVolumeContrib   : TEXCOORDN;    \
+  #endif                                            \
+#endif                                              \
+
+// how to copy vegetation params (bending and such) ?
+float4 AmbientObjectCol : PI_ObjectAmbColComp;//x=Ambient.w, y=ObjColor.w, z = 0, w = render quality
+float4 FrozenLayerParams : PI_FrozenLayerParams; // if RT_CUSTOM xyz = light amount, w = blend amount, else xyz= blend amount, w = use object space flag
+
+float4 Diffuses[4]  : PB_DiffuseMulti  < psregister = PS_REG_PL_00; >;
+
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "SupportsAttrInstancing;"
+           "NoChunkMerging;"
+           "NoPreview;"
+           "SupportsReplaceBasePass;"
+           "ShaderType = General;"
+           "ShaderDrawType = Light;";
+>;
+
+/// Un-Tweakables //////////////////////
+
+OPACITYMAP
+ENVIRONMENTMAP
+ENVIRONMENTCUBEMAP
+
+sampler2D frostPatternBumpSampler = sampler_state
+{
+  Texture = textures/defaults/frozen/frost_noise2.dds;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D frostPatternSmoothBumpSampler = sampler_state
+{
+  Texture = textures/defaults/frozen/frost_noise3.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D frostBubblesBumpSampler = sampler_state
+{
+  Texture = textures/defaults/frozen/frost_noise4.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D dynFrostBubblesBumpSampler = sampler_state
+{
+  Texture = textures/defaults/frozen/frost_noise7.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D reflectSampler = sampler_state
+{
+  Texture = textures/defaults/frozen/probe_env01.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+  AddressW = Wrap;
+}
+
+sampler3D volumeNoiseSampler = sampler_state
+{
+  Texture = textures/defaults/Noise3D.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+  AddressW = Wrap;
+};
+
+sampler2D glitterPowSampler = sampler_state
+{
+  Texture = textures/defaults/frozen/glitter_pow.dds;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+// Tweakables /////////////////
+
+float TillingU
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Set frost detail layer tilling";
+  string UIName   = "Tilling U";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 1.0; // 1.0
+
+float TillingV
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Sets frost detail layer tilling";
+  string UIName   = "Tilling V";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float VariationTilling
+<
+  vsregister      = VS_REG_PM_4.y;
+  string UIName   = "Variation tilling";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 4.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float ReflectionAmount
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIName   = "Reflect amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.05;
+> = 0.24; // 1.0
+
+float TopSnowAmount
+<
+  psregister      = PS_REG_PM_3.w;
+  string UIName   = "Snow top amount";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.05;
+> = 1; // 0.5
+
+float4 TintColor
+<
+  psregister      = PS_REG_PM_4;
+  string UIName   = "Tint color";
+  string UIWidget = "color";
+> = {1.0, 1.0, 1.0, 1.0};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////// Custom shading pass structure /////////////////////////////////////
+
+// Needed for fraglib ...
+#include "VertexLib.cfi"
+
+struct fragPassCustom
+{
+  half4 cBackDiffuseMap;
+  half4 cFrostNoise;
+
+  half3 vViewTS;
+  half3 vGlitterNormal;
+  half3 cGlitterSpecular;
+
+  half3 cIceTop;
+  half fIceTopZ;
+  half fBubbles;
+  half fFrostVariation;
+
+  float3 vPosOS;
+
+  half3 cFrontBackShade;       // used for vegetation
+  half fFrontAtten;
+
+  half3 cBackDiffCoef;
+
+  half3 cFilterColor;
+  half fOcclShadowAcc;
+
+  half3 cShadingFront;
+  half3 cShadingBack;
+
+  half4 cColor0;
+  half4 cColor1;
+
+  half fRenderQuality;
+  half fAmbientContribution;
+  half fOpacity;
+
+  half fFrostAmount;
+
+  half3 vUpVector;
+  half fUpVectorInWS;
+};
+
+struct fragLightPassCustom
+{
+
+};
+
+#include "ShadeLib.cfi"
+
+/////////// Common vertex shader ////////////////
+
+struct vtxCommonFrozen
+{
+  OUT_P
+  float4 baseTC    : TEXCOORDN;   //zw: detail uvs
+  float4 screenProj  : TEXCOORDN;
+  float4 vView       : TEXCOORDN; //w: pixel distance
+
+  float4 tangVec   : TEXCOORDN;   //w: backlighting.r, and in grass case all shading
+  float4 binormVec : TEXCOORDN;   //w: backlighting.g, and in grass case all shading
+  float4 posOS : TEXCOORDN;   //w: backlighting.b, and in grass case all shading
+
+#if %_LT_LIGHTS && %_LT_HASPROJ
+  float4 projTC    : TEXCOORDN;
+#endif
+
+  float4 Ambient   : TEXCOORDN;
+
+  // Cant allow volumetric fog on lower specs.. no more interpolators left
+#if %_RT_FOG && %_RT_INSTANCING_ATTR
+  #if !%_RT_QUALITY && !%_RT_QUALITY1
+    float4 AvgFogVolumeContrib : COLOR1;
+  #else
+    float4 AvgFogVolumeContrib : TEXCOORDN;
+  #endif
+#endif
+
+  // vegetation x: obj brightness, y: obj alpha blend, z:rend quality, w occlusion
+  // else just vertex color
+  float4 Color     : COLOR0;
+};
+
+vtxCommonFrozen FrozenVS(app2vertGeneral IN)
+{
+  vtxCommonFrozen OUT;
+#ifndef OPENGL
+  OUT = (vtxCommonFrozen)0;
+#endif
+
+  // Position in screen space.
+  OUT.baseTC = IN.baseTC ;
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  OUT.posOS.xyz = vertPassPos.Position.xyz * VariationTilling;
+
+  float3 vNormalOS = vertPassPos.ObjToTangentSpace[2];
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+  // Output the screen-space texture coordinates
+  OUT.screenProj = HPosToScreenTC(OUT.HPosition);
+
+  // Output world to tangent matrix and world space position
+  float3 worldTangentS = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]) );
+  float3 worldTangentT = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]) );
+  float3 worldTangentN = normalize(cross(worldTangentS, worldTangentT)) * IN.Tangent.w;
+  OUT.tangVec.xyz = worldTangentS.xyz;
+  OUT.binormVec.xyz = worldTangentT.xyz;
+
+  OUT.vView.xyz = vertPassPos.WorldPos.xyz;
+
+  float3 vEye = normalize( -OUT.vView.xyz );
+  float eyeTangentDot = dot(vEye, worldTangentN);
+
+#if %_RT_VEGETATION && (%LEAVES || %GRASS)
+  worldTangentN *= (eyeTangentDot*0.8 + 0.2);
+  IN.Tangent.w *= (eyeTangentDot*0.8 + 0.2);
+  //OUT.baseTC.w = abs( OUT.baseTC.w );
+  //OUT.baseTC.w *= (eyeTangentDot*0.6+0.4);
+#endif
+
+  half3 cFrontBackShade = 0;
+  #if %_LT_LIGHTS
+    const int aLType[4] = { %_LT_0_TYPE, %_LT_1_TYPE, %_LT_2_TYPE, %_LT_3_TYPE };
+
+    for(int i=0; i<%_LT_NUM; i++)
+    {
+      #if %_RT_VEGETATION
+
+        float4 WorldLightPos = LGetPosition(i);
+        float3 LightVecWS = WorldLightPos.xyz - OUT.vView.xyz;
+        half3 LightVec;
+        // Use per-vertex attenuation
+        half fFallOff = 1;
+        if (aLType[i] != LT_DIRECTIONAL)
+        {
+          fFallOff = GetAttenuation(LightVecWS.xyz, WorldLightPos.w);
+          LightVec = normalize(LightVecWS);
+        }
+        else
+        {
+          LightVec = g_VS_SunLightDir;
+        }
+
+        // grass shading all done per-vertex
+        #if %GRASS
+          half3 frontLightDif=0, frontLightSpec=0;
+          LeafShadingFront(vEye, LightVec, worldTangentN, Diffuses[i], 0, frontLightDif, frontLightSpec, MatSpecColor.w);
+          cFrontBackShade.xyz += frontLightDif * fFallOff;
+        #endif
+
+        #if %LEAVES || %GRASS
+          half3 curBackLight = LeafShadingBack(vEye, LightVec, -worldTangentN, Diffuses[i], 0.6);
+          cFrontBackShade.xyz += curBackLight*fFallOff * 0.5;
+        #endif
+      #endif
+
+      #if %_LT_HASPROJ
+        if (aLType[i] == LT_PROJECTED)
+        {
+          float4 vOrgPos = float4(vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz, vertPassPos.Position.w);
+          OUT.projTC = mul(LightMatrix, vOrgPos);
+        }
+      #endif
+
+    }
+  #endif
+
+  half4 cVegetationShading;
+  half fFrontAtten;
+
+  OUT.Color.x = dot( GetInputColor(IN.Color).xyz, 0.333);
+  OUT.Color.w = IN.Tangent.w * 0.5 + 0.5;
+
+#if %_RT_VEGETATION
+
+  #if %_RT_INSTANCING_ATTR
+    AmbientObjectCol = IN.InstAmbientObjectCol;
+  #endif
+
+  OUT.Color.x = AmbientObjectCol.x * IN.Color.w; // ambient multiplier
+  OUT.Color.y = AmbientObjectCol.w; // render quality - attenuation factor to avoid view dependent rendering terms to sprites
+
+  #if %LEAVES || %GRASS
+    cFrontBackShade *= OUT.Color.y * 0.5; //FrostMaskSpecColor.xyz *
+
+    OUT.tangVec.w   = cFrontBackShade.x;
+    OUT.binormVec.w = cFrontBackShade.y;
+    OUT.posOS.w = cFrontBackShade.z;
+  #endif
+
+#endif
+
+#if !%_RT_SAMPLE4
+
+    OUT.Ambient = AmbientOp;
+  #if %_RT_INSTANCING_ATTR
+    OUT.Ambient = IN.InstAmbientOp;
+  #endif
+
+#endif
+
+  // Output fog into view-vector W component (to save interpolator)
+#if %_RT_FOG
+  OUT.vView.w = GetVolumetricFogDensity(vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz);
+ #if %_RT_INSTANCING_ATTR
+   OUT.AvgFogVolumeContrib = IN.InstAvgFogVolumeContrib;
+ #endif
+#else
+  OUT.vView.w = vertPassPos.Position.w;
+#endif
+
+  // set up vector
+#if %_RT_VEGETATION && (%LEAVES || %GRASS)
+  //objToTangentSpace[2] *= (eyeTangentDot*0.8 + 0.2);
+#endif
+  float3 vUpVector = mul(vertPassPos.ObjToTangentSpace, float3(0,0,1));
+
+  // No more interpolators left...
+  OUT.baseTC.wz = vUpVector.xy;
+  OUT.screenProj.z = vUpVector.z;
+
+  float4 vFrozenLayerParams = 0;
+#if %_RT_INSTANCING_ATTR
+  vFrozenLayerParams = IN.InstFrozenLayerParams;
+#else
+  vFrozenLayerParams = FrozenLayerParams;
+#endif
+
+  float fUpVectorInWS = 1.0f - vFrozenLayerParams.w;
+
+  // No more interpolators left...
+  OUT.Color.z = fUpVectorInWS;
+
+#if %_RT_SAMPLE4
+
+  OUT.Ambient = vFrozenLayerParams;
+  OUT.tangVec.w = IN.Tangent.w;
+
+#endif
+
+  return OUT;
+}
+
+///////////////// pixel shaders //////////////////
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_unify_parameters( inout fragPass pPass )
+{
+
+  pPass.bCustomComposition = true;
+  pPass.bRenormalizeNormal = true;
+  pPass.bHemisphereLighting = true;
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_frozen_unify(inout fragPass pPass, in vtxCommonFrozen IN)
+{
+  // Set quality level (LOW, MEDIUM, HIGH or MAX)
+  pPass.nQuality = GetShaderQuality();
+
+  pPass.IN.baseTC = IN.baseTC;
+  pPass.IN.bumpTC = pPass.IN.baseTC;
+  pPass.IN.vTangent = IN.tangVec;
+  pPass.IN.vBinormal = IN.binormVec;
+  pPass.IN.vNormal.xyz = (cross(IN.tangVec.xyz, IN.binormVec.xyz)) * (IN.Color.w*2-1);                  // 4 alu
+  pPass.IN.vView = IN.vView;
+  pPass.IN.screenProj = IN.screenProj;
+  pPass.fAlphaTestRef = pPass.IN.screenProj.z;
+  pPass.IN.Ambient = IN.Ambient;
+
+#if %_LT_LIGHTS && %_LT_HASPROJ
+  pPass.IN.projTC = IN.projTC;
+#endif
+
+  pPass.pCustom.fAmbientContribution = 1.0;
+  pPass.pCustom.fRenderQuality = 1.0;
+
+#if %_RT_VEGETATION
+  pPass.pCustom.fAmbientContribution = IN.Color.x;
+  pPass.pCustom.fRenderQuality = IN.Color.y;
+
+  #if %LEAVES  || %GRASS
+
+    pPass.pCustom.cFrontBackShade.x = IN.tangVec.w;
+    pPass.pCustom.cFrontBackShade.y = IN.binormVec.w;
+    pPass.pCustom.cFrontBackShade.z = IN.posOS.w;
+
+  #endif
+
+#else
+  #if %VERTCOLORS
+    pPass.bVertexColors = true;
+    pPass.IN.Color = IN.Color.x;
+    pPass.IN.Color.w = 1;
+  #endif
+#endif
+
+#if %_RT_FOG
+
+  pPass.IN.AvgFogVolumeContrib = AvgFogVolumeContrib;
+
+  #if %_RT_INSTANCING_ATTR
+    pPass.IN.AvgFogVolumeContrib = IN.AvgFogVolumeContrib;
+  #endif
+
+#endif
+
+  pPass.pCustom.vPosOS = IN.posOS;
+  pPass.pCustom.fOpacity = IN.Ambient.w;
+
+  // get up vector
+  pPass.pCustom.vUpVector = normalize( float3(IN.baseTC.wz, IN.screenProj.z) );
+  pPass.pCustom.fUpVectorInWS = IN.Color.z;
+
+  frag_unify_parameters( pPass );
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_begin(inout fragPass pPass)
+{
+  half3 vViewTS = normalize( mul(pPass.mTangentToWS, pPass.vView) );                                            // 2 alu
+
+  float2 tcOrig = pPass.IN.baseTC.xy;
+  float2 tcFrost = tcOrig * float2( TillingU, TillingV );
+
+  pPass.cDiffuseMap =GetTexture2D( diffuseMapSampler, tcOrig.xy );
+
+  float fFrostVariation = 1;
+  if( pPass.nQuality > QUALITY_LOW )
+  {
+    fFrostVariation = tex3D(volumeNoiseSampler, pPass.pCustom.vPosOS * 0.25  ).w;
+    fFrostVariation *= tex3D(volumeNoiseSampler, pPass.pCustom.vPosOS * 0.5 + fFrostVariation).w*2;
+    fFrostVariation *= tex3D(volumeNoiseSampler, pPass.pCustom.vPosOS * 1.25 + fFrostVariation).w*4;
+    fFrostVariation = saturate(fFrostVariation-0.25); // 8 inst
+  }
+
+  pPass.pCustom.fFrostVariation = fFrostVariation;
+
+  half2 vDisp = fFrostVariation*0.01; // 1 inst
+  pPass.pCustom.cFrostNoise = EXPAND( tex2D(frostPatternBumpSampler, tcFrost*10 +vDisp) ); // 2 inst
+
+  half4 vFrostNoise = tex2D(frostPatternSmoothBumpSampler, tcFrost*10 + vDisp);
+
+  half3 cFrostNoiseSmooth = 0;
+  if( pPass.nQuality > QUALITY_LOW )
+  {
+    cFrostNoiseSmooth.xy = EXPAND( vFrostNoise.xy );                // 1 alu
+    cFrostNoiseSmooth.z = sqrt(1-dot(cFrostNoiseSmooth.xy, cFrostNoiseSmooth.xy));
+  }
+
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+  pPass.vNormal = pPass.mTangentToWS[2];
+
+  half3 cBump = 0;
+
+#if !%GRASS
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+  // Merge bump maps
+
+  half fFrostOnSides = 0;
+  if( GetShaderQuality() > QUALITY_LOW )
+    fFrostOnSides = saturate(saturate(pPass.vNormal.z-0.3)*10);
+
+  // Bump map sampler always present     // + vDisp
+  cBump.xyz = GetNormalMap(bumpMapSampler,  pPass.IN.baseTC.xy + vDisp*fFrostOnSides  );                                      // 2 alu
+
+  half3 vBubbles = 0;
+  if( GetShaderQuality() > QUALITY_LOW )
+  {
+    pPass.pCustom.vGlitterNormal = cBump.xyz;
+    pPass.pCustom.vGlitterNormal.xy += pPass.pCustom.cFrostNoise*0.5;
+    // do glitter in tangent space to save some instructions
+    pPass.pCustom.vGlitterNormal.xyz = normalize( pPass.pCustom.vGlitterNormal.xyz );
+
+    cBump.xy += cFrostNoiseSmooth * 0.1 * fFrostOnSides ;
+    vFrostNoise.w = dot(vFrostNoise.xyz, 0.33)*2-1;
+
+    // compute frost bubbles
+    vBubbles = tex2D(frostBubblesBumpSampler, tcFrost*10).w;
+    vBubbles += tex2D(frostBubblesBumpSampler, tcFrost*20 + float2(0.25,0) + saturate(vFrostNoise.w)*vViewTS.xy*0.1).w;
+    vBubbles += tex2D(frostBubblesBumpSampler, tcFrost*20 + float2(0,0.15)+ saturate(vFrostNoise.w)*vViewTS.xy*0.2).w;
+    vBubbles += tex2D(frostBubblesBumpSampler, tcFrost*20 + float2(0.35,0.75)+ saturate(vFrostNoise.w)*vViewTS.xy*0.3).w;
+    vBubbles /= 4.0;
+    vBubbles *= fFrostVariation;
+
+    vBubbles = saturate(dot(vBubbles, 0.666)-0.25);
+
+    // Blend a bit frozen bubbles into diffuse
+    pPass.cDiffuseMap.xyz += 0.2*vBubbles.x;   // 1 inst
+    pPass.pCustom.fBubbles = vBubbles.x;
+  }
+
+  pPass.cGlossMap = 1;
+
+  // Store new normal
+  pPass.vNormal = ( mul( cBump.xyz, pPass.mTangentToWS));
+  if( pPass.nQuality > QUALITY_LOW )
+    pPass.vNormal = normalize( pPass.vNormal );
+
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+  pPass.fNdotE = dot(pPass.vNormal.xyz, pPass.vView);                                                 // 1 inst
+  pPass.pCustom.cGlitterSpecular = saturate( dot(pPass.pCustom.vGlitterNormal.xyz, vViewTS) );        // 1 inst                                         // 1 alu
+
+  half3 vReflVec = (2.0 * pPass.fNdotE * pPass.vNormal.xyz) - pPass.vView.xyz;                        // 2 inst
+  if( GetShaderQuality() > QUALITY_LOW )
+    pPass.cEnvironment = tex2D(reflectSampler, vReflVec.xy +  cFrostNoiseSmooth.xy*0.1);                // 1 inst
+  else
+    pPass.cEnvironment = tex2D(reflectSampler, vReflVec.xy +  pPass.cDiffuseMap.xy*4 +(cFrostNoiseSmooth.xy)*0.1);                // 1 inst
+
+  pPass.cEnvironment = dot( pPass.cEnvironment.xyz, 1.333);                                           // 1 inst
+  pPass.cEnvironment += saturate(pPass.cEnvironment*2-1);                                             // 2 inst
+
+  half fFresnel = 1;
+  if( pPass.nQuality > QUALITY_LOW )
+  {
+    pPass.cEnvironment *= vBubbles;
+    fFresnel = 0.5 + GetFresnelTex(pPass.fNdotE, 0).w * 2;                          // 1 alu
+  }
+
+  pPass.cEnvironment *= ReflectionAmount * fFresnel;
+
+  // Set top snow layer
+  if( pPass.nQuality > QUALITY_LOW )
+  {
+    pPass.pCustom.cIceTop = saturate(pPass.vNormal.z*0.5+ 1 - 0.4*fFrostVariation );
+    pPass.pCustom.cIceTop *= saturate( dot(pPass.cDiffuseMap.xyz, 1)*1.5); // apply diffuse texture luminance for nice variation
+  }
+  else
+  {
+    pPass.pCustom.cIceTop = ( dot(pPass.cDiffuseMap.xyz, 1)*1.5); // apply diffuse texture luminance for nice variation
+  }
+
+    // Get top region - using world space for more accurate or object space (can be problematic with low-tesselated stuff)
+    pPass.pCustom.fIceTopZ = lerp( dot(pPass.pCustom.vUpVector, cBump.xyz),
+                                       pPass.vNormal.z, pPass.pCustom.fUpVectorInWS);
+//pPass.pCustom.fIceTopZ = lerp( normalize( mul(cBump.xyz, pPass.pCustom.vWorldSpaceToOS) ).z,
+
+#endif
+
+  // Set alpha and apply smooth transition when using alpha blending
+  pPass.fAlpha = pPass.cDiffuseMap.w * pPass.pCustom.fOpacity;
+}
+
+void frag_custom_per_light(inout fragPass pPass, inout fragLightPass pLight)
+{
+  pPass.pCustom.fOcclShadowAcc += pLight.fOcclShadow;
+  pPass.pCustom.cFilterColor = pLight.cFilter;
+
+#if !%GRASS
+  pLight.fNdotL = ( saturate(pLight.fNdotL) );
+
+  half3 cDiffuse = pLight.fNdotL * pLight.cDiffuse.xyz;                                            // 1 alu
+  half3 cK = pLight.fOcclShadow * pLight.fFallOff * pLight.cFilter;
+  pPass.cDiffuseAcc.xyz += cDiffuse.xyz * cK.xyz;                                                   // 1 alu
+#endif
+}
+
+void frag_custom_ambient(inout fragPass pPass, inout half3 cAmbient)
+{
+  pPass.cAmbientAcc.xyz = cAmbient;
+}
+
+void frag_custom_end(inout fragPass pPass, inout half3 cFinal)
+{
+
+#if %_RT_VEGETATION
+
+  #if %LEAVES || %GRASS
+    half fOccFactor = 1.0;
+
+    #ifdef %_LT_NUM
+      fOccFactor = pPass.pCustom.fOcclShadowAcc * 1.0 / %_LT_NUM;
+    #endif
+
+    // Apply shadows to back-shading
+    half fOcclBackShadow = saturate( max(fOccFactor, 0.5) );                                       // 1 alu
+    pPass.pCustom.cFrontBackShade.xyz *= fOcclBackShadow * pPass.pCustom.cFilterColor;              // 2 alu
+
+    pPass.cDiffuseAcc += pPass.pCustom.cFrontBackShade.xyz;
+
+  #endif
+#endif
+
+  half3 cIceTop = 1;
+  half3 cAmbGlitter =1;
+  half3 cAmbDif = (pPass.cAmbientAcc +pPass.cDiffuseAcc);                      // 1 alu
+
+  if( pPass.nQuality > QUALITY_LOW )
+  {
+    cIceTop = pPass.pCustom.cIceTop;
+    // glitter power factors with texture lookup
+    cAmbGlitter = tex2D(glitterPowSampler, pPass.pCustom.cGlitterSpecular.x).x*1.5;;
+
+    // Add glitter to ice top
+    cIceTop += cAmbGlitter;
+
+    pPass.pCustom.fBubbles *= cAmbGlitter*2;
+    pPass.pCustom.fBubbles *= (dot(pPass.pCustom.fBubbles, 0.333) > 0.2) ?20:1;
+  }
+
+  half3 cDiffuse = pPass.cDiffuseMap.xyz; // 3 alu
+
+  //pPass.cSpecularAcc.xyz += pPass.cEnvironment.xyz;
+  half3 cSpecular = pPass.cSpecularAcc.xyz;
+
+  if( pPass.nQuality > QUALITY_LOW )
+  {
+    cDiffuse *= MatDifColor.xyz;
+    cDiffuse = lerp(cDiffuse + pPass.pCustom.fBubbles, cIceTop*1.5 * 0.5, saturate(saturate(pPass.pCustom.fIceTopZ-0.45)*10)* saturate(0.8 *saturate(pPass.pCustom.fFrostVariation*3) )*TopSnowAmount );
+
+    cSpecular.xyz += pPass.cEnvironment.xyz;
+    cSpecular *= (1-saturate(saturate(pPass.pCustom.fIceTopZ-0.45)*10)) *pPass.pCustom.fRenderQuality; // 3 alu
+  }
+  else
+  {
+    cSpecular.xyz += pPass.cEnvironment.xyz*0.33;
+    cDiffuse = lerp(cDiffuse, pPass.pCustom.cIceTop*0.5, saturate(saturate(pPass.pCustom.fIceTopZ-0.45)*10 )*TopSnowAmount );
+  }
+
+  cFinal.xyz = (cDiffuse + cSpecular) * TintColor * cAmbDif * pPass.pCustom.fAmbientContribution; // 3 alu
+  pPass.fAlpha = saturate(pPass.fAlpha);// * pPass.pCustom.fFrostAmount;
+
+  //cFinal.xyz = lerp(float3(1, 0, 0), cFinal.xyz, pPass.pCustom.fFrostAmount);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#include "fragLib.cfi"
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_dynamic_frozen_unify(inout fragPass pPass, in vtxCommonFrozen IN)
+{
+  // Set quality level (LOW, MEDIUM, HIGH or MAX)
+  pPass.nQuality = GetShaderQuality();
+
+  pPass.IN.baseTC = IN.baseTC;
+  pPass.IN.bumpTC = pPass.IN.baseTC;
+  pPass.IN.vTangent = IN.tangVec;
+  pPass.IN.vBinormal = IN.binormVec;
+  pPass.IN.vNormal.xyz = (cross(IN.tangVec.xyz, IN.binormVec.xyz)) * (IN.tangVec.w);                  // 4 alu
+  pPass.IN.vView = IN.vView;
+  pPass.IN.screenProj = IN.screenProj;
+  pPass.fAlphaTestRef = pPass.IN.screenProj.z;
+
+  pPass.pCustom.fAmbientContribution = 1.0;
+  pPass.pCustom.fRenderQuality = 1.0;
+
+  pPass.pCustom.cColor0 = IN.Ambient;
+    //IN.Color;
+
+#if %_RT_FOG
+
+  pPass.IN.AvgFogVolumeContrib = AvgFogVolumeContrib;
+
+  #if %_RT_INSTANCING_ATTR
+    pPass.IN.AvgFogVolumeContrib = IN.AvgFogVolumeContrib;
+  #endif
+
+#endif
+
+  pPass.pCustom.vPosOS = IN.posOS;
+  pPass.pCustom.fOpacity = IN.Ambient.w;
+
+  // get up vector
+  pPass.pCustom.vUpVector = normalize( float3(IN.baseTC.wz, IN.screenProj.z) );
+  pPass.pCustom.fUpVectorInWS = IN.Color.z;
+
+  pPass.vView = normalize(-pPass.IN.vView.xyz);                                                           // 3 alu
+  pPass.mTangentToWS = float3x3(pPass.IN.vTangent.xyz, pPass.IN.vBinormal.xyz, pPass.IN.vNormal.xyz);
+
+  frag_unify_parameters( pPass );
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+float4 DynamicFrozenPS( inout fragPass pPass )
+{
+  half3 cFinal = 0;
+  half fFrostAmountOrig = pPass.pCustom.cColor0.w;
+  half fFrostAmount = pPass.pCustom.cColor0.w;
+
+  half fShadowOcclMap = saturate(1.0 - tex2Dproj(shadowOccludeMapSampler, pPass.IN.screenProj.xyzw).x);  // 1 inst
+  half3 vViewTS = normalize( mul(pPass.mTangentToWS, pPass.vView) );   // 6 inst
+
+  float2 tcOrig = pPass.IN.baseTC.xy;
+  float2 tcFrost = tcOrig * float2( TillingU, TillingV ); // 1 inst
+
+  pPass.cDiffuseMap = GetTexture2D( diffuseMapSampler, tcOrig.xy );
+
+  float fFrostVariation = 1;
+  if( pPass.nQuality > QUALITY_LOW )
+  {
+    fFrostAmount = smoothstep(0, 1, sqrt(fFrostAmount) ); // 4 inst
+    half3 vNormalDisplace = GetNormalMap(bumpMapSampler,  pPass.IN.baseTC.xy);      // 2 inst
+
+    fFrostVariation = tex3D(volumeNoiseSampler, pPass.pCustom.vPosOS * 0.6  ).w;    // 1 isnt
+    fFrostVariation += tex3D(volumeNoiseSampler, pPass.pCustom.vPosOS * 0.9 + (fFrostVariation) * vNormalDisplace * fFrostAmount * 0.2).w; // 5 inst
+    fFrostVariation += tex3D(volumeNoiseSampler, pPass.pCustom.vPosOS * 1.5 + (fFrostVariation) * vNormalDisplace * fFrostAmount * 0.2).w; // 2 inst
+
+    fFrostVariation *= 2; // 1 inst
+
+    fFrostVariation = abs( frac( fFrostVariation + fFrostAmount ) * 2 - 1 );
+    fFrostVariation = saturate( fFrostVariation - 0.2 - ( 1 - fFrostAmount ) );; // 6 inst sum
+  }
+
+  half2 vDisp = fFrostVariation * 0.03; // 1 inst
+  pPass.pCustom.cFrostNoise = EXPAND( tex2D(frostPatternBumpSampler, tcFrost*10 +vDisp) ); // 2 inst
+
+  half4 vFrostNoise = tex2D(frostPatternSmoothBumpSampler, tcFrost*10 + vDisp); // 1 inst
+
+  half3 cFrostNoiseSmooth = 0;
+  cFrostNoiseSmooth.xy = EXPAND( vFrostNoise.xy )*fFrostVariation;                // 2 inst
+  cFrostNoiseSmooth.z = sqrt(1-dot(cFrostNoiseSmooth.xy, cFrostNoiseSmooth.xy));  // 3 inst
+
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+  pPass.vNormal = pPass.mTangentToWS[2];
+  pPass.pCustom.cIceTop = saturate(pPass.vNormal.z - 0.4*fFrostVariation );  // 1 inst
+
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+  // Merge bump maps
+
+  half3 vBubbles = 0;
+  if( GetShaderQuality() > QUALITY_LOW )
+  {
+    vBubbles = tex2D(dynFrostBubblesBumpSampler, tcFrost*10 ).w; // 1 inst
+    vBubbles += saturate(tex2D(dynFrostBubblesBumpSampler, tcFrost*20  + 0.025*vViewTS.xy).w);
+    vBubbles += saturate(tex2D(dynFrostBubblesBumpSampler, tcFrost*20 + float2(0,0.25) + 0.05*vViewTS.xy).w);
+    vBubbles += saturate(tex2D(dynFrostBubblesBumpSampler, tcFrost*20 + 0.1*vViewTS.xy).w);// 8 inst
+    vBubbles *= 0.25; // 1 inst
+
+    vBubbles = saturate(vBubbles.x-(1-fFrostAmount)*(1-fFrostAmount)*(1-fFrostAmount)) * fFrostVariation*2; // 6 inst
+
+    pPass.pCustom.fBubbles = vBubbles.x;
+  }
+
+  half3 cBump = GetNormalMap(bumpMapSampler,  pPass.IN.baseTC.xy + vDisp * vBubbles * 3  );     // 4 inst
+
+  // Generate glitter normal
+  pPass.pCustom.vGlitterNormal = cBump.xyz;
+  pPass.pCustom.vGlitterNormal.xy += pPass.pCustom.cFrostNoise*0.5; // 1 inst
+  // do glitter in tangent space to save some instructions
+  pPass.pCustom.vGlitterNormal.xyz = normalize( pPass.pCustom.vGlitterNormal.xyz ); // 3 inst
+
+  pPass.cGlossMap = 1;
+
+  // Store new normal
+  pPass.vNormal = normalize( mul( cBump.xyz, pPass.mTangentToWS)); // 6 inst
+
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+  pPass.fNdotE = dot(pPass.vNormal.xyz, pPass.vView);                                                 // 1 inst
+  pPass.pCustom.cGlitterSpecular = saturate( dot(pPass.pCustom.vGlitterNormal.xyz, vViewTS) );        // 1 inst                                         // 1 alu
+
+  half3 vReflVec = (2.0 * pPass.fNdotE * pPass.vNormal.xyz) - pPass.vView.xyz;                        // 2 inst
+  pPass.cEnvironment = tex2D(reflectSampler, vReflVec.xy+  cFrostNoiseSmooth.xy*0.1);                // 1 inst
+
+  pPass.cEnvironment = dot( pPass.cEnvironment.xyz, 1.333);                                           // 1 inst
+  pPass.cEnvironment += saturate(pPass.cEnvironment*2-1);                                             // 2 inst
+
+  half fFresnel = 1;
+  if( pPass.nQuality > QUALITY_LOW )
+    pPass.cEnvironment *= vBubbles;                                                     // 1 inst
+  else
+    pPass.cEnvironment *= 0.2;                                                     // 1 inst
+
+  fFresnel = 0.5 + (GetFresnelTex(pPass.fNdotE, 0).y) *1.25;                          // 2 inst
+
+  vBubbles *= fFresnel;                                                               // 1 inst
+  pPass.cEnvironment *= ReflectionAmount * fFresnel;                                  // 2 inst
+
+  // Set alpha and apply smooth transition when using alpha blending
+  pPass.fAlpha = pPass.cDiffuseMap.w * pPass.pCustom.fOpacity;;                         // 1 inst
+
+  if( pPass.nQuality > QUALITY_LOW )
+  {
+    // glitter power factors with texture lookup
+    half3 cAmbGlitter = tex2D(glitterPowSampler, pPass.pCustom.cGlitterSpecular.x).x*1.5; // 2 inst
+    pPass.pCustom.fBubbles *= cAmbGlitter;                                                // 1 inst
+    pPass.pCustom.fBubbles *= (dot(pPass.pCustom.fBubbles, 0.333) > 0.06) ?5:1;          // 3 inst
+  }
+
+  half3 cDiffuseSpec = pPass.cEnvironment.xyz;
+  cDiffuseSpec += vBubbles + pPass.pCustom.fBubbles * 2; // 2 inst
+  cDiffuseSpec *= saturate(pPass.vNormal.z * 0.5 + 0.5); // 2 inst
+  cDiffuseSpec += saturate( vBubbles ) * saturate( pPass.vNormal.z ); //1 inst
+  cDiffuseSpec *=  TopSnowAmount; // 3 inst
+
+  cFinal.xyz = fFrostAmountOrig * cDiffuseSpec * (pPass.pCustom.cColor0.xyz*fShadowOcclMap + g_PS_SkyColor.xyz);// * pPass.cEnvironment.xyz;
+
+  return half4(cFinal.xyz ,1);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pixout FrozenPS(vtxCommonFrozen IN)
+{
+  pixout OUT;
+
+#if !%_RT_SAMPLE4
+  // Initialize fragPass structure
+  fragPass pPass = (fragPass) 0;
+  frag_frozen_unify(pPass, IN);
+  half4 cFinal = frag_shared_output(pPass);
+
+  HDROutput(OUT, cFinal , 1);
+
+  //half4 cFinal = 1;
+  //HDROutput(OUT, cFinal , 1);
+
+#else
+
+  // Initialize fragPass structure
+  fragPass pPass = (fragPass) 0;
+  frag_dynamic_frozen_unify(pPass, IN);
+
+  // Dynamic frozen
+  half4 cFinal = DynamicFrozenPS( pPass );
+  HDROutput(OUT, cFinal , 1);
+#endif
+
+  return OUT;
+}
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script = 
+        "TechniqueZ=ZPass;"
+        "TechniqueShadowGen=ShadowGen;"
+#ifdef D3D10
+        "TechniqueShadowGenDX10=ShadowGenGS;"
+#endif
+        "TechniqueShadowPass=ShadowPass;"
+>
+{
+  pass p0
+  {
+
+    VertexShader = compile vs_Auto FrozenVS() GeneralVS;
+    PixelShader = compile ps_Auto FrozenPS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    CullMode = Back;
+
+  #if %GRASS || %LEAVES
+      CullMode = None;
+  #endif
+  }
+}
+
+//////////////////////////////// Common techniques ////////////////
+
+#include "CommonZPass.cfi"
+#include "ShadowCommon.cfi"
+#include "CommonShadowGenPass.cfi"
+#ifdef D3D10
+  #include "CommonShadowGenPassGS.cfi"
+#endif
+#include "CommonShadowPass.cfi"
+
+#undefine %TEMP_VEGETATION
+
+/////////////////////// eof ///

@@ -1,0 +1,114 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: Glass.ext
+// Created: 19/07/2004 by Tiago Sousa
+
+Version (1.00)
+
+Property
+{
+  Name            = %BUMP_MAP
+  Mask            = 0x1
+  Property        (Bump map)
+  Description     (Use bump-map texture)
+  DependencySet   = $TEX_Bump
+  DependencyReset = $TEX_Bump
+  Hidden
+}
+
+Property
+{
+  Name            = %GLOSS_MAP
+  Mask            = 0x2
+  Property        (Gloss map)
+  Description     (Use gloss map as separate texture)
+  DependencySet   = $TEX_Gloss
+  DependencyReset = $TEX_Gloss
+  Hidden
+}
+
+Property
+{
+  Name            = %ENVIRONMENT_MAP
+  Mask            = 0x10
+  Property        (Environment map)
+  Description     (Use environment map as separate texture)
+  DependencyReset = $TEX_EnvCM
+}
+
+Property
+{
+  Name        = %VERTCOLORS
+  Mask        = 0x20
+  Property    (Vertex Colors)
+  Description (Use vertex colors)
+  Hidden
+}
+
+Property
+{
+  Name        = %REFRACTION_MAP
+  Mask        = 0x100
+  Property    (Refraction map)
+  Description (Use refraction map as separate texture - if disabled artist should use alpha blending)
+}
+
+Property
+{
+  Name            = %GRADIENT_COLORING
+  Mask            = 0x200
+  Property        (Gradient coloring)
+  Description     (Use subsurface map as a gradient texture)
+  DependencyReset = $TEX_Subsurface
+}
+
+Property
+{
+  Name            = %BILINEAR_FP16
+  Mask            = 0x400
+  DependencySet   = $HW_BilinearFP16
+  DependencyReset = $HW_BilinearFP16
+  Hidden
+}
+
+Property
+{
+  Name            = %REALTIME_MIRROR_REFLECTION
+  Mask            = 0x800
+  Property        (Realtime mirror reflection)
+  Description     (Use realtime mirror reflection map)
+  DependencyReset = $TEX_EnvCM
+}
+
+Property
+{
+  Name        = %TWO_SIDED_SORTING
+  Mask        = 0x1000
+  Property    (Two sided sorting)
+  Description (Render two sided with sorting aproximation)
+}
+
+Property
+{
+  Name        = %DISABLE_RAIN_PASS
+  Mask        = 0x2000
+  Property    (Disable rain layer)
+  Description (Disables rain layer)
+}
+
+Property
+{
+  Name            = %STAT_BRANCHING
+  Mask            = 0x10000000
+  DependencySet   = $HW_StaticBranching
+  DependencyReset = $HW_StaticBranching
+  Hidden
+}
+
+Property
+{
+  Name            = %DYN_BRANCHING
+  Mask            = 0x20000000
+  DependencySet   = $HW_DynamicBranching
+  DependencyReset = $HW_DynamicBranching
+  Hidden
+}

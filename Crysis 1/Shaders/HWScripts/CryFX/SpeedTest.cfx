@@ -1,0 +1,105 @@
+#include "Common.cfi"
+#include "ModificatorVT.cfi"
+#include "ModificatorTC.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "ShaderDrawType = General;"
+>;
+
+/// Un-Tweakables //////////////////////
+sampler2D TexSampler = sampler_state
+{
+  Texture = $Diffuse;
+};
+
+DIFFUSEMAP
+SHADOWOCCLUDEMAP
+
+/////////////////////////////
+
+struct a2v
+{
+  float4 Position : POSITION; //in object space
+  float3 Normal : NORMAL; //in object space
+  float4 baseTC    : TEXCOORDN;
+};
+
+struct v2f
+{
+  float4 HPosition    : POSITION;  //in projection space
+  float4 baseTC      : TEXCOORDN;
+  float4 Normal  : TEXCOORDN;
+  float4 shadowTC   : TEXCOORDN;
+};
+
+///////////////// vertex shader //////////////////
+v2f SpeedTestVS(a2v IN)
+{
+  v2f OUT = (v2f)0;
+
+  OUT.HPosition = mul(vpMatrix, IN.Position);
+  OUT.baseTC.xyz = IN.baseTC.xyz;
+  OUT.Normal.xyz = IN.Normal;//saturate(0.5+0.5*dot(g_VS_SunLightDir, normalize(half4(0,0,1,0)+IN.Normal)))*MatDifColor;
+  OUT.shadowTC = HPosToScreenTC(OUT.HPosition);
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout SpeedTestPS(v2f IN)
+{
+  pixout OUT;
+
+  half4 shadowOccl = 1 - tex2Dproj(shadowOccludeMapSampler, IN.shadowTC.xyzw);
+
+  half4 vLighting = saturate(0.3333+0.6666*dot(normalize(IN.Normal), g_PS_SunLightDir))*g_PS_SunColor*MatDifColor;
+
+  vLighting *= shadowOccl.x;
+
+  vLighting += Ambient;
+
+  half4 finalColor = vLighting * tex2D(diffuseMapSampler, IN.baseTC.xy);
+
+  HDROutput(OUT, finalColor, 1);
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script = 
+        "TechniqueZ=ZPass;"
+        "TechniqueShadowGen=ShadowGen;"
+#ifdef D3D10
+        "TechniqueShadowGenDX10=ShadowGenGS;"
+#endif
+        "TechniqueShadowPass=ShadowPass;"
+>
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto SpeedTestVS();
+
+    ZEnable = true;
+    ZWriteEnable = true;
+
+    PixelShader = compile ps_Auto SpeedTestPS();
+  }
+}
+
+#include "CommonZPass.cfi"
+#include "ShadowCommon.cfi"
+#include "CommonShadowGenPass.cfi"
+#ifdef D3D10
+  #include "CommonShadowGenPassGS.cfi"
+#endif
+#include "CommonShadowPass.cfi"
+
+/////////////////////// eof ///

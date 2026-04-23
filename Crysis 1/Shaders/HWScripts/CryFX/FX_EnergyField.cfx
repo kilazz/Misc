@@ -1,0 +1,400 @@
+// TODO:
+// Clean up, lots of redundancy and optimize
+
+#include "Common.cfi"
+#include "ShadeLib.cfi"
+#include "ModificatorVT.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+                "Public;"
+                "NoPreview;"
+                "ShaderDrawType = General;"
+                "ShaderType = FX;"
+>;
+
+/// Un-Tweakables //////////////////////
+ENVIRONMENTMAP
+ENVIRONMENTCUBEMAP
+
+sampler2D envMapSamplerRefr
+<
+  string Script = 
+      "RenderOrder=PreDraw;"
+      "RenderCamera=Current;"
+      "RenderType=CurScene;"
+      "RenderTarget_IDPool = _RT2D_SCREEN_ID;"
+      "RenderTarget_Width=$ScreenSize;"
+      "RenderTarget_Height=$ScreenSize;"
+      "RenderTarget_UpdateType=Allways;"
+      "RenderDepthStencilTarget=DepthBuffer;";
+>
+{
+  Texture = $RT_2D;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+float4x4 ObjectMatrix : PI_TransObjMatrix;
+float AnimGenParams = { PB_time 0.5 };
+
+// Tweakables /////////////////
+
+float4 ShieldColor
+<
+  psregister      = PS_REG_PM_7;
+  string UIHelp   = "Set energy shield color";
+  string UIName   = "Shield color";
+  string UIWidget = "color";
+> = {1.0, 0.9, 0.9, 1.0};
+
+float4 SparksColor
+<
+  psregister      = PS_REG_PM_8;
+  string UIHelp   = "Set electricity sparks color";
+  string UIName   = "Sparks color";
+  string UIWidget = "color";
+> = {0.25, 0.5, 1.0, 1.0};
+
+float ShieldAnimSpeedScale
+<
+  psregister      = PS_REG_PM_4.x;
+  string UIHelp   = "Set animation animation speed scale";
+  string UIName   = "Shield animation speed";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float SparksAnimSpeedScale
+<
+  psregister      = PS_REG_PM_4.y;
+  string UIHelp   = "Set animation animation speed scale";
+  string UIName   = "Sparks animation speed";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.001;
+> = 2.0;
+
+float BumpTillingX
+<
+  psregister      = PS_REG_PM_4.z;
+  string UIHelp   = "Set bump tilling";
+  string UIName   = "Bump X tilling";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float BumpTillingY
+<
+  psregister      = PS_REG_PM_4.w;
+  string UIHelp   = "Set bump tilling";
+  string UIName   = "Bump Y tilling";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float SparksTillingX
+<
+  psregister      = PS_REG_PM_5.x;
+  string UIHelp   = "Set sparks tilling";
+  string UIName   = "Sparks X tilling";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float SparksTillingY
+<
+  psregister      = PS_REG_PM_5.y;
+  string UIHelp   = "Set sparks tilling";
+  string UIName   = "Sparks Y tilling";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float SparksMul
+<
+  psregister      = PS_REG_PM_5.z;
+  string UIHelp   = "Set sparks multiplier";
+  string UIName   = "Sparks multiplier";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float RefrBumpScale
+<
+  psregister      = PS_REG_PM_5.w;
+  string UIHelp   = "Set refraction bump scale";
+  string UIName   = "Refraction bump scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 4.0;
+  float UIStep    = 0.001;
+> = 0.5;
+
+float ReflBumpScale
+<
+  psregister      = PS_REG_PM_6.x;
+  string UIHelp   = "Set reflection bump scale";
+  string UIName   = "Reflection bump scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 4.0;
+  float UIStep    = 0.001;
+> = 0.5;
+
+float ReflectionAmount
+<
+  psregister      = PS_REG_PM_6.y;
+  string UIHelp   = "Set amount of reflection \nMin value = 0, Max value = 1.0";
+  string UIName   = "Reflection Amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.001;
+> = 0.1;
+
+float VtxAnimScale
+<
+  vsregister      = VS_REG_PM_4.y;
+  string UIHelp   = "Set vertex animation scale";
+  string UIName   = "Vertex animation scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float VtxAnimSpeed
+<
+  vsregister      = VS_REG_PM_4.z;
+  string UIHelp   = "Set vertex animation speed";
+  string UIName   = "Vertex animation speed";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.001;
+> = 5.0;
+
+/////////// Common vertex shader ////////////////
+
+struct vtxOut
+{
+  OUT_P
+  float4 tcBase : TEXCOORDN;
+  float4 vView : TEXCOORDN;
+  float4 tcScreenPos : TEXCOORDN;
+  float4 localFogColor : TEXCOORDN;
+};
+
+vtxOut EnergyFieldVS(app2vertGeneral IN)
+{
+  vtxOut OUT = (vtxOut)0;
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  float procAnim = (sin( frac(vertPassPos.Position.x + vertPassPos.Position.y + vertPassPos.Position.z)*g_VS_AnimGenParams.y * VtxAnimSpeed) + cos( frac(vertPassPos.Position.x + vertPassPos.Position.y + vertPassPos.Position.z)*g_VS_AnimGenParams.y * VtxAnimSpeed * 2))*0.5;
+  vertPassPos.Position.xyz += vertPassPos.ObjToTangentSpace[2].xyz * procAnim * VtxAnimScale;
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+  OUT.tcBase = IN.baseTC;
+
+  // Output view-vector
+  float3 vView = ViewPos.xyz - vertPassPos.Position.xyz;
+  OUT.vView.xyz= (mul(vertPassPos.ObjToTangentSpace, vView.xyz));
+
+  // Output the screen-space texture coordinates
+  OUT.tcScreenPos = HPosToScreenTC(OUT.HPosition);
+
+  OUT.localFogColor = GetVolumetricFogColor(vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz);
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout EnergyFieldPS(vtxOut IN)
+{
+  pixout OUT;
+
+   // Debug output
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, IN.tcBase);
+   return OUT;
+ #endif
+
+  // 2.5*0.5 * 0.5
+  float fAnim = frac(AnimGenParams * ShieldAnimSpeedScale);
+
+  half3 cBumpMap = half3(0,0,1);
+  half2 tcTilling = half2(BumpTillingX, BumpTillingY);
+#if %BUMP_MAP
+  half3 cBumpMap_1 = GetNormalMap(bumpMapSampler, IN.tcBase.xy * tcTilling.xy * 10 - float2(0, fAnim) );
+
+  half3 cBumpMap_2 = GetNormalMap(bumpMapSampler, IN.tcBase.yx * tcTilling.xy * 40 - fAnim.xx);
+
+  cBumpMap.xy = (cBumpMap_1.xy + cBumpMap_2.xy);
+  cBumpMap.z = (cBumpMap_1.z + cBumpMap_2.z)*0.5;
+#endif
+
+  half3 vNormal = normalize(cBumpMap.xyz * half3(0.5,0.5, 1) );
+
+  half3 vEye = normalize(IN.vView.xyz);
+  half NdotE = abs(dot(vEye.xyz, vNormal.xyz));
+
+  half2 tcRefr = (IN.tcScreenPos.xy/IN.tcScreenPos.w);
+
+  vNormal.xy *= (half) RefrBumpScale.x;
+  half3 cRefrR = tex2D(envMapSamplerRefr, tcRefr.xy + vNormal.xy*0.01*1.5);
+  half3 cRefrG = tex2D(envMapSamplerRefr, tcRefr.xy + vNormal.xy*0.01);
+  half3 cRefrB = tex2D(envMapSamplerRefr, tcRefr.xy + vNormal.xy*0.01*0.1);
+
+  half3 cRefr = half3(cRefrR.r, cRefrG.g, cRefrB.b);
+
+  half4 cFinal = 0;
+  half NdotE_a = vEye.z;
+
+  cFinal.xyz = cRefr.xyz * (half3) ShieldColor.xyz;
+  HDRFogOutput(OUT, half4(cFinal.xyz,  abs(NdotE_a)), 1, IN.localFogColor.xyz, IN.localFogColor.w);
+
+  return OUT;
+}
+
+pixout EnergyFieldSparksPS(vtxOut IN)
+{
+  pixout OUT;
+
+   // Debug output
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, IN.tcBase);
+   return OUT;
+ #endif
+
+  half2 tcSparksTilling = half2(SparksTillingX, SparksTillingY);
+
+  float fAnimSparks = frac(AnimGenParams * SparksAnimSpeedScale);
+  half4 cBaseMap_1 = tex2D(diffuseMapSampler, IN.tcBase.xy * tcSparksTilling.xy * 5   - float2(0, fAnimSparks) );
+  half4 cBaseMap_2 = tex2D(diffuseMapSampler, IN.tcBase.yx * tcSparksTilling.xy * 20 - fAnimSparks.xx );
+
+  half4 cBaseMap = 0.5 * (cBaseMap_1.x + cBaseMap_2.x);
+  cBaseMap = pow(1-abs(cBaseMap.x*2-1), 16);
+  cBaseMap.xyz *= (half3) SparksColor.xyz;
+
+  float fAnimShield = frac(AnimGenParams * ShieldAnimSpeedScale);
+
+  IN.tcBase.xy *=2;
+  half3 cBumpMap = half3(0,0,1);
+  half2 tcTilling = half2(BumpTillingX, BumpTillingY);
+#if %BUMP_MAP
+  half3 cBumpMap_1 = tex2D(bumpMapSampler, IN.tcBase.xy * tcTilling.xy * 5 - float2(0, fAnimShield) );
+  cBumpMap_1.xyz = cBumpMap_1.xyz*2-1;
+
+  half3 cBumpMap_2 = tex2D(bumpMapSampler, IN.tcBase.yx * tcTilling.xy * 20 - fAnimShield.xx );
+  cBumpMap_2.xyz = cBumpMap_2.xyz*2-1;
+
+  cBumpMap.xy = (cBumpMap_1.xy + cBumpMap_2.xy);
+  cBumpMap.z = (cBumpMap_1.z + cBumpMap_2.z)*0.5;
+#endif
+
+  half3 vNormal = normalize(cBumpMap.xyz * half3((half2)ReflBumpScale.xx, 1) );
+
+  half3 vEye = normalize(IN.vView.xyz);
+  half NdotE = abs(dot(vEye.xyz, vNormal.xyz));
+
+  // Compute reflection vector
+  half3 vReflect = reflect( -vEye.xyz, vNormal.xyz );
+
+  half3 cEnvMap = 1;
+#if %ENVIRONMENT_MAP
+  cEnvMap.xyz = tex2D(envMapSampler, 1.0/abs(NdotE) ).xyz;
+#endif
+
+  half fFresnel = GetFresnel(saturate(NdotE), 1.0, 1);
+  half3 cReflection = cEnvMap.xyz * fFresnel;
+
+  half4 cFinal = 0;
+  half NdotE_a = abs(vEye.z);
+
+  cFinal.xyz = NdotE_a*(cReflection*pow(NdotE, MatSpecColor.w)*cBaseMap.xyz*(half)SparksMul + cReflection*pow(NdotE, MatSpecColor.w)* (half) ReflectionAmount);
+
+  HDROutput(OUT, half4(cFinal.xyz,  abs(NdotE_a)), 1);
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script = 
+        "TechniqueZ=ZPass;"
+>
+{
+  // depth sorting aproximation, render backfaces first, then front faces
+  pass p0
+  {
+    VertexShader = compile vs_Auto EnergyFieldVS();
+    PixelShader = compile ps_Auto EnergyFieldPS();
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = Front;
+
+    SrcBlend = SRC_ALPHA;
+    DestBlend = ONE_MINUS_SRC_ALPHA;
+    AlphaBlendEnable = true;
+  }
+
+  pass p1
+  {
+    VertexShader = compile vs_Auto EnergyFieldVS();
+    PixelShader = compile ps_Auto EnergyFieldPS();
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = Back;
+
+    SrcBlend = SRC_ALPHA;
+    DestBlend = ONE_MINUS_SRC_ALPHA;
+    AlphaBlendEnable = true;
+  }
+
+  pass p2
+  {
+    VertexShader = compile vs_Auto EnergyFieldVS();
+    PixelShader = compile ps_Auto EnergyFieldSparksPS();
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = None;
+
+    SrcBlend = ONE;
+    DestBlend = ONE;
+    AlphaBlendEnable = true;
+  }
+
+}
+
+//////////////////////////////// Common techniques ////////////////
+
+#include "CommonZPass.cfi"
+
+/////////////////////// eof ///

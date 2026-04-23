@@ -1,0 +1,290 @@
+#include "Common.cfi"
+#include "ShadeLib.cfi"
+
+float4 AmbientObjectCol : PI_ObjectAmbColComp;//x=Ambient.w, y=ObjColor.w, z = 0, w = render quality
+
+#define INST_STREAM_CUSTOM                         \
+#if %_RT_INSTANCING_ATTR                           \
+  float4 InstAmbientOp  : TEXCOORDN;               \
+  float4 InstAmbientObjectCol : TEXCOORDN;         \
+  float4 InstBendInfo : TEXCOORDN;                 \
+#endif                                             \
+
+#include "ModificatorVT.cfi"
+
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "NoPreview;"
+           "ShaderDrawType = Light;"
+>;
+
+/// Un-Tweakables //////////////////////
+float4 DiffusesVS[4]  : PB_DiffuseMulti;
+float4x4 mViewIT : PI_View_IT;
+
+sampler3D noiseMapSampler = sampler_state
+{
+  Texture = textures/defaults/Noise3D.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+  AddressW = Wrap;
+};
+
+sampler2D detailBumpSampler = sampler_state
+{
+  Texture = textures/defaults/frostBumpPattern.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D envMapSampler = sampler_state
+{
+  Texture = textures/defaults/frost_refl2.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+// Tweakables /////////////////
+
+float WetMultiplier
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Sets wet multiplier";
+  string UIName   = "Wet multiplier";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float DarkeningAmount
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Set base layer darkening amount";
+  string UIName   = "Base layer darkening amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.005;
+> = 0.125;
+
+float DetailBumpTile
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIHelp   = "Set wet layer detail bump tilling";
+  string UIName   = "Wet detail bump tile";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 0.2;
+
+float BumpScale
+<
+  psregister      = PS_REG_PM_3.w;
+  string UIHelp   = "Set wet bump scale";
+  string UIName   = "Bump scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 5.0;
+  float UIStep    = 0.005;
+> = 0.3;
+
+float AnimScale
+<
+  vsregister      = VS_REG_PM_4.y;
+  string UIHelp   = "Sets water slidding speed";
+  string UIName   = "Animation scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float NoiseOffset
+<
+  vsregister      = VS_REG_PM_4.z;
+  string UIHelp   = "Set wet variation layer offsetting. Use for giving more variation to wet.";
+  string UIName   = "Noise offset";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.005;
+> = 0.0;
+
+float VariationTileU
+<
+  vsregister      = VS_REG_PM_5.x;
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 4.0;
+
+float VariationTileV
+<
+  vsregister      = VS_REG_PM_5.y;
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 4.0;
+
+float VariationTileW
+<
+  vsregister      = VS_REG_PM_5.w;
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 4.0;
+
+/////////// Common vertex shader ////////////////
+
+struct vtxCommonOut
+{
+  OUT_P
+  float4 tcBase : TEXCOORDN;
+
+  float4 tcDetail0 : TEXCOORDN;
+  float4 tcDetail1 : TEXCOORDN;
+
+  float4 vReflectionWS : TEXCOORDN;
+  float4 vEye : TEXCOORDN;
+
+  float4 shadowTC : TEXCOORDN;
+};
+
+vtxCommonOut WetVS(app2vertGeneral IN)
+{
+  vtxCommonOut OUT;
+#ifndef OPENGL
+  OUT = (vtxCommonOut)0;
+#endif
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+  OUT.tcBase.xy = IN.baseTC.xy;
+
+  //float3 vGravity = mul((const float3x3)objToTangentSpace, normalize(vNorm + float3(0,0,-1)));
+  float3 vScale = float3(VariationTileU, VariationTileV, VariationTileW);
+  OUT.tcDetail0.xyz = vertPassPos.Position.xyz * vScale.xyz + float3(0, 0, frac(g_VS_AnimGenParams.y * AnimScale)) + NoiseOffset;
+  OUT.tcDetail1.xyz = vertPassPos.Position.xyz * vScale.xyz * 2 + float3(0, 0, frac(g_VS_AnimGenParams.y* AnimScale * 2)) + NoiseOffset;
+
+  float3 vEye = normalize( -vertPassPos.WorldPos.xyz );
+
+  OUT.vEye.xyz = vEye.xyz;
+
+  float3 worldTangentN = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[2]);
+  float3 tcRef = reflect( vEye.xyz,  worldTangentN.xyz);
+  OUT.vReflectionWS.xyz = tcRef;  //-> should be transformed to eye space, but looks weird in non-closed objects
+
+  // Output the screen-space texture coordinates
+  OUT.shadowTC = HPosToScreenTC(OUT.HPosition);
+
+  // Bump strenght setting - used for compensating mipmaps bump strenght removal
+  OUT.tcBase.w = (OUT.HPosition.w * 0.5 + 1) * 0.1;
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout WetPS(vtxCommonOut IN)
+{
+  pixout OUT;
+
+   // Debug output
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, IN.tcBase);
+   return OUT;
+ #endif
+
+  half fFinalDarkening = 0;
+
+  half4 cBump = half4(0,0,1,1);
+  cBump.xyz = GetNormalMap(bumpMapSampler, IN.tcBase.xy);
+
+  half3 vEye = normalize(IN.vEye.xyz);
+  half NdotE = saturate( dot(cBump.xyz, vEye.xyz) );
+  half fFresnel = GetFresnel(NdotE, 0.5, 5);
+
+  cBump.xy += (tex2D(detailBumpSampler, IN.tcBase.xy * DetailBumpTile).xy*2-1) * BumpScale;
+
+  cBump.w = tex3D(noiseMapSampler, IN.tcDetail0.xyz).w;
+  cBump.w *= tex3D(noiseMapSampler, IN.tcDetail1.xyz).w;
+  cBump.w *= 2;
+
+  cBump.w = cBump.w * 2.0 - 1.0;
+  //cBump.xy -= cBump.w;
+  cBump.z = -cBump.w;
+
+  // Get main vectors/coeficients
+  half3 vNormal = normalize(cBump.xyz);
+
+  // normalize reflection vector and add some perturbation into it
+  half3 vReflectionWS = normalize(IN.vReflectionWS.xyz) ;
+
+  half3 envMap = GetTexture2D(envMapSampler, vReflectionWS.xy* 0.5 + 0.5 + vNormal.xy * IN.tcBase.w).w;
+  envMap = saturate(envMap *2-1) * fFresnel;
+
+  half fOcclShadowAcc = 0;
+#if %_LT_LIGHTS
+   half4 shadowOccl = tex2Dproj(shadowOccludeMapSampler, IN.shadowTC.xyzw);
+
+  // Light types
+  const int aLType[4] = { %_LT_0_TYPE, %_LT_1_TYPE, %_LT_2_TYPE, %_LT_3_TYPE };
+
+  for(int i=0; i<%_LT_NUM; i++)
+  {
+    half fOcclShadow = 1-dot(shadowOccl, ShadowChanMasks[i])*0.5;
+
+    fOcclShadowAcc += fOcclShadow;
+  }
+#endif
+
+  half4 cFinal = 0;
+
+  cFinal.xyz = envMap * fOcclShadowAcc * WetMultiplier;
+  cFinal.w = DarkeningAmount;
+
+  HDROutput(OUT, cFinal, 1);
+
+  return OUT;
+}
+//////////////////////////////// technique ////////////////
+
+technique General
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto WetVS() GeneralVS;
+    PixelShader = compile ps_Auto WetPS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = None;  // cull should be set for specific materials (like vegetation/double sided)
+    ZFunc = Equal;
+
+    SrcBlend = ONE;
+    DestBlend = ONE_MINUS_SRC_ALPHA;
+    AlphaBlendEnable = true;
+
+  }
+}
+
+/////////////////////// eof ///

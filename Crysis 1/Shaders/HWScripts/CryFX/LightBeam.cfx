@@ -1,0 +1,279 @@
+#include "Common.cfi"
+#include "ShadeLib.cfi"
+#include "ModificatorVT.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "NoPreview;"
+           "ShaderDrawType = Custom;"
+           "ShaderType = FX;"
+>;
+
+//////////////////////////////// techniques ////////////////
+
+//================================================================
+
+/// Un-Tweakables //////////////////////
+float Time = PB_Time;
+
+float4 Diffuses[4]  : PB_DiffuseMulti  < psregister = PS_REG_PL_00; >;
+
+/*
+float NoiseScaleX
+<
+  string UIWidget = "slider";
+  string UIName   = "NoiseScaleX";
+  float UIMin     = -2.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.01;
+> = 0.05;
+
+float NoiseSpeedX
+<
+  string UIWidget = "slider";
+  string UIName   = "NoiseSpeedX";
+  float UIMin     = -2.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.01;
+> = 0.1;
+
+float NoiseScaleY
+<
+  string UIWidget = "slider";
+  string UIName   = "NoiseScaleY";
+  float UIMin     = -2.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.01;
+> = 0.05;
+
+float NoiseSpeedY
+<
+  string UIWidget = "slider";
+  string UIName   = "NoiseSpeedY";
+  float UIMin     = -2.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.01;
+> = 0.15;
+
+float NoiseScaleZ
+<
+  string UIWidget = "slider";
+  string UIName   = "NoiseScaleZ";
+  float UIMin     = -2.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.01;
+> = 0.1;
+
+float NoiseSpeedZ
+<
+  string UIWidget = "slider";
+  string UIName   = "NoiseSpeedZ";
+  float UIMin     = -2.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.01;
+> = 0.05;
+*/
+
+sampler3D noiseMapSampler = sampler_state
+{
+  Texture = textures/defaults/Noise3D.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+  AddressW = Wrap;
+}
+
+sampler2D jitterMapSampler = sampler_state
+{
+  Texture = Textures/defaults/dither_2.dds;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+  AddressW = Wrap;
+}
+
+sampler2D sceneDepthMapSampler = sampler_state
+{
+  Texture = $ZTarget;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+samplerCUBE beamProjCubeSampler = sampler_state
+{
+  Texture = $FromLight;
+  sRGBLookup = true;
+};
+
+#include "ShadowCommon.cfi"
+
+struct app2vert
+{
+  IN_P
+};
+
+struct pixout_cl
+{
+  float4 Color  : COLOR0;
+};
+
+struct vert2fragBeam
+{
+  float4 HPosition  : POSITION;
+  float4 projTC     : TEXCOORDN;
+  float3 Pos        : TEXCOORDN;
+
+  float4 tcScreenPos : TEXCOORDN;
+  float4 tcJitter : TEXCOORDN;
+
+#if %NOISE
+  float4 noiseTC    : TEXCOORDN;
+#endif
+
+#if %_RT_SAMPLE0
+  vert2fragShadowCommon shadowTC;
+#endif
+
+};
+
+void streamPos_FromBeam(in app2vert IN, inout streamPos OUT)
+{
+  OUT.Position = IN.Position;
+}
+
+vert2fragBeam TransformBeamVS(app2vert IN)
+{
+  vert2fragBeam OUT = (vert2fragBeam)0;
+
+  // Position in screen space.
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromBeam(IN, vertPassPos);
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjMatr, vertPassPos, false);
+
+  OUT.Pos.xyz = vertPassPos.Position.xyz - g_VS_WorldViewPos.xyz;
+#if %NOISE
+  // disabled public parameters usage atm, since there's some issue with it + shadows active at same time
+  float4 noiseGen = float4(0.05, 0, 0, Time*0.1);
+  OUT.noiseTC.x = dot(vertPassPos.Position, noiseGen);
+  noiseGen = float4(0, 0.05, 0, Time*0.15);
+  OUT.noiseTC.y = dot(vertPassPos.Position, noiseGen);
+  noiseGen = float4(0, 0, 0.1, Time*0.05);
+  OUT.noiseTC.z = dot(vertPassPos.Position, noiseGen);
+#endif
+
+  OUT.projTC = mul(LightMatrix, vertPassPos.Position);
+  //OUT.tcScreenPos = HPosToScreenTC(OUT.HPosition);
+  OUT.tcScreenPos.x = (OUT.HPosition.x * 0.5 + OUT.HPosition.w * 0.5);
+  OUT.tcScreenPos.y = (OUT.HPosition.w * 0.5 - OUT.HPosition.y * 0.5);
+  OUT.tcScreenPos.w = OUT.HPosition.w ;
+
+#if !D3D10
+  OUT.tcScreenPos.xy += g_VS_ScreenSize.zw*OUT.HPosition.w;
+#endif
+
+  OUT.tcScreenPos.z = OUT.HPosition.w  * g_VS_NearFarClipDist.w ;
+
+  OUT.tcJitter = OUT.tcScreenPos;
+  half2 vJitterScale = float2(g_VS_ScreenSize.x, g_VS_ScreenSize.y)/4;  // jitter texture is 2x2 size - make sure to map texel to pixel
+  OUT.tcJitter.xy *= vJitterScale;
+
+#if %_RT_SAMPLE0
+  GenShadowTC(vertPassPos.Position, vertPassPos.InstMatrix, OUT.shadowTC);
+#endif
+
+  return OUT;
+}
+
+pixout VolBeamPS(vert2fragBeam IN)
+{
+  pixout OUT = (pixout) 0;
+
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, IN.tcScreenPos.xyzw);
+   return OUT;
+ #endif
+
+  // Todo: use jittering
+
+  half3 vLightWS = LGetPosition(0).xyz - IN.Pos.xyz;
+  half fFallOff = GetAttenuation(vLightWS.xyz, LGetPosition(0).w);                                   // 2 alu
+
+  half dist = length(vLightWS.xyz) * LGetPosition(0).w;
+
+  float fDepth = tex2Dproj(sceneDepthMapSampler, IN.tcScreenPos.xyzw).x;
+
+  clip(fDepth - IN.tcScreenPos.z);
+
+  // jittering test -> very high quality, and ultra slow speed
+  // very bad quality when rendering into low-res rt
+  //half3 fJitter = ((tex2Dproj(jitterMapSampler, IN.projTC * float4(64, 64, 1,1)).xyz))*2-1 ;
+
+  // try hidding artefacts nearby projector by using lower mipmaps/blurring
+  half fCookieMipBias = (4.0 - 4.0* saturate( dist * 4.0 )) ; // 2 alu
+
+  half4 filterColor = texCUBEbias(beamProjCubeSampler, float4(IN.projTC.xyz, fCookieMipBias) );
+
+  half fNoise = 1;
+#if %NOISE
+  // Todo: replace with 2d noise
+  fNoise = saturate(tex3D(noiseMapSampler, IN.noiseTC.xyz).a *2 - 0.25);
+#endif
+
+  float fShadow = 1;
+
+#if %_RT_SAMPLE0
+  fShadow = ShadowDepthTest(IN.shadowTC, float2(0.0, 0.0));
+#endif
+
+  // "soften" slices intersections
+  //half softDepth = saturate( ( fDepth - IN.tcScreenPos.z )*1000 );
+
+  half3 Color = filterColor * Diffuses[0].xyz * fNoise * fShadow * fFallOff;// * softDepth;
+
+  HDROutput(OUT, half4(Color, dot(Color.xyz, 1)), 1);
+
+  return OUT;
+}
+
+technique LightBeam
+<
+  string Script = "Public;";
+>
+{
+  CustomRE Beam
+  {
+    Model = objects/lights/beam.cgf;
+    LightStyle = 0;
+    StartRadius = 0.05;
+    EndRadius = 10.7;
+    Length = 22;
+    StartColor = {1 1 1 0.9f};
+    EndColor = {1 1 1 -0.1};
+  }
+
+  pass p0
+  {
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = None;
+
+    SrcBlend = ONE;
+    DestBlend = ONE;
+    AlphaBlendEnable = true;
+
+    VertexShader = compile vs_Auto TransformBeamVS() GeneralVS;
+    PixelShader = compile ps_Auto VolBeamPS() GeneralPS;
+  }
+}
+
+/////////////////////// eof ///

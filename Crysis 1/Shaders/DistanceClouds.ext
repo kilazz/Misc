@@ -1,0 +1,12 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: Particles.ext
+// Created: 16/2/2004 by Andrey Honich.
+
+Version (1.00)
+
+Property
+{
+  Name   = %DIFFUSE
+  Mask   = 0x1
+  Hidden
+}

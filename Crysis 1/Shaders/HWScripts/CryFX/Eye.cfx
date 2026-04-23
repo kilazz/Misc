@@ -1,0 +1,407 @@
+#include "Common.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+       "Public;"
+       "SupportsAttrInstancing;"
+       //"SingleLightPass;"
+#if %EYE_OVERLAY
+//      "ForceDrawLast;"
+     "DecalNoDepthOffset;"
+#else
+      "ForceZpass;"
+      "ForceGeneralPass;"
+#endif
+       "ShaderDrawType = Light;"
+       "ShaderType = General;"
+>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////// Custom shading pass structure /////////////////////////////////////
+
+struct fragPassCustom
+{
+  half3 cIrisGlint;
+  half fCenterGlint;
+  half fCorneaOpacityRecip;
+  half fCornea_Opacity;
+  half fMaterialOpacity;
+};
+
+struct fragLightPassCustom
+{
+
+};
+
+#include "ShadeLib.cfi"
+
+// Un-Tweakables /////////////////
+float4x4 mCamera        : PB_CameraMatrix;
+float4 AmbientObjectCol : PI_ObjectAmbColComp;//x=Ambient.w, y=ObjColor.w, w = Obj Rend quality
+float4 ResourcesOpacity : PB_ResourcesOpacity;
+//////////////////////////////// Common vertex shader ////////////////
+
+#include "VertexLib.cfi"
+
+//////////////////////////////// Samplers ////////////////
+SUBSURFACEMAP
+DECALMAP
+OPACITYMAP
+ENVIRONMENTMAP
+ENVIRONMENTCUBEMAP
+
+// Tweakables /////////////////
+
+float ReflectionAmount
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Set amount of reflection";
+  string UIName   = "Reflect Amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 0.25;
+
+float FresnelBias
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Set how much reflective material is";
+  string UIName   = "Fresnel bias";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.001;
+> = 0.0;
+
+float FresnelScale
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIHelp   = "Set fresnel term scale";
+  string UIName   = "Fresnel Scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 32.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float IrisGlintMul
+<
+  psregister      = PS_REG_PM_3.w;
+  string UIHelp   = "Set iris glint multiplier";
+  string UIName   = "Iris glint multiplier";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 4.0;
+  float UIStep    = 0.001;
+> = 2.0;
+
+float CorneaOpacity
+<
+  psregister      = PS_REG_PM_4.x;
+  string UIHelp   = "Set cornea reflection opacity";
+  string UIName   = "Cornea Opacity";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.001;
+> = 0.5;
+
+float4 IrisColor
+<
+  psregister      = PS_REG_PM_5;
+  string UIHelp   = "Set eye iris color";
+  string UIName   = "Iris color";
+  string UIWidget = "color";
+> = {1.0, 1.0, 1.0, 1.0};
+
+vert2FragGeneral EyeVS(app2vertGeneral IN)
+{
+  vert2FragGeneral OUT;
+
+#ifndef OPENGL
+  OUT = (vert2FragGeneral)0;
+#endif
+
+  vs_shared_output( IN, OUT, false );
+
+#if %EYE_OVERLAY
+  // pull overlay z in front
+  OUT.HPosition = OUT.HPosition * DecalZFightingRemedy.x + DecalZFightingRemedy.wwyw;;  // 1 alu
+#endif
+
+  OUT.vBinormal.w = ResourcesOpacity.w;
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_unify_parameters( inout fragPass pPass )
+{
+
+  pPass.bRenormalizeNormal = true;
+  pPass.bCustomComposition = true;
+  pPass.bHemisphereLighting = true;
+  pPass.bDisableAlphaTestD3D10 = true;
+
+#if %ENVIRONMENT_MAP
+  pPass.fReflection_Amount = ReflectionAmount;
+  pPass.fFresnel_Bias = FresnelBias;
+  pPass.fFresnel_Scale = FresnelScale;
+#endif
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_begin(inout fragPass pPass)
+{
+  pPass.cGlossMap.xyz = tex2D(glossMapSampler, pPass.IN.baseTC.xy);
+
+  #if %IRIS
+    // Apply iris color
+    pPass.cDiffuseMap.xyz *= IrisColor;
+    pPass.cGlossMap.xyz = pPass.cDiffuseMap.xyz;
+  #endif
+
+  pPass.cEnvironment = 1;
+#if %ENVIRONMENT_MAP
+  #if %_TT3_TCUBE
+    pPass.cEnvironment.xyz = texCUBE(envMapSamplerCUBE, pPass.vReflVec);
+  #else
+
+    float3 vReflectES = pPass.vReflVec.xyz;
+    // Don't use correct mapping on low-specs
+    if( pPass.nQuality == QUALITY_HIGH )
+    {
+
+      // Xform reflection to eye-space (required for correct spherical env. mapping...)
+      vReflectES = mul( (float3x3)mCamera, pPass.vReflVec );                                   // 3 alu
+
+      // optimized math
+      float m = - 2.828 * sqrt( vReflectES.z + 1.0 );                                                 // 3 alu
+      vReflectES.xy = (vReflectES.xy / m ) + 0.5;                                                     // 2 alu
+    }
+
+    pPass.cEnvironment.xyz = tex2D(envMapSampler, vReflectES.xy).xyz;
+
+  #endif
+#endif
+
+  // Get fresnel term (artist friendlier)
+  pPass.cEnvironment *= pPass.fReflection_Amount;                                                 // 1 alu
+  pPass.fFresnel = pPass.fFresnel_Bias + GetFresnelTex(pPass.fNdotE, 0).w * pPass.fFresnel_Scale; // 1 alu
+
+  if( pPass.nQuality == QUALITY_LOW )
+  {
+    // cheap fresnel for low specs
+    pPass.fFresnel = 1 - saturate( pPass.fNdotE );
+  }
+
+  // Apply fresnel to environment map
+  pPass.cEnvironment *= pPass.fFresnel;
+
+  if( pPass.nQuality == QUALITY_HIGH )
+  {
+
+#if %IRIS
+  // Iris highlight
+  pPass.pCustom.cIrisGlint = pow( saturate( pPass.fNdotE ), pPass.fSpecPow);
+
+  // apply iris color and final multiplier
+  pPass.pCustom.cIrisGlint *= pPass.cDiffuseMap.xyz * IrisGlintMul;
+#endif
+
+    // Always keep a glint around eye center
+    pPass.pCustom.fCenterGlint = pow( saturate(pPass.fNdotE), pPass.fSpecPow * 10);
+    pPass.cEnvironment += pPass.pCustom.fCenterGlint;
+  }
+
+  // Compute opacity
+  #if !%EYE_OVERLAY
+    pPass.pCustom.fCornea_Opacity = CorneaOpacity;
+  #endif
+
+  #if !%IRIS
+    pPass.fAlpha = saturate( pPass.IN.Ambient.w * (pPass.cDiffuseMap.w + pPass.pCustom.fCornea_Opacity + 0.05) );
+  #else
+    pPass.fAlpha = pPass.IN.Ambient.w;
+
+  #endif
+
+  #if %EYE_OVERLAY
+    // workaround for setting material opacity with multiple light sources
+    pPass.fAlpha = saturate( pPass.IN.vBinormal.w * (pPass.cDiffuseMap.w + pPass.pCustom.fCornea_Opacity + 0.05) );
+  #endif
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_per_light(inout fragPass pPass, inout fragLightPass pLight)
+{
+  // Compute coeficients
+  if( pPass.nQuality == QUALITY_HIGH )
+  {
+    // Use EdotL to attenuate bump strenght in shadow area - Needed to match skin shading also
+    half EdotL = saturate(dot(pPass.vView.xyz, pLight.vLight.xyz)*0.5 + 0.5);
+    pLight.fNdotL = saturate( pLight.fNdotL * 0.5 + 0.5) * EdotL; // soften NdotL a bit
+  }
+  else
+    pLight.fNdotL = saturate( pLight.fNdotL );
+
+  // Diffuse Term
+  half3 cDiffuse = pLight.fNdotL * pLight.cDiffuse.xyz;
+
+  half3 cSpecular = Phong( pPass.vReflVec, pLight.vLight.xyz, pPass.fSpecPow) + pPass.pCustom.cIrisGlint;
+  cSpecular.xyz *= pLight.cSpecular.xyz * pLight.fNdotL;
+
+  half3 cK = pLight.fOcclShadow * pLight.fFallOff * pLight.cFilter;                                // 2 alu
+
+  pPass.cDiffuseAcc.xyz += cDiffuse.xyz * cK.xyz;                                                   // 1 alu
+  pPass.cSpecularAcc.xyz += cSpecular.xyz * cK.xyz;                                                 // 1 alu
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_ambient(inout fragPass pPass, inout half3 cAmbient)
+{
+  pPass.cAmbientAcc.xyz += cAmbient.xyz;                                                             // 1 alu
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_end(inout fragPass pPass, inout half3 cFinal)
+{
+  // Final composition
+  cFinal.xyz = ( pPass.cAmbientAcc.xyz + pPass.cDiffuseAcc.xyz * pPass.cDiffuseMap.w) * pPass.cDiffuseMap.xyz;       // 3 alu
+  if (pPass.nQuality != QUALITY_LOW)
+    cFinal.xyz *= MatDifColor.xyz;
+
+  #if %ENVIRONMENT_MAP
+
+    //if !%_RT_REALTIMECM
+      // apply shading to environment map
+      pPass.cSpecularAcc.xyz += pPass.cEnvironment.xyz *( pPass.cAmbientAcc.xyz + pPass.cDiffuseAcc.xyz ); // 2 alu
+    //else
+//      pPass.cSpecularAcc.xyz += pPass.cEnvironment.xyz;                                // 1 alu
+  //  #endif
+
+  #endif
+
+  half fCorneaOpacityRecip = 1.0;
+#if !%IRIS && %_RT_ALPHABLEND
+  fCorneaOpacityRecip = 1.0/ saturate(pPass.cDiffuseMap.w + pPass.pCustom.fCornea_Opacity + 0.05);            // 2 alu
+#endif
+  half3 cSpecular = pPass.cSpecularAcc.xyz * pPass.cGlossMap.xyz * fCorneaOpacityRecip;   // 3 alu
+  if (pPass.nQuality != QUALITY_LOW)
+    cSpecular *= MatSpecColor.xyz;
+  cFinal.xyz += cSpecular;
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#include "fragLib.cfi"
+
+///////////////// pixel shader //////////////////
+
+pixout EyePS(vert2FragGeneral IN)
+{
+  pixout OUT = (pixout) 0;
+
+  // Initialize fragPass structure
+  fragPass pPass = (fragPass) 0;
+  frag_unify(pPass, IN);
+  half4 cFinal = frag_shared_output(pPass);
+
+  HDROutput(OUT, cFinal, 1);
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script = 
+        "TechniqueZ=ZPass;"
+        "TechniqueCaustics=CausticsPass;"
+        "TechniqueMotionBlur=MotionBlurPass;"
+#ifndef %DISABLE_RAIN_PASS
+        "TechniqueRainPass=RainPass;"
+#endif
+#if %EYE_OVERLAY
+        "TechniqueCustomRender=CustomRenderPass;"
+#endif
+        "TechniqueShadowGen=ShadowGen;"
+#ifdef D3D10
+        "TechniqueShadowGenDX10=ShadowGenGS;"
+#endif
+        "TechniqueShadowPass=ShadowPass;"
+>
+{
+  pass p0
+  {
+#if %DYN_BRANCHING
+    VertexShader = compile vs_3_0 EyeVS() GeneralVS;
+    PixelShader = compile ps_3_0 EyePS() GeneralPS;
+#else
+    VertexShader = compile vs_Auto EyeVS() GeneralVS;
+    PixelShader = compile ps_Auto EyePS() GeneralPS;
+#endif
+    ZEnable = true;
+    ZWriteEnable = true;
+    CullMode = Back;
+
+#if !%EYE_OVERLAY
+    SrcBlend = SRC_ALPHA;
+    DestBlend = ONE_MINUS_SRC_ALPHA;
+    //AlphaBlendEnable = true;
+    //IgnoreMaterialState = true;
+    ZFunc = LEqual;
+#else
+
+    ZFunc = Less;
+    //IgnoreMaterialState = false;
+#endif
+
+  }
+}
+
+//////////////////////////////// Common techniques ////////////////
+
+#include "CommonZPass.cfi"
+#include "CommonCausticsPass.cfi"
+#include "CommonMotionBlurPass.cfi"
+
+#ifndef %DISABLE_RAIN_PASS
+  #include "CommonRainPass.cfi"
+#endif
+
+#include "ShadowCommon.cfi"
+#include "CommonShadowGenPass.cfi"
+#ifdef D3D10
+  #include "CommonShadowGenPassGS.cfi"
+#endif
+#include "CommonShadowPass.cfi"
+
+// temporary hack - while we dont get eyes backcaps geometry
+#define %TEMP_EYES 0x80000000
+
+#include "CommonViewsPass.cfi"
+
+#undefine %TEMP_EYES
+
+/////////////////////// eof ///

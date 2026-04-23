@@ -1,0 +1,13 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: FX_VelocityBeamParticles.ext
+// Created: 16/2/2004 by Tiago Sousa
+
+Version (1.00)
+
+Property
+{
+  Name        = %CONSTANT_DIRECTION
+  Mask        = 0x1
+  Property    (Constant direction)
+  Description (Use for using contant direction)
+}

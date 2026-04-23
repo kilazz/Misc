@@ -1,0 +1,31 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: Particles.ext
+// Created: 16/2/2004 by Andrey Honich.
+
+Version (1.00)
+
+Property
+{
+  Name   = %DIFFUSE
+  Mask   = 0x1
+  Hidden
+}
+
+Property
+{
+  Name            = %BUMP_MAP
+  Mask            = 0x1
+  Property        (Bump map)
+  Description     (Use bump-map texture)
+  DependencySet   = $TEX_Bump
+  DependencyReset = $TEX_Bump
+  Hidden
+}
+
+Property
+{
+  Name        = %FAKE_FIRE
+  Mask        = 0x2
+  Property    (Fake fire)
+  Description (Use bump-map and diffuse texture as displacement for fire diffuse texture)
+}

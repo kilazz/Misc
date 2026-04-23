@@ -1,0 +1,983 @@
+float4  AnimGenParams = { PB_time 1.0, PB_time 0.5, PB_time 0.25, PB_time 0.125};
+
+#include "ClothValidations.cfi"
+#include "Common.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           //"SingleLightPass;"
+           "SupportsAttrInstancing;"
+#if %DETAIL_BUMP_MAPPING
+           "DetailBumpMapping;"
+#endif
+#if %WIND_BENDING
+           "VT_WindBending;"
+#endif
+           "ShaderDrawType = Light;"
+           "ShaderType = General;"
+>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////// Custom shading pass structure /////////////////////////////////////
+
+struct fragPassCustom
+{
+  half3 vTangent;        // perturbed tangent vector
+  half3 vBinormal;       // perturbed binormal vector
+
+  half fFresnel;         // fresnel term
+
+  half fFuzzyNess;       // fuzzyness term
+  half3 cFuzzy;          // fuzzyness color
+  half3 cFuzzyAcc;
+
+  half fSpecMultiplier;
+  half fDifExponent;   // diffuse exponent used for mineart shading
+  half2 vSurfaceRoughness;
+
+  half3 cLuminanceDiffuseFresnel;  // luminance term * diffuse map * fresnel pre-multiplication
+
+  // mp specific
+  half3 cReflectEffectAmb;     // reflection term used for mp effects
+  half3 cDiffuseAccum;      // diffuse accumulation (used for mp effects)
+  half fFresnelScaleAccum;  // fresnel scale accumulation (used for mp effects)
+
+  half fCloakAmount;
+};
+
+struct fragLightPassCustom
+{
+};
+
+#include "ShadeLib.cfi"
+
+// Un-Tweakables /////////////////
+float4x4 mCamera      : PB_CameraMatrix;
+float4 AmbientObjectCol : PI_ObjectAmbColComp;//x=Ambient.w, y=ObjColor.w, w = Obj Rend quality
+
+//////////////////////////////// Common vertex shader ////////////////
+
+#include "VertexLib.cfi"
+
+//////////////////////////////// Samplers ////////////////
+SUBSURFACEMAP
+DECALMAP
+OPACITYMAP
+ENVIRONMENTMAP
+ENVIRONMENTCUBEMAP
+
+sampler2D customMapSampler { Texture = $CustomMap; sRGBLookup = true; };
+
+sampler2D chameleonMapSampler
+{
+  Texture = $CloakRT;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D cloakFluidSampler
+{
+  Texture = Textures/defaults/noise.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+// Tweakables /////////////////
+
+float DiffuseExponent
+<
+  psregister      = PS_REG_PM_4.x;
+  string UIHelp   = "Set diffuse falloff in material is";
+  string UIName   = "Diffuse falloff";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float FuzzynessSmoothness
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIHelp   = "Set fuzzyness smoothness";
+  string UIName   = "Fuzzyness smoothness";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 2.0;
+
+float FuzzynessStrength
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Set fuzzyness Strength";
+  string UIName   = "Fuzzyness Strength";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float FuzzynessSpread
+<
+  psregister      = PS_REG_PM_3.w;
+  string UIHelp   = "Set fuzzyness amount";
+  string UIName   = "Fuzzyness spreading amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float FuzzynessSaturation
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Set fuzzyness color amount";
+  string UIName   = "Fuzzyness Saturation";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+#if %ANISO_SPECULAR
+  float SpecularMultiplier
+  <
+    psregister      = PS_REG_PM_4.y;
+    string UIHelp   = "Set specular intensity/multiplier";
+    string UIName   = "Specular multiplier";
+    string UIWidget = "slider";
+    float UIMin     = 0;
+    float UIMax     = 2;
+    float UIStep    = 0.001;
+  > = 0.314;
+
+  float AnisotropicShape
+  <
+    psregister      = PS_REG_PM_4.z;
+    vsregister      = VS_REG_PM_4.y;
+    string UIHelp   = "Set anisotropy shape (0.5 is isotropic, 1 is radial, 0 is disk)";
+    string UIName   = "Anisotropy Shape";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 1.0;
+    float UIStep    = 0.001;
+  > = 0.25;
+#endif
+
+#if %ALPHAGLOW
+  float AmbientMultiplier
+  <
+    psregister      = PS_REG_PM_4.w;
+    string UIHelp   = "Set alpha glow multiplier";
+    string UIName   = "Alpha glow multiplier";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 32.0;
+    float UIStep    = 0.1;
+  > = 1.0;
+#endif
+
+#if %DETAIL_BUMP_MAPPING
+  float DetailBumpTillingU
+  <
+    psregister      = PS_REG_PM_5.x;
+    string UIHelp   = "Set detail diffuse_bump tilling";
+    string UIName   = "Detail tilling U";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 32.0;
+    float UIStep    = 0.1;
+  > = 1.0;
+
+  float DetailBumpTillingV
+  <
+    psregister      = PS_REG_PM_5.y;
+    string UIHelp   = "Set detail diffuse_bump tilling";
+    string UIName   = "Detail tilling V";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 32.0;
+    float UIStep    = 0.1;
+  > = 1.0;
+
+  float DetailBumpScale
+  <
+    psregister      = PS_REG_PM_5.z;
+    string UIHelp   = "Set detail bump scale";
+    string UIName   = "Detail bump scale";
+    string UIWidget = "slider";
+    float UIMin     = 0.125;
+    float UIMax     = 10.0;
+    float UIStep    = 0.1;
+  > = 1.0;
+
+  float DetailBlendAmount
+  <
+    psregister      = PS_REG_PM_5.w;
+    string UIHelp   = "Set diffuse detail blend scale";
+    string UIName   = "Detail blend amount";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 1.0;
+    float UIStep    = 0.1;
+  > = 0.0;
+#endif
+
+#if %NANOSUIT_EFFECTS
+
+  float MetallicAmount
+  <
+    psregister      = PS_REG_PM_5.x;
+    string UIName   = "Metallic amount";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 1.0;
+    float UIStep    = 0.1;
+  > = 1.0;
+
+  float ReflectionAmount
+  <
+    psregister      = PS_REG_PM_5.y;
+    string UIName   = "Reflection Amount";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 10.0;
+    float UIStep    = 0.001;
+  > = 1.0;
+
+  float FresnelBias
+  <
+    psregister      = PS_REG_PM_5.z;
+    string UIName   = "Fresnel bias";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 1.0;
+    float UIStep    = 0.001;
+  > = 0.0;
+
+  float FresnelScale
+  <
+    psregister      = PS_REG_PM_5.w;
+    string UIName   = "Fresnel scale";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 32.0;
+    float UIStep    = 0.001;
+  > = 0.0;
+
+  float FresnelScaleShadowBias
+  <
+    psregister      = PS_REG_PM_6.x;
+    string UIName   = "Fresnel scale shadow bias";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 1.0;
+    float UIStep    = 0.001;
+  > = 1.0;
+
+  float SparksPow
+  <
+    vsregister      = VS_REG_PM_5.x;
+    string UIName   = "Sparks Pow";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 10.0;
+    float UIStep    = 0.001;
+  > = 8.0;
+
+  float SparksMultiplier
+  <
+    vsregister      = VS_REG_PM_5.y;
+    string UIName   = "Sparks multiplier";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 32.0;
+    float UIStep    = 0.001;
+  > = 5.0;
+
+  float SparksPhase
+  <
+    vsregister      = VS_REG_PM_5.z;
+    string UIName   = "Sparks phase";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 100.0;
+    float UIStep    = 0.001;
+  > = 50.0;
+
+  float SparksFrequency
+  <
+    vsregister      = VS_REG_PM_5.w;
+    string UIName   = "Sparks frequency";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 10.0;
+    float UIStep    = 0.001;
+  > = 4.0;
+
+  float4 SparksColor
+  <
+    vsregister      = VS_REG_PM_6;
+    string UIName   = "Sparks color";
+    string UIWidget = "color";
+  > = {1.0, 1.0, 1.0, 1};
+
+#endif
+
+#if %NANOSUIT_CLOAK
+
+  float CloakShadowBias
+  <
+    psregister      = PS_REG_PM_6.y;
+    string UIName   = "Cloak shadow bias";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 1.0;
+    float UIStep    = 0.001;
+  > = 0.25;
+
+#endif
+
+////////////////////////////////////////////////////////
+//                PRE-SHADERS
+////////////////////////////////////////////////////////
+
+// Mineart adjustment
+float prsh_DifExponent < psregister = PS_REG_PM_7.x; > = ( DiffuseExponent * 0.1 );
+
+// Mineart diffuse exponent
+float prsh_LuminanceAdjument < psregister = PS_REG_PM_7.y; > = (2.0 - DiffuseExponent );
+
+#if %ANISO_SPECULAR
+
+  // Specular multiplier pre-multiplied with some terms
+  float prsh_SpecMulFinal < psregister = PS_REG_PM_7.z; > = ( ( SpecularMultiplier * 15.0 ) / ( ( (1.0 - AnisotropicShape ) * AnisotropicShape ) * 12.5663 ) + 0.0001 );
+
+#endif
+
+////////////////////////////////////////////////////////
+//                GENERAL PASS
+////////////////////////////////////////////////////////
+
+//  baseTC.wz: anisotropic shape
+
+///////////////// vertex shader //////////////////
+vert2FragGeneral ClothVS(app2vertGeneral IN)
+{
+  vert2FragGeneral OUT;
+#ifndef OPENGL
+  OUT = (vert2FragGeneral)0;
+#endif
+
+  vs_shared_output( IN, OUT, false );
+
+  // custom vertex shader computation
+
+#if %ANISO_SPECULAR
+
+  // * 10 required for anisotropic version using texture lookups
+  OUT.baseTC.zw = float2(1.0 - AnisotropicShape, AnisotropicShape);
+  OUT.baseTC.zw = max(1.0 / OUT.baseTC.zw, 0.001);
+
+  // Invert swizzles to generate less mov's in ps2.0
+  OUT.baseTC.zw = OUT.baseTC.wz;
+
+#endif
+
+#if %NANOSUIT_CLOAK
+
+  OUT.vBinormal.w = frac( AnimGenParams.y*0.01 );
+
+#endif
+
+  return OUT;
+}
+
+struct vert2FragEffects
+{
+  OUT_P
+  float4 baseTC     : TEXCOORDN;
+  float4 tangVec    : TEXCOORDN;
+  float4 binormVec  : TEXCOORDN;
+  float4 normalVec  : TEXCOORDN;
+  float4 viewVec    : TEXCOORDN;
+  float4 posOS      : TEXCOORDN;
+  float4 vEffParams0 : TEXCOORDN;
+  float4 vEffParams1 : TEXCOORDN;
+  float4 Ambient    : COLOR0;
+};
+
+vert2FragEffects ClothEffectsVS(app2vertGeneral IN)
+{
+  vert2FragEffects OUT;
+#ifndef OPENGL
+  OUT = (vert2FragEffects)0;
+#endif
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  OUT.posOS = vertPassPos.Position;
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+  // Apply texture modifiers
+  _TCModify(IN.baseTC, OUT.baseTC, vertPassPos.Position, vertPassPos.ObjToTangentSpace[2], TS_DIFFUSE);
+
+  // Output world to tangent matrix and world space position
+  float3 worldTangentS = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]);
+  float3 worldTangentT = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]);
+  float3 worldTangentN = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[2]);
+  OUT.tangVec.xyz = (worldTangentS);
+  OUT.binormVec.xyz = (worldTangentT);
+  OUT.normalVec.xyz = (worldTangentN);
+  OUT.viewVec.xyz = vertPassPos.WorldPos.xyz;
+
+  // Output ambient color
+  OUT.Ambient = AmbientOp;
+#if %_RT_INSTANCING_ATTR
+  OUT.Ambient = IN.InstAmbientOp;
+#endif
+
+  OUT.vEffParams0 = float4( SparksPow, SparksMultiplier, SparksPhase, SparksFrequency );
+  OUT.vEffParams1 = float4( SparksColor.xyz,  SparksFrequency );
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+sampler2D fuzzyPowSampler = sampler_state
+{
+  Texture = textures/defaults/fuzzy_pow_sampler_merged.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+float4 GetFuzzyPowTex(float value, float exponent)
+{
+
+#if D3D10
+  return tex2Dlod( fuzzyPowSampler, float4( value, exponent, 0, 0 ) );
+#else
+  return tex2D( fuzzyPowSampler, float2( value, exponent ) );
+#endif
+}
+
+// Fuzzyness is just fresnel, with no biasing
+half GetFuzzyness(in half NdotI, in half fuzzySmoothness, in half fuzzySpread)
+{
+  half alpha = GetFuzzyPowTex(NdotI, fuzzySmoothness * 0.1 ).x;
+  return GetFuzzyPowTex( alpha ,fuzzySpread * 0.1).y;
+
+  // 3 alu
+}
+
+half3 AdjustSat( half3 vVal, half fContrast)
+{
+   return saturate(0.5  - 0.5 * fContrast) + vVal * fContrast; // 2 alu
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Compute "chameleon" diffuse color:
+//  - Get 7 samples from accumulated previous framebuffers
+//  - Displaces samples also using noise texture to simulate flow
+//  - Replaces diffuse color with interpolated final chameleon color and diffuse color, using mask
+// stored in alpha channel
+//  - Assumes diffuse/gloss map already stored
+
+// Todo: Low-spec versions
+
+void frag_get_chameleon_color( inout fragPass pPass )
+{
+
+  half3 cChameleon = 0;
+
+  const half fCloakScale = 0.2;
+  const float2 samples[7] =
+  {
+    float2(0.527, -0.085)*fCloakScale,
+    float2(-0.040,  0.536)*fCloakScale,
+    float2(-0.670, -0.179)*fCloakScale,
+    float2(-0.419, -0.616)*fCloakScale,
+    float2(0.440, -0.639)*fCloakScale,
+    float2(-0.757,  0.349)*fCloakScale,
+    float2(0.574,  0.685)*fCloakScale,
+  };
+
+  float2 vScreenProj = pPass.IN.screenProj.xy / pPass.IN.screenProj.z;
+  float fAnimGen = pPass.IN.vBinormal.w;
+  half2 vDither = tex2D(cloakFluidSampler, vScreenProj.xy * (PS_ScreenSize/256) * 0.025 + fAnimGen).xy;
+  vDither += tex2D(cloakFluidSampler, vScreenProj.xy * (PS_ScreenSize/256) * 0.025 - fAnimGen).xy;
+
+  vDither.xy = vDither * 2.0 - 2.0;
+  vDither.xy += pPass.cBumpMap.xy;
+
+  vDither.xy *= 0.05;
+  vDither.xy *= fCloakScale;
+
+  cChameleon.xyz  = tex2D( chameleonMapSampler, vScreenProj.xy + (samples[0] + vDither.xy) ).xyz;
+  cChameleon.xyz += tex2D( chameleonMapSampler, vScreenProj.xy + (samples[1] + vDither.xy) ).xyz;
+  cChameleon.xyz += tex2D( chameleonMapSampler, vScreenProj.xy + (samples[2] + vDither.xy) ).xyz;
+  cChameleon.xyz += tex2D( chameleonMapSampler, vScreenProj.xy + (samples[3] + vDither.xy) ).xyz;
+  cChameleon.xyz += tex2D( chameleonMapSampler, vScreenProj.xy + (samples[4] + vDither.xy) ).xyz;
+  cChameleon.xyz += tex2D( chameleonMapSampler, vScreenProj.xy + (samples[5] + vDither.xy) ).xyz;
+  cChameleon.xyz += tex2D( chameleonMapSampler, vScreenProj.xy + (samples[6] + vDither.xy) ).xyz;
+  cChameleon.xyz /= 7.0;
+
+  float fEffectMask = pPass.cDiffuseMap.w;
+  #if %OPACITY_MAP
+    fEffectMask = tex2D(opacityMapSampler, pPass.IN.baseTC.xy).w;
+  #endif
+
+  pPass.pCustom.fCloakAmount = saturate( fEffectMask * 4)*0.4+0.6;
+  pPass.cDiffuseMap.xyz = lerp(pPass.cDiffuseMap.xyz, cChameleon.xyz, pPass.pCustom.fCloakAmount );
+  pPass.cGlossMap.xyz *= cChameleon.xyz * 0.5;
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_unify_parameters( inout fragPass pPass )
+{
+  pPass.bCustomComposition = true;
+  pPass.bRenormalizeNormal = true;
+  pPass.bHemisphereLighting = true;
+
+#if %BUMP_DIFFUSE
+  pPass.bDiffuseBump = true;
+#endif
+
+#if %VERTCOLORS
+  pPass.bVertexColors = true;
+#endif
+
+#if %ALPHAGLOW
+  pPass.bAlphaGlow = true;
+  pPass.fAlphaGlow_Multiplier = AmbientMultiplier;
+#endif
+
+#if %DETAIL_BUMP_MAPPING
+  pPass.bDetailBumpMapping = true;
+  pPass.vDetailBumpTilling = half2(DetailBumpTillingU, DetailBumpTillingV);
+  pPass.fDetailBumpScale = DetailBumpScale;
+  pPass.fDetailBlendAmount = DetailBlendAmount;
+
+  #if %ALPHAMASK_DETAILMAP
+    pPass.bDetailBumpMappingMasking = true;
+  #endif
+
+#endif
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_begin(inout fragPass pPass)
+{
+  pPass.pCustom.fSpecMultiplier = 1.0;
+#if %ANISO_SPECULAR
+
+ // Override specular multiplier for low-specs
+ if( pPass.nQuality == QUALITY_LOW)
+   pPass.pCustom.fSpecMultiplier = SpecularMultiplier * 5;
+ else
+  pPass.pCustom.fSpecMultiplier = prsh_SpecMulFinal;
+
+#endif
+
+  pPass.pCustom.vSurfaceRoughness = pPass.IN.baseTC.wz;
+  pPass.pCustom.fDifExponent = prsh_DifExponent;
+
+  // Apply decal texture (if present)
+  half4 cDecal = tex2D(decalMapSampler, pPass.IN.baseTC.xy);
+  pPass.cDiffuseMap.xyz *= cDecal.xyz * 2;
+
+  // Set opacity, gloss-map and per pixel shininess
+  pPass.fAlpha = pPass.IN.Ambient.w * pPass.cDiffuseMap.w;
+
+  pPass.cGlossMap = 1;
+#if %ANISO_SPECULAR
+  pPass.cGlossMap = tex2D(glossMapSampler, pPass.IN.baseTC.xy);
+  // Apply per pixel shininess
+  pPass.fSpecPow *= pPass.cGlossMap.w;
+  pPass.cGlossMap.w = 1;
+
+  // Set opacity, gloss-map and per pixel shininess
+  pPass.fAlpha = pPass.IN.Ambient.w;
+#endif
+
+#if %NANOSUIT_CLOAK
+  frag_get_chameleon_color( pPass );
+#endif
+
+  // Output simple fresnel term (using  pow1 and bias = DiffuseExponent)
+  pPass.pCustom.fFresnel = (1-saturate(pPass.fNdotE)) + saturate(pPass.fNdotE) * DiffuseExponent; // 2 alu
+
+  // Compute fuzzyness layer
+  pPass.pCustom.fFuzzyNess = GetFuzzyness(pPass.fNdotE, FuzzynessSmoothness, FuzzynessSpread);         // 3 alu
+  half3 cFuzzyMap = AdjustSat(pPass.cDiffuseMap.xyz, FuzzynessSaturation);                                   // 2 alu
+  pPass.pCustom.cFuzzy = (half) FuzzynessStrength * saturate(cFuzzyMap.xyz * pPass.pCustom.fFuzzyNess) * pPass.cGlossMap.w;  // 3 alu
+
+  if( pPass.nQuality == QUALITY_LOW )
+  {
+    pPass.pCustom.fFresnel = 1 - pPass.fNdotE;                    // 1 alu
+    pPass.pCustom.fFuzzyNess = pPass.pCustom.fFresnel;
+    pPass.pCustom.cFuzzy = (half) FuzzynessStrength * saturate(pPass.cDiffuseMap.xyz * pPass.pCustom.fFuzzyNess) * pPass.cGlossMap.w;  // 3 alu
+  }
+
+  // Output perturbed tangent and binormal vector for anisotropic shading
+#if %ANISO_SPECULAR
+  pPass.pCustom.vTangent = pPass.IN.vTangent.xyz;
+  pPass.pCustom.vBinormal = pPass.IN.vBinormal.xyz;
+
+  if( pPass.nQuality > QUALITY_LOW )
+  {
+    pPass.pCustom.vTangent = ShiftVectorOpt(pPass.IN.vTangent.xyz, pPass.vNormal.xyz, -pPass.cBumpMap.x);           // 1 alu
+    pPass.pCustom.vBinormal = ShiftVectorOpt(pPass.IN.vBinormal.xyz, pPass.vNormal.xyz, -pPass.cBumpMap.y);         // 1 alu
+  }
+  else
+  {
+    // workaround seems like clamping not working
+    //pPass.fSpecPow = max(pPass.fSpecPow , 0.01);
+  }
+
+  // Multiply gloss color by anisotropic pre-multiplied constants
+  pPass.cGlossMap.xyz *= pPass.pCustom.fSpecMultiplier;                                                 // 1 alu
+
+#endif
+
+  // Pre-multiply parameters
+  //half fLuminance = pPass.IN.vBinormal.w;
+  half fLuminance = prsh_LuminanceAdjument;
+  pPass.pCustom.cLuminanceDiffuseFresnel = fLuminance * pPass.cDiffuseMap.xyz * pPass.pCustom.fFresnel;             // 2 alu
+
+#if %NANOSUIT_EFFECTS
+  pPass.pCustom.fFresnelScaleAccum = FresnelScale;
+  pPass.pCustom.cReflectEffectAmb = 0;
+  pPass.pCustom.cDiffuseAccum = 0;
+#endif
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_per_light(inout fragPass pPass, inout fragLightPass pLight)
+{
+  if (pPass.bDiffuseBump )
+  {
+    pLight.fNdotL = dot(pPass.vNormalDiffuse.xyz, pLight.vLight.xyz);                               // 1 alu
+  }
+
+#if !%NANOSUIT_CLOAK
+
+  // Wrap N dot L slightly
+  pLight.fNdotL = saturate( pLight.fNdotL * 0.8 + 0.2 );                                            // 1 alu
+
+#else
+
+  // Use absolute value NdotL to get brighter backsides and don't let diffuse get totally black in shadow areas
+
+  pLight.fNdotL =  saturate(pLight.fNdotL*0.5+0.5 );                                                             // 2 alu
+  pLight.fOcclShadow = saturate(pLight.fOcclShadow + (pPass.pCustom.fCloakAmount)*CloakShadowBias);              // 1 alu
+
+#endif
+
+  half3 cDiffuse = 0;
+  if( pPass.nQuality > QUALITY_LOW )
+  {
+    // Minnaert diffuse shading (aprox) (NdotL * (NdotL^N) * F)
+    cDiffuse =pPass.pCustom.cLuminanceDiffuseFresnel.xyz * GetFuzzyPowTex(pLight.fNdotL, pPass.pCustom.fDifExponent).x; // 1 alu
+    // Add fuzzy layer * NdotL (for self-shadowing on fuzzy)
+    cDiffuse = lerp(cDiffuse, pPass.pCustom.cFuzzy, pPass.pCustom.fFuzzyNess) * pLight.fNdotL * pLight.cDiffuse.xyz;  // 4 alu
+  }
+  else
+  {
+    cDiffuse = pLight.fNdotL * pLight.cDiffuse.xyz;
+  }
+
+  half3 cSpecular = 0;
+#if %ANISO_SPECULAR
+
+  // todo: Need solution for low-spec anisotropic
+
+  if( pPass.nQuality > QUALITY_LOW )
+  {
+     // Use ward anisotropic specular
+    cSpecular = WardAnisotropic_opt(pPass.pCustom.vTangent,
+                                   pPass.pCustom.vBinormal,
+                                   pPass.vNormal,
+                                   pPass.vView,
+                                   pLight.vLight,
+                                   pLight.fNdotL,
+                                   pPass.fNdotE,
+                                   pPass.pCustom.vSurfaceRoughness,
+                                   pPass.fSpecPow);                                                   // 13 alu
+  }
+  else
+  {
+    cSpecular = Phong(pPass.vReflVec,pLight.vLight,  pPass.fSpecPow) * pLight.fNdotL;
+  }
+
+  cSpecular *= pLight.cSpecular.xyz;                                          // 1 alu
+
+#endif
+
+  half3 cK = pLight.fOcclShadow * pLight.fFallOff * pLight.cFilter;                                // 2 alu
+
+  // Accumulate results
+  pPass.cDiffuseAcc += cDiffuse * cK;
+  pPass.cSpecularAcc += cSpecular * cK;
+
+  // Sum results
+#if %NANOSUIT_EFFECTS
+
+  pPass.pCustom.cDiffuseAccum += pLight.fNdotL * pLight.cDiffuse.xyz * pLight.fFallOff * pLight.cFilter * pLight.fOcclShadow;
+  pPass.pCustom.fFresnelScaleAccum *= saturate(pLight.fOcclShadow + FresnelScaleShadowBias);
+
+#endif
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_ambient(inout fragPass pPass, inout half3 cAmbient)
+{
+
+  if (pPass.bDiffuseBump )
+  {
+    // darken ambient if there is unoccluded area direction
+    cAmbient.xyz *= saturate( dot(pPass.vNormalDiffuse.xyz, pPass.vNormal.xyz) );
+  }
+
+  #if %NANOSUIT_EFFECTS
+    pPass.pCustom.cReflectEffectAmb = cAmbient;
+  #endif
+
+  pPass.cAmbientAcc += cAmbient.xyz;
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_end(in fragPass pPass, inout half3 cFinal)
+{
+  // Final composition
+
+  half3 cAmbientFuzzyDiffuse = lerp( pPass.cDiffuseMap.xyz, pPass.pCustom.cFuzzy.xyz, (pPass.pCustom.fFuzzyNess) );  // 2 alu
+  half3 cDiffuse, cSpecular;
+  if (pPass.nQuality == QUALITY_LOW)
+  {
+    cDiffuse = (pPass.cAmbientAcc.xyz  + pPass.cDiffuseAcc.xyz) * cAmbientFuzzyDiffuse;      // 3 alu
+    cSpecular = pPass.cSpecularAcc.xyz * pPass.cGlossMap.xyz;             // 1 alu
+  }
+  else
+  {
+    cDiffuse = (pPass.cAmbientAcc.xyz * cAmbientFuzzyDiffuse + pPass.cDiffuseAcc.xyz) * MatDifColor.xyz;      // 3 alu
+    cSpecular = pPass.cSpecularAcc.xyz * pPass.cGlossMap.xyz * MatSpecColor.xyz;             // 2 alu
+  }
+
+  cFinal.xyz = cDiffuse + cSpecular;
+
+#if %NANOSUIT_EFFECTS
+
+  if( pPass.nQuality > QUALITY_LOW )
+  {
+  // insane temporary solution for nano-suit in multiplayer
+
+  half3 reflColor = 0;
+  half3 vReflect = reflect(-pPass.vView.xyz, lerp(pPass.mTangentToWS[2].xyz, pPass.vNormal.xyz, MetallicAmount));
+  half3 envMap = 0;
+
+  #if %_TT3_TCUBE
+    envMap.xyz = texCUBE(envMapSamplerCUBE, vReflect.xyz).xyz;
+  #else
+    vReflect = normalize( vReflect );
+
+    // Xform reflection to eye-space (required for correct spherical env. mapping...)
+    float3 vReflectES = ( mul( (float3x3)mCamera, vReflect.xyz ) );                                 // 3 alu
+
+    float m = - 2.828 * sqrt( vReflectES.z + 1.0 );                                               // 3 alu
+    vReflectES.xy = (vReflectES.xy / m ) + 0.5;                                                   // 2 alu
+
+    envMap.xyz = tex2D(envMapSampler, vReflect.xy).xyz;
+  #endif
+
+  reflColor = envMap.xyz * (half)ReflectionAmount;
+  half fFresnel = FresnelBias + GetFresnelTex(pPass.fNdotE, 0).w * pPass.pCustom.fFresnelScaleAccum;
+  reflColor *= fFresnel ;
+
+  half3 cRefl = reflColor * MetallicAmount * pPass.cDiffuseMap.w;
+
+  cFinal.xyz += cRefl * (pPass.pCustom.cReflectEffectAmb + pPass.pCustom.cDiffuseAccum);
+
+  }
+
+#endif
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#include "fragLib.cfi"
+
+///////////////// pixel shader //////////////////
+
+pixout ClothPS(vert2FragGeneral IN)
+{
+  pixout OUT = (pixout) 0;
+
+  // Initialize fragPass structure
+  fragPass pPass = (fragPass) 0;
+  frag_unify(pPass, IN);
+  half4 cFinal = frag_shared_output(pPass);
+
+  HDROutput(OUT, cFinal, 1);
+
+  return OUT;
+}
+
+// insane temporary solution for nano-suit in multiplayer
+
+pixout ClothEffectsPS(vert2FragEffects IN)
+{
+  pixout OUT;
+
+  half4 vEffParams0 = IN.vEffParams0; //float4( SparksPow, SparksMultiplier, SparksPhase, SparksFrequency );
+  half4 vEffParams1 = IN.vEffParams1; //float4( SparksColor.xyz,  SparksFrequency );
+
+  half4 finalColor = 0;
+  half4 baseColor = tex2D(diffuseMapSampler, IN.baseTC.xy);
+
+  half4 decalColor = tex2D(decalMapSampler, IN.baseTC.xy);
+  baseColor.xyz *= decalColor.xyz * 2;
+
+  half3 normalDiffuseVec = half3(0,0,1);
+  half4 bumpColor=half4(0,0,1,1);
+  bumpColor.xyz = GetNormalMap(bumpMapSampler, IN.baseTC.xy);                                       // 2 alu
+
+  // Get main vectors/coeficients
+  float3x3 tangentToWS = float3x3(IN.tangVec.xyz, IN.binormVec.xyz, IN.normalVec.xyz);
+  half3 normalVec = normalize( mul(bumpColor.xyz, tangentToWS) );                                           // 3 alu
+
+  half3 eyeVec = normalize(-IN.viewVec.xyz);                                                         // 3 alu
+  half NdotE = saturate(dot(eyeVec.xyz, normalVec.xyz));                                           // 1 alu
+
+  // temporary solution for nano-suit in multiplayer
+  float3 vPos = IN.posOS;
+  vPos *= vEffParams0.z;
+  vPos += - bumpColor * vEffParams0.z * 0.2 + AnimGenParams.z * vEffParams0.w;
+
+  float3 sin3 = sin(vPos);//_ApproxSine4( vPos.xyzz);
+
+  float fSin = dot(sin3, 0.3333);
+  fSin = 1- abs( fSin );
+
+  half fFresnel = FresnelBias + GetFresnelTex(NdotE, 0).w * FresnelScale;
+  finalColor.xyz += (pow(fSin, vEffParams0.x)*vEffParams0.y * fFresnel * vEffParams1 * baseColor.w);
+
+  // distance blend out
+  finalColor.w = baseColor.w * IN.Ambient.w;
+
+  //OUT.Color = finalColor;
+  HDROutput(OUT, finalColor, 1);
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script = 
+        "TechniqueZ=ZPass;"
+        "TechniqueGlow=GlowPass;"
+        "TechniqueMotionBlur=MotionBlurPass;"
+        "TechniqueDetail=DetailPass;"
+        "TechniqueCaustics=CausticsPass;"
+#ifndef %DISABLE_RAIN_PASS
+        "TechniqueRainPass=RainPass;"
+#endif
+        "TechniqueCustomRender=CustomRenderPass;"
+        "TechniqueShadowGen=ShadowGen;"
+#ifdef D3D10
+        "TechniqueShadowGenDX10=ShadowGenGS;"
+#endif
+        "TechniqueShadowPass=ShadowPass;"
+>
+{
+  pass p0
+  {
+#if %DYN_BRANCHING
+    VertexShader = compile vs_3_0 ClothVS() GeneralVS;
+    PixelShader = compile ps_3_0 ClothPS() GeneralPS;
+#else
+    VertexShader = compile vs_Auto ClothVS() GeneralVS;
+    PixelShader = compile ps_Auto ClothPS() GeneralPS;
+#endif
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    CullMode = Back;
+  }
+
+#if %NANOSUIT_EFFECTS
+
+  pass p1
+  {
+    VertexShader = compile vs_Auto ClothEffectsVS() GeneralVS;
+    PixelShader = compile ps_Auto ClothEffectsPS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+
+    CullMode = Back;
+
+    SrcBlend = ONE;
+    DestBlend = ONE;
+    AlphaBlendEnable = true;
+    ColorWriteEnable = RED|GREEN|BLUE;
+  }
+
+#endif
+}
+
+//////////////////////////////// Common techniques ////////////////
+
+#include "CommonZPass.cfi"
+#include "CommonGlowPass.cfi"
+#include "CommonMotionBlurPass.cfi"
+#include "CommonDetailPass.cfi"
+#include "CommonCausticsPass.cfi"
+#include "CommonViewsPass.cfi"
+
+#ifndef %DISABLE_RAIN_PASS
+  #include "CommonRainPass.cfi"
+#endif
+
+#include "ShadowCommon.cfi"
+#include "CommonShadowGenPass.cfi"
+#ifdef D3D10
+  #include "CommonShadowGenPassGS.cfi"
+#endif
+#include "CommonShadowPass.cfi"
+
+/////////////////////// eof ///

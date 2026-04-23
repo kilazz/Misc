@@ -1,0 +1,14 @@
+// Copyright (C) Crytek Studios 2001-2005
+// File: ShadowMaskGen.ext
+// Created: 29/07/2005 by Nick Kasyan
+
+Version (1.00)
+
+Property
+{
+  Name            = %USE_SM30
+  Mask            = 0x10
+  DependencySet   = $HW_SM30
+  DependencyReset = $HW_SM30
+  Hidden
+}

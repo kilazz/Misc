@@ -1,0 +1,30 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: Particles.ext
+// Created: 16/2/2004 by Andrey Honich.
+
+Version (1.00)
+
+Property
+{
+  Name        = %REFRACTION
+  Mask        = 0x4
+  Property    (Refraction)
+  Description (Use bump-map texture as displacement for refraction)
+}
+
+Property
+{
+  Name            = %FAKE_SPECULAR
+  Mask            = 0x8
+  Property        (Fake Specular)
+  Description     (Use environment map for faking specularity)
+  DependencyReset = $TEX_Custom
+}
+
+Property
+{
+  Name            = %SCREEN_SPACE_DEFORMATION
+  Mask            = 0x10
+  Property        (Screen space deformation)
+  DependencyReset = $TEX_Custom
+}

@@ -1,0 +1,946 @@
+// Depreceated - to be removed - check what artists use at all
+
+// Only used stuff is Scope effect, delete file and replace with FX_ScopeSight
+
+#include "Common.cfi"
+#include "ShadeLib.cfi"
+#include "ModificatorVT.cfi"
+#include "ModificatorTC.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "ShaderDrawType = General;"
+           "ShaderType = FX;"
+>;
+
+/// Common stuff  //////////////////////
+
+////////////////////////////////////////////////////////////////
+
+OPACITYMAP
+ENVIRONMENTMAP
+ENVIRONMENTCUBEMAP
+
+sampler2D screenMapSampler
+<
+  string Script = 
+      "RenderOrder=PreDraw;"
+      "RenderCamera=Current;"
+      "RenderType=CurScene;"
+      "RenderTarget_IDPool = _RT2D_SCREEN_ID;"
+      "RenderTarget_Width=$ScreenSize;"
+      "RenderTarget_Height=$ScreenSize;"
+      "RenderTarget_UpdateType=Allways;"
+      "RenderDepthStencilTarget=DepthBuffer;";
+>
+{
+  Texture = $RT_2D;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+// Shared functions  /////////////////////////////////
+
+// Compute fresnel term, assumes NdotI comes clamped
+half Fresnel( in half NdotI, in half bias, in half power)
+{
+  half facing = (1.0 - NdotI);
+  return bias + (1.0-bias)*pow(facing, power);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Outer Sphere effect ////////////////////////////////////////////////////////////////////////////
+
+#if %OUTER_SPHERE
+
+// Notes /////////////////////////////////
+// - Lacking zpass/fog support
+
+/// Specific data ////////////////////////
+
+/// Constants ////////////////////////////
+
+float PlasmaScale
+<
+  vsregister      = VS_REG_PM_4.y;
+  string UIHelp   = "Sets plasma texture scale";
+  string UIName   = "Plasma texture scale";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 2;
+
+float PlasmaSpeed
+<
+  vsregister      = VS_REG_PM_4.z;
+  string UIHelp   = "Sets plasma movement speed";
+  string UIName   = "Plasma movement speed";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 0.8;
+
+float OverallPlasmaStrenght
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Sets overall plasma color strenght";
+  string UIName   = "Overall Plasma strenght";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 4.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float PlasmaThickness
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Sets plasma thickness";
+  string UIName   = "Plasma thickness";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 16.0;
+  float UIStep    = 0.005;
+> = 2.0;
+
+float MainPlasmaStrenght
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIHelp   = "Sets main plasma color strenght";
+  string UIName   = "Main Plasma strenght";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 0.2;
+
+float BoltPlasmaStrenght
+<
+  psregister      = PS_REG_PM_3.w;
+  string UIHelp   = "Sets plasma bolt color strenght";
+  string UIName   = "Plasma Bolt strenght";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float4 MainPlasmaColor
+<
+  psregister      = PS_REG_PM_4;
+  string UIHelp   = "Set main plasma color";
+  string UIName   = "Main Plasma color";
+  string UIWidget = "color";
+> = {0.0, 0.5, 1.0, 1.0};
+
+float ElectricitySparksScale
+<
+  vsregister      = VS_REG_PM_5.x;
+  string UIHelp   = "Sets electricity sparks texture tilling amount";
+  string UIName   = "Electricity sparks tilling";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float ElectricitySparksNoise
+<
+  vsregister      = VS_REG_PM_5.y;
+  string UIHelp   = "Sets electricity sparks noise scale";
+  string UIName   = "Electricity sparks noise scale";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 0.5;
+
+float ElectricitySparksSpeed
+<
+  vsregister      = VS_REG_PM_5.z;
+  string UIHelp   = "Sets electricity sparks movement speed";
+  string UIName   = "Electricity sparks speed";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float ElectricityVariation
+<
+  vsregister      = VS_REG_PM_5.w;
+  string UIHelp   = "Sets electricity variation";
+  string UIName   = "Electricity lifetime variation";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 2.0;
+
+float ElectricityLifetime
+<
+  vsregister      = VS_REG_PM_4.w;
+  string UIHelp   = "Sets electricity lifetime";
+  string UIName   = "Electricity lifetime cycle";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 8.0;
+
+float ElectricitySparksStrenght
+<
+  psregister      = PS_REG_PM_5.x;
+  string UIHelp   = "Sets electricity sparks color strenght";
+  string UIName   = "Electricity sparks strenght";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float4 BoltPlasmaColor
+<
+  psregister      = PS_REG_PM_6;
+  string UIHelp   = "Set plasma bolt color";
+  string UIName   = "Plasma Bolt color";
+  string UIWidget = "color";
+> = {0.0, 0.5, 1.0, 1.0};
+
+float4 ElectricitySparksColor
+<
+  psregister      = PS_REG_PM_7;
+  string UIHelp   = "Set electricity sparks color";
+  string UIName   = "Electricity sparks color";
+  string UIWidget = "color";
+> = {0.0, 0.5, 1.0, 1.0};
+
+/// Samplers ////////////////////////////
+
+sampler3D noiseVolumeMapSampler = sampler_state
+{
+  Texture = textures/defaults/Noise3D.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+  AddressW = Wrap;
+}
+
+sampler2D iridiscenceMapSampler = sampler_state
+{
+  Texture = Textures/Defaults/rainbowgradient.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Mirror;
+  AddressV = Mirror;
+};
+
+sampler2D lightingMapSampler = sampler_state
+{
+  Texture = $Diffuse; //Textures/Defaults/sparks_test.tif;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+///////////////// vertex shader //////////////////
+
+struct v2Frag
+{
+  float4 HPosition : POSITION;
+
+  // main plasma layer texcoords
+  float3 plasmaTC0 : TEXCOORDN;
+  float3 plasmaTC1 : TEXCOORDN;
+
+  // detail plasma layer texcoords
+  float4 detailPlasmaTC0 : TEXCOORDN;
+  float2 detailPlasmaTC1 : TEXCOORDN;
+};
+
+///////////////// vertex shader //////////////////
+v2Frag OuterSphereVS(app2vertGeneral IN)
+{
+  v2Frag OUT = (v2Frag)0;
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+  // Scale values into a more apropriate range. Until editor has more precision controling shader params
+  // we'll always need to scale them...
+  PlasmaScale/=10;
+  PlasmaSpeed/=10;
+
+  // Plasma texture coordinates are generated from vertex world position
+  OUT.plasmaTC0.xyz=mul(vertPassPos.InstMatrix, vertPassPos.Position).xyz + g_VS_WorldViewPos.xyz;
+  OUT.plasmaTC1.xyz=OUT.plasmaTC0.xyz;
+  OUT.detailPlasmaTC0.xyz=OUT.plasmaTC0.xyz;
+
+  OUT.plasmaTC0 *= PlasmaScale ;                     // scale main plasma layer
+  OUT.plasmaTC0.xy += g_VS_AnimGenParams.z * PlasmaSpeed ;  // animate it
+
+  OUT.plasmaTC1 *= PlasmaScale * 1.2 ;                 // scale 2nd main plasma layer
+  OUT.plasmaTC1.xy -= g_VS_AnimGenParams.z * PlasmaSpeed ;  // animate it
+
+  // Scale values into a more apropriate range. Until editor has more precision controling shader params
+  // we'll always need to scale them...
+  ElectricitySparksNoise/=100;
+
+  OUT.detailPlasmaTC0.xyz*=ElectricitySparksNoise;
+  OUT.detailPlasmaTC0.z+=g_VS_AnimGenParams.z*ElectricitySparksSpeed;
+
+  OUT.detailPlasmaTC1.xy=IN.baseTC.xy*ElectricitySparksScale;
+
+  float fPI=3.1415926;
+
+  // Compute detail plasma layer phase
+  OUT.detailPlasmaTC0.w=sin(((g_VS_AnimGenParams.z/ElectricityLifetime))*2*fPI);
+  OUT.detailPlasmaTC0.w+=sin(g_VS_AnimGenParams.z*ElectricityVariation)  ;
+  OUT.detailPlasmaTC0.w*=0.5;
+
+  OUT.detailPlasmaTC0.w=saturate(OUT.detailPlasmaTC0.w);
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout OuterSpherePS(v2Frag IN)
+{
+  pixout OUT;
+
+   // Debug output
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, float4(IN.plasmaTC0, 1));
+   return OUT;
+ #endif
+
+  // Main plasma layer
+  half noiseColorA=tex3D(noiseVolumeMapSampler, IN.plasmaTC0.xyz).w;
+  half noiseColorB=tex3D(noiseVolumeMapSampler, IN.plasmaTC1.xyz).w;
+  noiseColorA=1-abs((noiseColorA+noiseColorB)-1);
+
+  half3 plasmaMainColor=pow(noiseColorA, PlasmaThickness)*MainPlasmaColor*MainPlasmaStrenght;  // plasma main
+  half3 plasmaBoltColor=pow(noiseColorA, 16)*BoltPlasmaColor*BoltPlasmaStrenght; // plasma bolt
+
+  // Final plasma composition
+  half3 finalPlasma=(plasmaMainColor+plasmaBoltColor)*OverallPlasmaStrenght;
+
+   // Detail plasma layer
+  half detailNoiseColor3D=tex3D(noiseVolumeMapSampler, IN.detailPlasmaTC0.xyz).w;
+
+  half detailNoiseColor=tex2D(lightingMapSampler, IN.detailPlasmaTC1.xy).z;
+  half3 detailPlasmaColor=detailNoiseColor*ElectricitySparksColor;
+  detailPlasmaColor*=saturate(detailNoiseColor3D*2-1)*ElectricitySparksStrenght*IN.detailPlasmaTC0.w;
+
+  half3 finalComposition=finalPlasma.xyz+ detailPlasmaColor.xyz;
+
+  HDROutput(OUT, half4(finalComposition, 1), 1);
+
+  return OUT;
+}
+
+#define CurrVertexShader VertexShader = compile vs_Auto OuterSphereVS();
+#define CurrPixelShader PixelShader = compile ps_Auto OuterSpherePS();
+
+#define CurrState \
+    ZEnable = true; \
+    ZFunc = LEqual; \
+    ZWriteEnable = false; \
+    CullMode = Back; \
+    SrcBlend = ONE; \
+    DestBlend = ONE; \
+    AlphaBlendEnable = true; \
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#elif %REFRACTIVE_SCOPE
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Refractive Scope effect ////////////////////////////////////////////////////////////////////////
+
+// Notes /////////////////////////////////
+// - Lacks optimization !
+
+/// Specific data ////////////////////////
+
+float FresnelBias
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Set reflection visibility at sharp angles\nMin value = 0 (reflection not visible), Max value = 1.0 (reflection visible) \nCorrect name - FresnelBias";
+  string UIName   = "Reflectivity";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.05;
+> = 0.3;
+
+float ReflectionAmount
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Set amount of reflection \nMin value = 0 (reflection not visible), Max value = 1.0 (reflection visible) \nCorrect name - ReflectionAmount";
+  string UIName   = "Reflection amount";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.05;
+> = 1.0;
+
+float RefractionAmount
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIHelp   = "Set amount of refraction \nMin value = 0 (refraction not visible), Max value = 1.0 (refraction visible) \nCorrect name - RefractionAmount";
+  string UIName   = "Refraction amount";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.05;
+> = 1.0;
+
+float4 LensColor
+<
+  psregister      = PS_REG_PM_4;
+  string UIHelp   = "Set scope lens color \nCorrect name - LensColor";
+  string UIName   = "Lens color";
+  string UIWidget = "color";
+> = {1.0, 1.0, 1.0, 1.0};
+
+float ScopeCenterX
+<
+  psregister      = PS_REG_PM_5.x;
+  string UIHelp   = "Set scope center X \nMin value = 0 (huge), Max value = 1.0 (normal) \nCorrect name - ScopeCenterX";
+  string UIName   = "Scope center X";
+  string UIWidget = "slider";
+  float UIMin     = -1.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.05;
+> = 0.4;
+
+float ScopeCenterY
+<
+  psregister      = PS_REG_PM_5.y;
+  string UIHelp   = "Set scope center Y \nMin value = 0 (huge), Max value = 1.0 (normal) \nCorrect name - ScopeCenterY";
+  string UIName   = "Scope center Y";
+  string UIWidget = "slider";
+  float UIMin     = -1.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.05;
+> = 0.0;
+
+float ScopeScale
+<
+  psregister      = PS_REG_PM_5.z;
+  string UIHelp   = "Set scope scale  \nMin value = 0 (huge), Max value = 4.0 (normal) \nCorrect name - ScopeScale";
+  string UIName   = "Scope scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 4.0;
+  float UIStep    = 0.05;
+> = 0.93;
+
+float ScopeReflBumpScale
+<
+  psregister      = PS_REG_PM_5.w;
+  string UIName   = "Reflection bump scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 4.0;
+  float UIStep    = 0.05;
+> = 1.0;
+
+float ScopeRefrBumpScale
+<
+  psregister      = PS_REG_PM_3.w;
+  string UIName   = "Refraction bump scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 4.0;
+  float UIStep    = 0.05;
+> = 0.1;
+
+/// Constants ////////////////////////////
+
+/// Samplers //////////////////////////
+
+///////////////// vertex shader //////////////////
+
+struct v2Frag
+{
+  float4 HPosition : POSITION;
+  float2 baseTC    : TEXCOORDN;
+  float4 screenPos : TEXCOORDN;
+
+  float4 viewVec   : TEXCOORDN;
+  float3 tangVec      : TEXCOORDN;
+  float3 binormVec    : TEXCOORDN;
+  float4 normalVec  : TEXCOORDN;
+};
+
+///////////////// vertex shader //////////////////
+v2Frag RefractiveScopeVS(app2vertGeneral IN)
+{
+  v2Frag OUT = (v2Frag)0;
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+  OUT.baseTC.xy=IN.baseTC.xy;
+
+  // Output projected refraction texture
+  OUT.screenPos.x = (OUT.HPosition.x  + OUT.HPosition.w)*0.5;
+  OUT.screenPos.y = (-OUT.HPosition.y  + OUT.HPosition.w)*0.5;
+  OUT.screenPos.zw = OUT.HPosition.w;
+
+  // Output world to tangent matrix and world space position
+  float3 worldTangentS = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]);
+  float3 worldTangentT = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]);
+  float3 worldTangentN = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[2]);
+  OUT.tangVec.xyz = worldTangentS.xyz;
+  OUT.binormVec.xyz = worldTangentT;
+  OUT.normalVec.xyz = worldTangentN;
+  OUT.viewVec.xyz = vertPassPos.WorldPos.xyz;
+#if %_RT_FOG
+  float4 fogColor = GetVolumetricFogColor(vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz);
+  OUT.viewVec.w = fogColor.w;
+#endif
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout RefractiveScopePS(v2Frag IN)
+{
+  pixout OUT;
+
+   // Debug output
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, float4(IN.baseTC, 0, 1));
+   return OUT;
+ #endif
+
+  half4 diffuseTex = tex2D(diffuseMapSampler, IN.baseTC.xy);
+
+  half3 normalVec=half3(0,0,1);
+
+  // Get main vectors/coeficients
+  float3x3 tangentToWS = float3x3(IN.tangVec.xyz, IN.binormVec.xyz, IN.normalVec.xyz);
+
+#if %BUMP_MAP
+   normalVec.xyz = GetNormalMap(bumpMapSampler, IN.baseTC.xy);
+//   normalVec.xy *=10;
+#endif
+
+  normalVec = NormalToWorldSpace(normalVec.xyz, tangentToWS);
+
+  half3 glossColor = diffuseTex.w;
+#ifdef %GLOSS_MAP
+  glossColor.xyz = tex2D(glossMapSampler, IN.baseTC.xy).xyz;
+#endif
+
+  half3 eyeVec = normalize(-IN.viewVec.xyz);
+  half NdotE=(dot(eyeVec.xyz, normalVec.xyz));
+  half fFresnel=Fresnel(saturate(NdotE), (half)FresnelBias, 5);
+
+  half3 reflColor=0;
+
+#if %ENVIRONMENT_MAP
+  // Calc Reflection Vector
+  half3 reflectVect = reflect(eyeVec.xyz, normalVec.xyz);
+ #if %_TT3_TCUBE
+  reflColor = texCUBE(envMapSamplerCUBE, reflectVect.xyz).xyz;
+ #else
+  reflColor = tex2D(envMapSampler, reflectVect.xy).xyz;
+ #endif
+  reflColor *= (half)ReflectionAmount*MatDifColor * 4.0;
+
+  // make sure there's always a bit of reflection
+  reflColor *= g_PS_SkyColor.xyz;
+#endif
+
+  half2 centerScope= half2(ScopeCenterX, ScopeCenterY);
+  half2 refrNewst = ((IN.screenPos.xy/ IN.screenPos.ww)+(normalVec.xy*ScopeRefrBumpScale)-0.5)*ScopeScale+0.5 + centerScope.xy/ScopeScale;
+
+  half3 refractColor = tex2D(screenMapSampler, refrNewst).xyz*(half)RefractionAmount;
+  half fLum = dot(refractColor, 0.33);
+  half3 finalColor= lerp(refractColor*LensColor, reflColor, fFresnel)*diffuseTex.xyz* saturate(fLum + 0.2) ;
+
+#if %_RT_FOG
+  ComputeGlobalFogPS(finalColor.xyz, IN.viewVec.w);
+  #if %_RT_ALPHABLEND
+    finalColor.xyz = lerp( AvgFogVolumeContrib.xyz, finalColor.xyz, AvgFogVolumeContrib.w );
+  #else
+    finalColor.xyz *= AvgFogVolumeContrib.w;
+  #endif
+#endif
+
+  HDROutput(OUT, half4(finalColor, 1), 1);
+
+  return OUT;
+}
+
+#define CurrVertexShader VertexShader = compile vs_Auto RefractiveScopeVS() GeneralVS;
+#define CurrPixelShader PixelShader = compile ps_Auto RefractiveScopePS() GeneralPS;
+
+#define CurrState \
+    ZEnable = true; \
+    ZFunc = LEqual; \
+    ZWriteEnable = true; \
+    CullMode = None; \
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#elif %REFRACTIVE_EXPLOSION
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Refractive explosion effect ////////////////////////////////////////////////////////////////////////
+
+// Notes /////////////////////////////////
+
+float4x4 _ModelView      : PB_View;
+float4x4 _ModelView_IT   : PB_View_IT;
+
+/// Specific data ////////////////////////
+
+float BumpScale
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Scales bump map \nMin value = -2, Max value = 2.0 \nCorrect name - BumpScale";
+  string UIName   = "Bump map scale";
+  string UIWidget = "slider";
+  float UIMin     = -2.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.005;
+> = 0.05;
+
+float CurrStep
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Set step of effect \nMin value = 0 (effect starting), Max value = 1.0 (effect ending) \nCorrect name - CurrStep";
+  string UIName   = "Current step";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.05;
+> = 0.0;
+
+float FresnelBias
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIHelp   = "Set reflection visibility at sharp angles\nMin value = 0 (reflection not visible), Max value = 1.0 (reflection visible) \nCorrect name - FresnelBias";
+  string UIName   = "Reflectivity";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.05;
+> = 0.3;
+
+float ReflectionAmount
+<
+  psregister      = PS_REG_PM_3.w;
+  string UIHelp   = "Set amount of reflection \nMin value = 0 (reflection not visible), Max value = 1.0 (reflection visible) \nCorrect name - ReflectionAmount";
+  string UIName   = "Reflection amount";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.05;
+> = 1.0;
+
+float RefractionAmount
+<
+  psregister      = PS_REG_PM_4.x;
+  string UIHelp   = "Set amount of refraction \nMin value = 0 (refraction not visible), Max value = 1.0 (refraction visible) \nCorrect name - RefractionAmount";
+  string UIName   = "Refraction amount";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.05;
+> = 1.0;
+
+/// Constants ////////////////////////////
+
+/// Samplers ////////////////////////////
+
+///////////////// vertex shader //////////////////
+
+struct v2Frag
+{
+  float4 HPosition : POSITION;
+  float2 baseTC    : TEXCOORDN;
+  float3 bumpTC    : TEXCOORDN;
+  float4 screenPos : TEXCOORDN;
+  float4 viewVec   : TEXCOORDN;
+
+  float3 tangVec      : TEXCOORDN;
+  float3 binormVec    : TEXCOORDN;
+  float3 normVec      : TEXCOORDN;
+};
+
+///////////////// vertex shader //////////////////
+v2Frag RefractiveExplVS(app2vertGeneral IN)
+{
+  v2Frag OUT = (v2Frag)0;
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+  OUT.baseTC.xy=IN.baseTC.xy;
+
+  // Output eye/light vector
+  float3 viewVec=ViewPos.xyz-vertPassPos.Position.xyz;
+  OUT.viewVec.xyz=mul((const float3x3)vertPassPos.ObjToTangentSpace, viewVec);
+
+  // Output projected refraction texture
+  OUT.screenPos.x = (OUT.HPosition.x  + OUT.HPosition.w)*0.5;
+  OUT.screenPos.y = (-OUT.HPosition.y  + OUT.HPosition.w)*0.5;
+  OUT.screenPos.zw = OUT.HPosition.w;
+
+  // Output tangent to world space matrix
+  float3 worldTangentS = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]);
+  float3 worldTangentT = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]);
+  float3 worldTangentN = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[2]);
+
+  OUT.tangVec.xyz = worldTangentS;
+  OUT.binormVec.xyz = worldTangentT;
+  OUT.normVec.xyz = worldTangentN;
+
+  float4 tcEPos = mul(_ModelView, vertPassPos.Position);        // get camera pos in world space
+  float3 tcCamVec = normalize(tcEPos.xyz);
+  float3 vNorm = vertPassPos.ObjToTangentSpace[2].xyz;
+  float3 tcNormal = normalize(mul((float3x3)_ModelView_IT, vNorm.xyz)); // get normal in world space
+  float3 tcRef = reflect(tcCamVec, tcNormal.xyz);
+
+  // Set bump texture coordinate always facing camera
+  OUT.bumpTC.xy = tcRef.xy*0.25+0.5;
+  OUT.bumpTC.y=1-OUT.bumpTC.y;
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout RefractiveExplPS(v2Frag IN)
+{
+  pixout OUT;
+
+   // Debug output
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, float4(IN.baseTC, 0, 1));
+   return OUT;
+ #endif
+
+  half4 diffuseTex = tex2D(diffuseMapSampler, IN.baseTC.xy);
+
+  half4 normalVec=half4(0,0,1,1);
+
+  float3x3 worldTangentSpace=float3x3(IN.tangVec.xyz, IN.binormVec.xyz, IN.normVec.xyz);
+#if %BUMP_MAP
+    normalVec.xyz = GetNormalMap(bumpMapSampler, IN.bumpTC.xy);
+
+    //normalVec.xyz = mul(normalVec.xyz, worldTangentSpace);
+    //normalVec.xy*=BumpScale;
+    normalVec.xy*=BumpScale;//*sin(g_VS_AnimGenParams.z);
+    //normalVec.xyz=normalize(normalVec.xyz);
+#endif
+
+  half3 glossColor = diffuseTex.w;
+//ifdef GLOSS_MAP
+  //glossColor.xyz = tex2D(glossMapSampler, IN.baseTC.xy).xyz;
+//endif
+
+  half3 viewVec= normalize(IN.viewVec.xyz);
+  half NdotE=saturate( dot(viewVec.xyz, half3(0,0,1)) );
+  NdotE=pow(NdotE, 4);
+
+  //half fFresnel=Fresnel(saturate(NdotE), (half)FresnelBias, 5);
+
+//ENVIRONMENT_MAP
+  // Calc Reflection Vector
+//  half3 reflectVect = normalize((2.0*NdotE*normalVec.xyz)-viewVec);
+//  reflColor= texCUBE(envMapSamplerCUBE, reflectVect.xyz).xyz*(half)ReflectionAmount;
+//endif
+
+  half2 refrNewst = (IN.screenPos.xy/ IN.screenPos.w) - (normalVec.xy*0.5)*NdotE;
+  half3 refractColor = tex2D(screenMapSampler, refrNewst).xyz; //(half)RefractionAmount;
+
+  //half3 final=(reflColor*fFresnel+refractColor*(1-fFresnel);
+  //half3 final=1-refractColor;
+
+  HDROutput(OUT, half4(refractColor, 1), 1);
+
+  return OUT;
+}
+
+#define CurrVertexShader VertexShader = compile vs_Auto RefractiveExplVS() GeneralVS;
+#define CurrPixelShader PixelShader = compile ps_Auto RefractiveExplPS() GeneralPS;
+
+#define CurrState \
+    ZEnable = true; \
+    ZFunc = LEqual; \
+    ZWriteEnable = true; \
+    CullMode = Back; \
+
+#elif %SCOPE_SIGHT
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Scope sight effect ////////////////////////////////////////////////////////////////////////
+
+float4 SightColor
+<
+  psregister      = PS_REG_PM_3;
+  string UIHelp   = "Set scope sight color \nCorrect name - SightColor";
+  string UIName   = "Sight color";
+  string UIWidget = "color";
+> = {1.0, 1.0, 1.0, 1.0};
+
+/// Constants ////////////////////////////
+
+/// Samplers ////////////////////////////
+
+///////////////// vertex shader //////////////////
+
+struct v2Frag
+{
+  float4 HPosition : POSITION;
+  float2 baseTC    : TEXCOORDN;
+};
+
+///////////////// vertex shader //////////////////
+v2Frag ScopeSightVS(app2vertGeneral IN)
+{
+  v2Frag OUT = (v2Frag)0;
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+  OUT.baseTC.xy = IN.baseTC.xy;
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout ScopeSightPS(v2Frag IN)
+{
+  pixout OUT;
+
+   // Debug output
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, float4(IN.baseTC, 0, 1));
+   return OUT;
+ #endif
+
+  half4 diffuseTex = tex2D(diffuseMapSampler, IN.baseTC.xy);
+  HDROutput(OUT, diffuseTex*SightColor, 1);
+
+  return OUT;
+}
+
+#define CurrVertexShader VertexShader = compile vs_Auto ScopeSightVS();
+#define CurrPixelShader PixelShader = compile ps_Auto ScopeSightPS();
+
+#define CurrState \
+    ZEnable = true; \
+    ZFunc = LEqual; \
+    ZWriteEnable = false; \
+    CullMode = None; \
+    SrcBlend = ONE; \
+    DestBlend = ONE_MINUS_SRC_ALPHA; \
+    AlphaBlendEnable = true; \
+
+//////////////////////////////// technique ////////////////
+
+#else
+
+struct a2Vtx
+{
+  float4 Position : POSITION;
+};
+
+struct v2Frag
+{
+  float4 HPosition : POSITION;
+};
+
+///////////////// vertex shader //////////////////
+v2Frag DummyVS(a2Vtx IN)
+{
+  v2Frag OUT = (v2Frag)0;
+  OUT.HPosition = mul(vpMatrix, IN.Position);
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout DummyPS(v2Frag IN)
+{
+  pixout OUT;
+  OUT.Color=1;
+  return OUT;
+}
+
+#define CurrVertexShader VertexShader = compile vs_Auto DummyVS();
+#define CurrPixelShader PixelShader = compile ps_Auto DummyPS();
+
+#define CurrState \
+    ZEnable = true; \
+    ZFunc = LEqual; \
+    ZWriteEnable = true; \
+    CullMode = Back; \
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#endif
+
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script = 
+        "TechniqueZ=ZPass;"
+        "TechniqueCaustics=CausticsPass;"
+        "TechniqueMotionBlur=MotionBlurPass;"
+>
+{
+  pass p0
+  {
+    CurrVertexShader
+    CurrPixelShader
+    CurrState
+  }
+}
+
+//===========================================================================
+// Common passes support (zpass/fog)
+
+#include "CommonZPass.cfi"
+#include "CommonCausticsPass.cfi"
+#include "CommonMotionBlurPass.cfi"
+
+/////////////////////// eof ///

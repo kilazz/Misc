@@ -1,0 +1,47 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: Hair.ext
+// Created: 01/08/2005 by Tiago Sousa
+
+Version (1.00)
+
+Property
+{
+  Name        = %VERTCOLORS
+  Mask        = 0x10
+  Property    (Vertex Colors)
+  Description (Use vertex colors)
+}
+
+Property
+{
+  Name        = %DISABLE_RAIN_PASS
+  Mask        = 0x20
+  Property    (Disable rain layer)
+  Description (Disables rain layer)
+}
+
+Property
+{
+  Name            = %STAT_BRANCHING
+  Mask            = 0x10000000
+  DependencySet   = $HW_StaticBranching
+  DependencyReset = $HW_StaticBranching
+  Hidden
+}
+
+Property
+{
+  Name            = %DYN_BRANCHING
+  Mask            = 0x20000000
+  DependencySet   = $HW_DynamicBranching
+  DependencyReset = $HW_DynamicBranching
+  Hidden
+}
+
+Property
+{
+  Name        = %WIND_BENDING
+  Mask        = 0x40000000
+  Property    (Wind bending)
+  Description (Gets affected by wind entities. Use extra shader parameters to tweak look.)
+}

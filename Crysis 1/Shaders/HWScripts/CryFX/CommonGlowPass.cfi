@@ -1,0 +1,183 @@
+////////////////////////////////////////////////////////////////////////////
+//
+//  Crytek Engine Source File.
+//  Shader extension
+//  Copyright (C), Crytek Studios, 2001-2004.
+// -------------------------------------------------------------------------
+//  File name:   CommonGlowPass.cfi
+//  Version:     v1.00
+//  Created:     23/11/2004 by Tiago Sousa
+//  Compilers:
+//  Description: Common/Shared passes bettwen shaders. Should be included after
+//    main shader technique
+//
+//  NOTE: ALWAYS MAKE SURE VERTEX INPUTS MATCH CORRECTLY BEFORE INCLUDING THIS!
+//  TODO: Add support for texture modifiers, since Illum and others require it
+//  "Common_" name convention - for shader sharing in cache files
+//
+//
+// -------------------------------------------------------------------------
+////////////////////////////////////////////////////////////////////////////
+
+/// Un-Tweakables //////////////////////
+// xyz = glow intensity/color, alpha is glow size
+
+float4 GlowParams : PB_GlowParams;
+sampler2D glowDecalMapSampler = sampler_state { Texture = $DecalOverlay; };
+
+////////////////////////////////////////////////////////
+//                Glow PASS
+////////////////////////////////////////////////////////
+
+///////////////// vertex input/output //////////////////
+struct vert2fragGlow
+{
+  float4 HPosition : POSITION;
+  float4 baseTC     : TEXCOORDN;
+  float4 maskTC     : TEXCOORDN;
+
+#if %_RT_DECAL_TEXGEN_2D || %_RT_DECAL_TEXGEN_3D
+  float3 DistAtten : TEXCOORDN;
+#endif
+};
+
+///////////////// vertex shaders //////////////////
+vert2fragGlow Common_GlowPassVS(app2vertGlow IN)
+{
+  vert2fragGlow OUT;
+#ifndef OPENGL
+  OUT = (vert2fragGlow)0;
+#endif
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGlow(IN, vertPassPos);
+
+#if %_RT_DECAL_TEXGEN_2D || %_RT_DECAL_TEXGEN_3D
+  float3 vBinormalProjToSurface = DecalBinormal.xyz - dot( DecalBinormal.xyz, vertPassPos.Normal ) * vertPassPos.Normal;
+  float3 vTangentProjToSurface = DecalTangent.xyz - dot( DecalTangent.xyz, vertPassPos.Normal ) * vertPassPos.Normal;
+
+  IN.Binormal = float4( normalize( vBinormalProjToSurface ), 1 );
+  IN.Tangent = float4( normalize( vTangentProjToSurface ), -1 );
+#endif
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+  float4 baseTC;
+#if %_RT_DECAL_TEXGEN_2D
+  // tex gen for 2d projected decals
+  baseTC.x = dot( DecalTangent, vertPassPos.Position );
+  baseTC.y = dot( DecalBinormal, vertPassPos.Position );
+  baseTC.zw = 0;
+
+  // attenuation for 2d projected decals
+  float3 DistAtten = vertPassPos.Position.xyz - DecalAtten.xyz;
+  DistAtten = mul( vertPassPos.ObjToTangentSpace, DistAtten );
+  OUT.DistAtten = DistAtten / DecalAtten.w;
+#elif %_RT_DECAL_TEXGEN_3D
+  // tex gen for 3d projected decals
+  baseTC.x = dot( DecalTangent, vertPassPos.Position );
+  baseTC.y = dot( DecalBinormal, vertPassPos.Position );
+  baseTC.zw = 0;
+
+  float3 distWS = vertPassPos.Position.xyz - DecalAtten.xyz;
+  float decalPlaneDist = dot( DecalNormal.xyz, distWS ); //float3 DecalNormal = normalize( cross( DecalBinormal.xyz, DecalTangent.xyz ) );
+
+  float invDecalSize = 1.0 / DecalAtten.w;
+
+  OUT.DistAtten.x = decalPlaneDist * invDecalSize;
+  OUT.DistAtten.y = saturate(dot(vertPassPos.Normal, DecalNormal) * 10);
+#else
+  baseTC = IN.baseTC;
+#endif
+
+  // reminder for Andrey, texture modifiers should work on all cases
+  _TCModify(baseTC, OUT.baseTC, vertPassPos.Position, vertPassPos.ObjToTangentSpace[2], TS_DIFFUSE);
+
+  //OUT.baseTC = _TCModify(baseTC, vPos, vNorm, _TCMMatrixDif, _TCGMatrixDif, true, false, 0);
+  OUT.maskTC.xyzw = mul(baseTC, _TCMMatrixDecal);
+
+  float fAlphaRef = 0.01;
+#if %_RT_ALPHATEST
+  #if %_RT_INSTANCING_ATTR
+    fAlphaRef += IN.InstAlphaTest.w;
+  #else
+    fAlphaRef += AlphaTest.w;
+  #endif
+#endif
+
+  OUT.maskTC.z = saturate( fAlphaRef );
+
+  float fAlpha = AmbientOp.w;
+#if %_RT_INSTANCING_ATTR
+  fAlpha = IN.InstAmbientOp.w;
+#endif
+  OUT.maskTC.w = fAlpha;
+
+  return OUT;
+}
+
+///////////////// pixel shaders //////////////////
+pixout Common_GlowPassPS(vert2fragGlow IN)
+{
+  pixout OUT = (pixout)0;
+
+    half4 baseColor = tex2D(diffuseMapSampler, IN.baseTC.xy);
+
+    // Load the diffuse texture
+#if ((%DECAL && (%_RT_DECAL_TEXGEN_2D || %_RT_DECAL_TEXGEN_3D)) || %CHARACTER_DECAL)
+  #if %_TT0_TCPROJ
+    baseColor = tex2Dproj(diffuseMapSampler_Decal, IN.baseTC.xyzw);
+  #else
+    baseColor = GetTexture2D(diffuseMapSampler_Decal, IN.baseTC.xy);
+  #endif
+#else
+
+  half4 maskColor = tex2D(glowDecalMapSampler, IN.maskTC.xy);
+  baseColor *= maskColor;
+
+#endif
+
+  OUT.Color = (half4)GlowParams * baseColor;
+  OUT.Color.xyz *= (half3) MatDifColor;
+  OUT.Color.xyz *= baseColor.w * IN.maskTC.w;
+
+#if %_RT_DECAL_TEXGEN_3D
+  OUT.Color.xyz *= saturate(1 - IN.DistAtten.x * IN.DistAtten.x) * IN.DistAtten.y;
+#elif %_RT_DECAL_TEXGEN_2D
+  OUT.Color.xyz *= saturate(1 - dot(IN.DistAtten, IN.DistAtten));
+#endif
+
+#if %_RT_ALPHATEST
+  clip( baseColor.w - IN.maskTC.z);
+#endif
+
+  OUT.Color.w = 1.0;
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique GlowPass
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto Common_GlowPassVS() GlowVS;
+    PixelShader = compile ps_Auto Common_GlowPassPS() GlowPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = Back;
+    IgnoreMaterialState = true;
+
+#if %DECAL
+    ZFunc = LEqual;
+#endif
+
+    AlphaBlendEnable = true;
+    SrcBlend = ONE;
+    DestBlend = ONE;
+    ZFunc = LEqual;
+
+  }
+}

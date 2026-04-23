@@ -1,0 +1,323 @@
+#include "Common.cfi"
+
+#define INST_STREAM_CUSTOM                          \
+#if %_RT_INSTANCING_ATTR                            \
+  float4 InstAmbientOp  : TEXCOORDN;               \
+#endif                                              \
+
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "SupportsAttrInstancing;"
+           "NoChunkMerging;"
+           "NoPreview;"
+#if %DECAL
+           "Decal;"
+#endif
+           "SupportsReplaceBasePass;"
+           "ShaderDrawType = Light;";
+>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////// Custom shading pass structure /////////////////////////////////////
+
+float4 Diffuses[1]  : PB_DiffuseMulti;
+float4 Speculars[1] : PB_SpecularMulti;
+
+struct fragPassCustom
+{
+  half3 vViewTS;
+  half4 vLightTS;
+  half3 vEyeTS;
+
+  half4 cLightMatDiffuse;
+  half4 cLightMatSpecular;
+};
+
+struct fragLightPassCustom
+{
+
+};
+
+#include "ShadeLib.cfi"
+#include "ModificatorVT.cfi"
+#include "ModificatorTC.cfi"
+
+///////////////// Vertex/texture modifiers //////////////////
+
+sampler2D fixedPowFactorSampler = sampler_state
+{
+  Texture = textures/defaults/fixed_power_self_shadow.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+samplerCUBE normalizationCubeMapSampler = sampler_state
+{
+  //Texture = textures/defaults/normalize_cm.dds;
+  Texture = $NormalizationCubeMap;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+  AddressW = Wrap;
+};
+
+/////////// Common vertex shader ////////////////
+
+struct vtxLowSpec
+{
+  OUT_P
+  float4 baseTC  : TEXCOORDN;
+  float4 vLight  : TEXCOORDN;
+  float4 vEye   : TEXCOORDN;
+
+  float4 cLightMatDiffuse   : TEXCOORDN;
+  float4 cLightMatSpecular   : TEXCOORDN;
+
+#if %_LT_LIGHTS && %_LT_HASPROJ
+  float4 projTC    : TEXCOORDN;
+#endif
+
+  float4 Ambient   : TEXCOORDN;
+
+};
+
+vtxLowSpec LowSpecVS(app2vertGeneral IN)
+{
+  vtxLowSpec OUT;
+#ifndef OPENGL
+  OUT = (vtxLowSpec)0;
+#endif
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+  // Apply texture modifiers
+  _TCModify(IN.baseTC, OUT.baseTC, vertPassPos.Position, vertPassPos.Normal, TS_DIFFUSE);
+
+  // Output world to tangent matrix and world space position
+  float3 worldTangentS = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]) );
+  float3 worldTangentT =  normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]) );
+  float3 worldTangentN =  normalize(cross(worldTangentS, worldTangentT)) * IN.Tangent.w;
+
+  float3x3 mTangentToWS = float3x3(worldTangentS, worldTangentT, worldTangentN);
+
+  float3 vViewWS = vWorldPos;
+
+  half3 cFrontBackShade = 0;
+  #if %_LT_LIGHTS
+    const int aLType = %_LT_0_TYPE;
+
+    float4 WorldLightPos = 1;
+    float3 LightVecWS = 0;
+    if (aLType != LT_DIRECTIONAL)
+    {
+      WorldLightPos  = LGetPosition(0);
+      LightVecWS = LGetPosition(0).xyz - vViewWS.xyz;
+    }
+    else
+      LightVecWS = g_VS_SunLightDir;
+
+    OUT.vLight = float4( mul( mTangentToWS, LightVecWS), WorldLightPos.w);
+    OUT.vEye.xyz = mul( mTangentToWS, vViewWS );
+
+    //OUT.vHalf.xyz =  mul( mTangentToWS, -vViewWS.xyz + LightVecWS.xyz);
+    OUT.vLight.xyz *= WorldLightPos.w;
+
+    OUT.cLightMatDiffuse.xyz = Diffuses[0];// * MatDifColor;
+    OUT.cLightMatSpecular.xyz = Speculars[0] * Speculars[0].w   * 0.333; // 0.33 -> avoid far cry style
+
+    #if %_LT_HASPROJ
+      if (aLType == LT_PROJECTED)
+        OUT.projTC = mul(LightMatrix, vertPassPos.Position);
+    #endif
+
+  #endif
+
+  OUT.Ambient = AmbientOp;
+#if %_RT_INSTANCING_ATTR
+  OUT.Ambient = IN.InstAmbientOp;
+#endif
+
+  OUT.Ambient.xyz *= MatDifColor.xyz;
+
+  return OUT;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_lowspec_unify(inout fragPass pPass, in vtxLowSpec IN)
+{
+  // Set quality level (LOW, MEDIUM, HIGH or MAX)
+  pPass.nQuality = GetShaderQuality();
+
+  pPass.IN.baseTC = IN.baseTC;
+  pPass.IN.bumpTC = pPass.IN.baseTC;
+  pPass.pCustom.vLightTS = IN.vLight;
+  pPass.pCustom.vEyeTS = IN.vEye;
+  pPass.pCustom.cLightMatDiffuse = IN.cLightMatDiffuse;
+  pPass.pCustom.cLightMatSpecular = IN.cLightMatSpecular;
+  pPass.IN.Ambient = IN.Ambient;
+
+#if %_LT_LIGHTS && %_LT_HASPROJ
+  pPass.IN.projTC = IN.projTC;
+#endif
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+half4 frag_lowspec_output( inout fragPass pPass )
+{
+  half4 cOut = 0;
+
+  pPass.nQuality = GetShaderQuality();
+
+  float4 baseTC = pPass.IN.baseTC;
+  float4 bumpTC = pPass.IN.bumpTC;
+
+  pPass.cBumpMap = GetNormalMap(bumpMapSampler, bumpTC.xy);                                      // 3 alu
+  pPass.vNormal = pPass.cBumpMap;
+
+  pPass.cDiffuseMap = tex2D(diffuseMapSampler, baseTC.xy);                                       // 1 tex
+  pPass.cGlossMap = tex2D(glossMapSampler, baseTC.xy);                                           // 1 tex
+
+  // Set default alpha
+  pPass.fAlpha = pPass.cDiffuseMap.w * pPass.IN.Ambient.w;                                       // 1 alu
+
+#if %_LT_LIGHTS
+  const int nType = %_LT_0_TYPE;
+
+  float4 vLight = ( pPass.pCustom.vLightTS );
+  float3 vEye = ( pPass.pCustom.vEyeTS );
+
+  half fFallOff = 1;
+  if (nType != LT_DIRECTIONAL)
+    //fFallOff = GetAttenuation(vLight.xyz, vLight.w);
+    fFallOff = saturate(1-dot(vLight.xyz, vLight.xyz));                           // 2 alu
+
+  // Get projector filter color if needed
+  half3 cFilter = 1;
+#if %_LT_HASPROJ
+  if (nType == LT_PROJECTED)
+    cFilter = texCUBE(projCubeSampler, pPass.IN.projTC.xyz);;
+#endif
+
+  // someting broken with cubemap orientation
+  //vLight.xyz = texCUBE(normalizationCubeMapSampler, vLight.xyz );
+  //vHalf.xyz = texCUBE(normalizationCubeMapSampler, vHalf.xyz );
+
+  vLight.xyz = normalize( vLight.xyz );
+  vEye.xyz = normalize( -vEye.xyz );
+
+  half3 vHalf = normalize( vLight.xyz + vEye.xyz );
+
+  // Compute diffuse
+  half fNdotL = saturate( dot(vLight.xyz, pPass.vNormal.xyz) );                     // 1 alu
+  half3 cDiffuse = fNdotL;
+
+  half HdotL = saturate( dot( vHalf, pPass.vNormal.xyz ) );                         // 1 alu
+
+  // aprox pow 16;
+  //half fSpec = saturate(HdotL * HdotL - 0.75) * 4.0;                              // 2 alu
+  //half fSpec = pow( HdotL, MatSpecColor.w);
+
+  half fSpec = tex2D(fixedPowFactorSampler, float2(HdotL.x, fNdotL) ).w ;             // 1 tex
+
+  half3 cSpecular =  fSpec; // * saturate(fNdotL *4);                                 // 2 alu
+
+  half3 cK = fFallOff * cFilter;    // 1 alu
+  cOut.xyz += cDiffuse.xyz  * pPass.cDiffuseMap.xyz * pPass.pCustom.cLightMatDiffuse; // 2 alu
+  cOut.xyz += cSpecular.xyz * pPass.pCustom.cLightMatSpecular * pPass.cGlossMap.xyz; // 2 alu
+
+  cOut.xyz *= cK;
+
+#endif
+
+  // Ambient term
+#if %_RT_AMBIENT
+  cOut.xyz += pPass.IN.Ambient.xyz * pPass.cDiffuseMap.xyz;
+#endif
+
+  // distance blend out
+  cOut.w = pPass.fAlpha;
+
+  return cOut;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pixout LowSpecPS(vtxLowSpec IN)
+{
+  pixout OUT;
+
+  // Initialize fragPass structure
+  fragPass pPass = (fragPass) 0;
+  frag_lowspec_unify(pPass, IN);
+  half4 cFinal = frag_lowspec_output(pPass);
+
+  HDROutput(OUT, cFinal , 1);
+
+  return OUT;
+}
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script = 
+        "TechniqueZ=ZPass;"
+        "TechniqueGlow=GlowPass;"
+        "TechniqueShadowGen=ShadowGen;"
+        "TechniqueShadowPass=ShadowPass;"
+>
+{
+  pass p0
+  {
+
+    VertexShader = compile vs_Auto LowSpecVS() GeneralVS;
+    PixelShader = compile ps_Auto LowSpecPS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    CullMode = Back;
+
+#if %CHARACTER_DECAL
+    ZEnable = true;
+    ZWriteEnable = false;
+
+    CullMode = Back;
+
+    AlphaBlendEnable = true;
+    SrcBlend = ZERO;
+    DestBlend = SRC_COLOR;
+#elif %DECAL
+    ZEnable = true;
+    ZWriteEnable = false;
+    ZFunc = LEqual;
+
+    CullMode = Back;
+#endif
+
+  }
+}
+
+//////////////////////////////// Common techniques ////////////////
+
+#include "CommonZPass.cfi"
+#include "CommonGlowPass.cfi"
+#include "ShadowCommon.cfi"
+#include "CommonShadowGenPass.cfi"
+#include "CommonShadowPass.cfi"
+
+/////////////////////// eof ///

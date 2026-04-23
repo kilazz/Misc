@@ -1,0 +1,14 @@
+// CryEngine Shadow Mask Gen Extension
+// Copyright (C) Crytek Studios, 2001-2005
+// File: ShadowMaskGen.ext | Author: Vladimir Kajalin, 29/09/2007
+
+Version (1.00)
+
+Property
+{
+  Name            = %USE_SM30
+  Mask            = 0x1
+  DependencySet   = $HW_SM30
+  DependencyReset = $HW_SM30
+  Hidden
+}

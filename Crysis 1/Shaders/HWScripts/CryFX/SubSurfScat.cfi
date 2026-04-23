@@ -1,0 +1,263 @@
+float GetGlobalDepthZ(in float4 shadowTC)
+{
+  float fZ = 0.0f;
+  float fDepth = 0.0f;
+
+  #if %_RT_SAMPLE0 && !%_RT_CUBEMAP0
+    float2 P0;
+    P0.xy = shadowTC.xy / shadowTC.w;
+
+#if D3D10
+    fZ = depthMapSampler0.Sample( SAMPLER_STATE_depthMapTexArrSampler, float2(P0.xy) );
+#else
+    fZ=tex2D(depthMapSampler0,P0.xy).r;
+#endif
+    fZ += fDepthShift.x;
+    fDepth = max(shadowTC.z - fZ,0);
+  #endif
+
+  return fDepth;
+}
+
+float GetDepthZ(in vert2fragShadowCommon shadowTC)
+{
+
+  half4 vDepth0 = (float4)0;
+  half4 vShadow = (float4)0;
+  float4 vZ = (float4)0;
+
+  #if %_RT_SAMPLE0
+    #ifndef %_RT_CUBEMAP0
+        float3 P0;
+        P0.xy = shadowTC.shadTC0.xy / shadowTC.shadTC0.w;
+        P0.z = shadowTC.shadTC0.z;
+    #endif
+  #endif
+
+  #if %_RT_SAMPLE1
+    #ifndef %_RT_CUBEMAP1
+      float3 P1;
+      P1.xy = shadowTC.shadTC1.xy / shadowTC.shadTC1.w;
+      P1.z = shadowTC.shadTC1.z;
+    #endif
+  #endif
+
+  #if %_RT_SAMPLE2
+    #ifndef %_RT_CUBEMAP2
+      float3 P2;
+      P2.xy = shadowTC.shadTC2.xy / shadowTC.shadTC2.w;
+      P2.z = shadowTC.shadTC2.z;
+    #endif
+  #endif
+
+  #if %_RT_SAMPLE3
+    #ifndef %_RT_CUBEMAP3
+      float3 P3;
+      P3.xy = shadowTC.shadTC3.xy / shadowTC.shadTC3.w;
+      P3.z = shadowTC.shadTC3.z;
+    #endif
+  #endif
+
+    float4 vOffset=0;
+
+  #if %_RT_SAMPLE0
+    #ifndef %_RT_CUBEMAP0
+        shadow_sample(depthMapSampler0, P0.xy, vDepth0.x);
+        vDepth0.x += fDepthShift.x;
+        vZ.x = shadowTC.shadTC0.z;
+    #else
+         //vDepth0.x = texCUBE(depthMapSamplerCUBE0, IN.shadowTC.shadTC0.xyz).r;
+        //vZ.x = length(IN.shadowTC.shadTC0.xyz) - fDepthTestBias.x;
+    #endif
+  #endif
+
+  #if %_RT_SAMPLE1
+    #ifndef %_RT_CUBEMAP1
+      shadow_sample(depthMapSampler1, P1.xy, vDepth0.y);
+      vDepth0.y += fDepthShift.y;
+      vZ.y = shadowTC.shadTC1.z;
+    #else
+      //vDepth0.y = texCUBE(depthMapSamplerCUBE1, IN.shadowTC.shadTC1.xyz).r;
+      //vZ.y = length(IN.shadowTC.shadTC1.xyz) - fDepthTestBias.y;
+    #endif
+  #endif
+
+  #if %_RT_SAMPLE2
+    #ifndef %_RT_CUBEMAP2
+      shadow_sample(depthMapSampler2, P2.xy, vDepth0.z);
+      vDepth0.z += fDepthShift.z;
+      vZ.z = shadowTC.shadTC2.z;
+    #else
+      //vDepth0.z = texCUBE(depthMapSamplerCUBE2, IN.shadowTC.shadTC2.xyz).r;
+      //vZ.z = length(IN.shadowTC.shadTC2.xyz) - fDepthTestBias.z;
+    #endif
+  #endif
+
+  #if %_RT_SAMPLE3
+    #ifndef %_RT_CUBEMAP3
+      shadow_sample(depthMapSampler3, P3.xy, vDepth0.w);
+      vDepth0.w += fDepthShift.w;
+      vZ.w = shadowTC.shadTC3.z;
+    #else
+      //vDepth0.w = texCUBE(depthMapSamplerCUBE3, IN.shadowTC.shadTC3.xyz).r;
+      //vZ.w = length(IN.shadowTC.shadTC3.xyz) - fDepthTestBias.w;
+    #endif
+  #endif
+
+#if %_RT_SHADOW_MIXED_MAP_G16R16
+
+  vShadow = max(vZ-vDepth0,0);
+
+  // soft depth test helps to reduce alliasing
+  //compare0 += saturate(vDif0/*fDepthTestHardness*/);
+  //compare0 = abs(vDif0);
+  //vShadow.x = compare0.x; // * vAlpha.x; //FIXME: What's the reason for "* vAlpha.x"
+#endif
+
+  //vShadow*=1.0f/NumSamples;  // //FIXME: implement multi-step
+
+  // custom clamping
+#if %_RT_SAMPLE0
+  #if %_RT_SAMPLE1 && !%_RT_CUBEMAP1
+
+    float fBalance = 1;
+
+    float4 b;
+    float4 tmp;
+    tmp.xy = P0.xy;
+    tmp.zw = 1-P0.xy;
+    b = (tmp < 0.05);
+    fBalance = saturate(dot(b, float4(1,1,1,1)));
+
+    vShadow.x*=(1-fBalance);
+    vShadow.yzw*=fBalance;
+
+    #if %_RT_SAMPLE2 && !%_RT_CUBEMAP2
+
+      tmp.xy = P1.xy;
+      tmp.zw = 1-P1.xy;
+      b = (tmp < 0.05);
+      fBalance = saturate(dot(b, float4(1,1,1,1)));
+
+      vShadow.xy*=(1-fBalance);
+      vShadow.zw*=fBalance;
+
+      #if %_RT_SAMPLE3 && !%_RT_CUBEMAP3
+
+        tmp.xy = P2.xy;
+        tmp.zw = 1-P2.xy;
+        b = (tmp < 0.05);
+        fBalance = saturate(dot(b, float4(1,1,1,1)));
+
+        vShadow.xyz*=(1-fBalance);
+        vShadow.w*=fBalance;
+
+      #endif
+
+    #endif
+
+  #endif
+#endif
+
+  float fCompare = saturate(dot(vShadow, half4(1, 1, 1, 1)));
+
+  return fCompare;
+}
+
+float3 SubSurfRefraction (float fromIR, float toIR,
+                                   float3 incoming, float3 normal)
+{
+   float eta = fromIR/toIR; // eta
+   float c1 = -dot (incoming, normal);
+   float cs2 = 1.-eta*eta*(1.-c1*c1);
+   float3 v = (eta*incoming + (eta*c1-sqrt(cs2))*normal);
+   if (cs2 < 0.) v = 0;
+   return v;
+}
+
+/*float4 efresnel(float4 II, float4 NN, float eta, out float Kr, float Kt)
+{
+  float4 R, T;
+  fresnel(II, NN, eta, Kr, Kt, R, T);
+  Kr = smoothstep(0.,0.5, Kr);
+  Kt = 1. - Kr;
+  return normalize(T);
+}*/
+
+/*float depthSingleScatter(  float3 P,
+                            float4x4 lightTexMatrix,
+                            float4x4 lightMatrix,
+                            sampler2D lightDepthTex
+                          )
+{
+  float4 texCoord = mul(lightTexMatrix, float4(P, 1.0));
+  float d_i = tex2Dproj(lightDepthTex, texCoord.xyw);
+
+  float4 Plight = mul(lightMatrix, float(P, 1.0)); //transform Plight to lightspace
+  float d_o = length(Plight);
+
+  //depth itself
+  float delta = d_o - d_i;
+
+  returb delta;
+}
+*/
+
+/*float depthSingleScatter(  float4 Plight,
+                          float4 shadowTexCoord,
+                          float4x4 lightMatrix,
+                          sampler2D lightDepthTex
+                        )
+{
+  float4 texCoord = float4(shadowTexCoord.xyz, 1.0); //fix
+  float d_i = tex2Dproj(lightDepthTex, texCoord.xyw);
+
+  float d_o = length(Plight);
+
+  //depth itself
+  float delta = d_o - d_i;
+
+  returb delta;
+}*/
+
+float depthSingleScatter(  float4 Plight,
+                          float depth
+                        )
+{
+  float d_o = length(Plight.xyz);
+  float d_i = depth * d_o;
+
+  //depth itself
+  float delta = d_o - d_i;
+
+  return delta;
+}
+
+/*float evalTranslucenceTex(float scatterValue)
+{
+  return tex1D(scatterFadeRamp, si); //use ramp sampler
+}*/
+
+//simple exponential disctribution translucence
+float evalTranslucence(float scatterValue, float sigma_t)
+{
+  return exp(-scatterValue * sigma_t); //lightColor;  directly exp func
+}
+
+half GetDepthFogAmount( half3 vStartScatter, half3 vEndScatter)
+{
+  half g_fogOffset = 0;
+  half g_fogScale = 0;
+  half g_fogPow = 2;
+  half3 fogVec = vEndScatter - vStartScatter;
+  half fogAmount = saturate(g_fogOffset + pow(g_fogScale * dot(fogVec, fogVec), g_fogPow));
+
+  return fogAmount;
+}
+
+// Blinn lighting model, infinite light, infinite viewer
+half BlinnModel( half3 N, half3 L, half3 V, half Exp )
+{
+  half3 H = normalize( L + V );
+  return pow( max( saturate (dot( N, H )), 0.00001 ), Exp );
+}

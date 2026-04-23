@@ -1,0 +1,1261 @@
+/// Uber-mess , cleanup whenever possible..
+
+#include "Common.cfi"
+#include "ModificatorVT.cfi"
+#include "ModificatorTC.cfi"
+#include "ShadeLib.cfi"
+
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "NoPreview;"
+           "LocalConstants;"
+#if %WAVE_DECAL
+            //"ForceZpass;"
+            "ForceDrawAfterWater;"
+#endif
+           "ShaderDrawType = General;"
+           "ShaderType = Water;"
+           "StartTecnique = e_water_ocean_fft ? Water : WaterFFT;";
+>;
+
+/// Un-Tweakables //////////////////////
+float4x4 mViewProj : PI_Composite; // view projection matrix
+float4x4 mViewProjI : PB_UnProjMatrix;  // invert( view projection matrix )
+float4x4 mWorldT : PI_TransObjMatrix;
+float4x4 mCamera : PB_CameraMatrix_I;
+
+float4 g_fWaterLevel : PB_WaterLevel;
+
+float4x4 mReflProj : PI_TexMatrix
+<
+  string 'Sampler' (envMapSamplerRefl)
+>;
+
+// water waves parameters
+float4 OceanParams0 = { PI_FromObject[0], PI_FromObject[1], PI_FromObject[2], PI_FromObject[3] };
+float4 OceanParams1 = { PI_FromObject[4], PI_FromObject[5], PI_FromObject[6], PI_FromObject[7] };
+
+// x: lifetime, y: curr lifetime, z: distance to terrain height, w: view distance attenuation
+float4 WaveParams0 = { PI_FromObject[8], PI_FromObject[9], PI_FromObject[10], PI_FromObject[11] };
+// x: current wave height, yzw unused
+float4 WaveParams1 = { PI_FromObject[12], PI_FromObject[13], PI_FromObject[14], PI_FromObject[15] };
+
+// Tweakables /////////////////
+
+/*
+float BigWavesScale = 2
+float SmallWavesScale = 1
+float FresnelBias = 0
+float SunShinePow = 128
+*/
+
+float SoftIntersectionFactor
+<
+  psregister      = PS_REG_PM_4.x;
+  string UIHelp   = "Controls softness of water surface intersection with other opaque scene geometry";
+  string UIName   = "Soft intersection factor";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.1;
+> = 1.0;
+
+// General procedural wind support
+
+#if %WAVE_DECAL
+
+float MaxAnimAmplitudeWav0
+<
+  vsregister      = VS_REG_PM_4.y;
+  string UIName   = "Max animation amplitude wave0";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float MaxAnimAmplitudeWav1
+<
+  vsregister      = VS_REG_PM_4.z;
+  string UIHelp   = "Set cloth animation amplitude";
+  string UIName   = "Max animation amplitude wave1";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+#endif
+
+#if %FAKE_CAMERA_MOVEMENT
+  float FakeCameraSpeed
+  <
+    vsregister      = VS_REG_PM_4.w;
+    string UIHelp   = "Set fake camera speed";
+    string UIName   = "Fake camera speed";
+    string UIWidget = "slider";
+    float UIMin     = -10.0;
+    float UIMax     = 10.0;
+    float UIStep    = 0.001;
+  > = 0.0;
+#endif
+
+float ReflectionAmount
+<
+  psregister      = PS_REG_PM_4.z;
+  string UIHelp   = "Set reflection scale";
+  string UIName   = "Reflection Amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 0.5;
+
+float WhiteCapsAmount
+<
+  psregister      = PS_REG_PM_4.w;
+  string UIHelp   = "Set white caps";
+  string UIName   = "WhiteCaps Amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.001;
+> = 0.75;
+
+float SunMultiplier
+<
+  psregister      = PS_REG_PM_5.x;
+  string UIName   = "Sun multiplier";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 32.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+/*
+
+float SunGlintMultiplier = 1.5
+float SunGlintThreshold = 1
+
+*/
+
+float FresnelScale
+<
+  psregister      = PS_REG_PM_5.w;
+  string UIName   = "Fresnel scale";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 32.0;
+  float UIStep    = 0.05;
+> = 1.0;
+
+////////////////////////////////////////////////////////////////
+
+sampler2D fftTexSampler : register(s0);
+
+sampler2D envMapSamplerRefl : register(s0)
+<
+  string Script = 
+      "RenderOrder=PreProcess;"
+      "ProcessOrder=WaterReflection;"
+      "RenderCamera=WaterPlaneReflected;"
+      "RenderTarget_IDPool = _RT2D_WATER_ID;"
+      "RenderTarget_Width=$ScreenSize;"
+      "RenderTarget_Height=$ScreenSize;"
+      "RenderTarget_UpdateType=WaterReflect;"
+      "RenderDepthStencilTarget=DepthBuffer;"
+      "ClearSetColor=Black;"
+      "ClearSetDepth=1;"
+      "ClearTarget=Color;"
+      "ClearTarget=Depth;";
+>
+{
+  Texture = $RT_2D;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler2D envMapSamplerRefr : register(s1)
+{
+  Texture = $SceneTarget;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+// Anisotropic not working ..
+sampler2D oceanBumpMapSampler
+{
+  Texture = $Bump;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D sceneDepthSampler
+{
+  Texture = $ZTarget;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+// Anisotropic not working ..
+sampler2D foamSampler
+{
+  Texture = textures/defaults/water_foam.dds; //_02.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D waterGlossMapSampler
+{
+  Texture = Textures/defaults/water_gloss.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D foamSamplerSec
+{
+  Texture = Textures/defaults/water_foam_02.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D waveSampler
+{
+  Texture = textures/defaults/water_wave.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Clamp;
+};
+
+sampler2D waveBumpSampler
+{
+  Texture = textures/defaults/water_wave_ddn.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Clamp;
+};
+
+/////////////////////////////
+
+struct a2vWater
+{
+  float4 Position : POSITION;
+
+#if %WAVE_DECAL
+  float2 baseTC   : TEXCOORDN;
+  float4 Color    : COLOR0;
+#endif
+};
+
+//simple sin approx for 4 at a time
+float4 _ApproxSine4(float4 arg)
+{
+  return sin(arg); //SmoothSignedTriangleWave(frac(arg)*2-1 + 0.5);
+}
+
+//simple sin approx for 4 at a time
+float4 _ApproxCosine4(float4 arg)
+{
+  return sin(arg); //return SmoothSignedTriangleWave(frac(arg)*2-1);
+}
+
+struct v2fWater
+{
+  float4 Position  : POSITION;   // in projection space
+  float4 baseTC    : TEXCOORDN;  // foam coordinates
+  float4 Wave0     : TEXCOORDN;  // wz if next frequency wave x2
+  float4 Wave1     : TEXCOORDN;  // wz if next frequency wave x2
+  float4 screenProj : TEXCOORDN; // refraction projection
+  float4 envTC      : TEXCOORDN; // reflection projection
+
+  float4 viewVec   : TEXCOORDN;
+  float4 normalVec   : TEXCOORDN; // w unused
+
+#if %_RT_FOG
+  float4 localFogColor : TEXCOORDN;
+#endif
+
+  float4 cColor : COLOR0;
+};
+
+float4 tex2Dlod_bilinear( in sampler2D s, in float2 t, in float2 textureSize, in float2 texelSize )
+{
+  float2 f = frac( t * textureSize );
+
+  // TODO: take advantage of arbitrary swizzles for 2.x & 3.0
+  float4 t00 = tex2Dlod( s,  float4(t, 0, 0) );
+  float4 t10 = tex2Dlod( s, float4( t + float2( texelSize.x, 0 ), 0, 0) );
+  float4 tA = lerp( t00, t10, f.x );
+
+  float4 t01 = tex2Dlod( s, float4( t + float2( 0, texelSize.y ), 0, 0) );
+  float4 t11 = tex2Dlod( s, float4( t + float2( texelSize.x, texelSize.y ), 0, 0) );
+  float4 tB = lerp( t01, t11, f.x );
+
+  return lerp( tA, tB, f.y );
+}
+
+// Get waves
+void GetWave(inout float3 vPos, in float2 FlowDir, in a2vWater IN, bool bOneSample = true)
+{
+  if( GetShaderQuality() == QUALITY_LOW )
+    return;
+
+  // constant to scale down values a bit
+  const float fAnimAmplitudeScale = 1.0 / 5.0;
+
+  float3 vFakePos = vPos;
+  #if %FAKE_CAMERA_MOVEMENT
+  vFakePos += ( float3(FlowDir.xy* g_VS_AnimGenParams.x* FakeCameraSpeed , 0) )*1.05 /* workaround for register exceeding */ ;
+  #endif
+
+  float3 vPosOrig = vFakePos;
+  float fPhaseTest = length(vFakePos.xy);
+
+  #if %WAVE_DECAL
+    float fDistToEdge =1.0;
+    float fEdgesAtten = 1.0f;
+    //float fLen = length(vPosOrig);
+
+    // compute per-wave - less 10 instructions
+    half fLifetime =  WaveParams0.x;
+
+    fDistToEdge = IN.Color.y;
+
+   // color.x = x attenuation,
+   // color.y = y attenuation
+   // color.z = x sector attenuation
+   // color.w = edges attenuation -> (1-abs(color.x*2-1)) * (1-abs(color.y*2-1))
+
+    fEdgesAtten = saturate( 2 * sqrt(1-abs(IN.Color.z*2-1)) ) ;
+    fEdgesAtten *= MaxAnimAmplitudeWav0 *4;     // 7 inst
+
+    //float2 vSinCos = float2( sin( vFakePos.x ), cos( vFakePos.x ) ) *0.333;//ApproxSine2(vFakePos.xy);// * 0.333;
+
+    //vPos.xy += vSinCos;
+
+    //fDistToEdge = sqrt(fDistToEdge) *fLifetime;
+    fDistToEdge = fDistToEdge * fLifetime;
+    OceanParams1.x = lerp( OceanParams1.x, MaxAnimAmplitudeWav0, fDistToEdge);  // 3 inst
+    //AnimAmplitudeWav0 = lerp( AnimAmplitudeWav0, MaxAnimAmplitudeWav0, fDistToEdge);
+    //AnimAmplitudeWav1 = lerp( AnimAmplitudeWav1, MaxAnimAmplitudeWav1, fDistToEdge);
+
+  //  vPos.z += sin( fLifetime *fDistToEdge.xxxx+fPhaseTest*1.01)*(fEdgesAtten * fLifetime) * WaveParams1.x;// * saturate(abs(fDistToEdge*2-1)+ 0.4);
+    //vPos.xyz = normalize(vPos.xyz) * fPhaseTest;
+
+  #endif
+
+  //////////////////////////////////////////////////////////////////////////////////////////////////
+  // Water ocean animation
+
+  // Each wave as ~doubled frequency/phase
+  const float4 vFrequencies = 5*OceanParams0.z * float4(0.233, 0.455, 0.6135, -0.1467);
+  const float4 vPhases = OceanParams0.w * float4(0.1, 0.159, 0.557, 0.2199);
+  const float4 vAmplitudes = OceanParams1.x * float4(1, 0.5, 0.25, 0.5);
+
+  float4 vWaveFreq = g_VS_AnimGenParams.z * vFrequencies;                                   // 1 inst
+
+  float4 vCosPhase = (fPhaseTest + vFakePos.x)* vPhases;                                    // 1 inst
+  float4 vCosWave = cos( vWaveFreq * FlowDir.x + vCosPhase );                               // 8 inst
+
+  float4 vSinPhase = (fPhaseTest + vFakePos.y)* vPhases;                                    // 1 inst
+  float4 vSinWave = sin( vWaveFreq * FlowDir.y + vSinPhase );                               // 8 inst
+
+  float fAnimSum = dot(vCosWave, vAmplitudes) + dot(vSinWave, vAmplitudes);                 // 3 inst
+
+#if !%_RT_SAMPLE4
+
+  if( GetShaderQuality() > QUALITY_LOW )
+    vPos.z += fAnimSum * fAnimAmplitudeScale;                                                 // 1 inst
+
+#else
+
+#ifndef D3D10
+  float3 v0 = tex2Dlod_bilinear( fftTexSampler, (vFakePos.xy)*0.0125*OceanParams0.w * 1.25, 64, 1.0/64 ); //*3
+#else
+  float3 v0 = tex2Dlod( fftTexSampler, float4(  (vFakePos.xy)*0.0125*OceanParams0.w * 1.25, 0 ,0) ); //*3
+#endif
+
+  vPos.xyz += v0 * 0.06 * OceanParams1.x * float3(1.5,1.5,1);
+
+#endif
+
+}
+
+//define WHITE_OUTPUT
+
+//define %SCREEN_SPACE_GRID
+#define %USE_EXP_VTX_ATTEN
+
+// Get vertex from screen space into world spasace
+void GetGridVertexPos( inout float4 vPos, inout float fDistToCam )
+{
+
+#if %SCREEN_SPACE_GRID || (!%_RT_QUALITY && !%_RT_QUALITY1)
+  const float fGridQuadSize = 1.0 / (200.0);
+  vPos.xy = ((vPos.xy  + fGridQuadSize)* 2 - 1);
+  //vPos.xy = vPos.xy* 2 - 1;
+
+  // BFH: make sure edges go out of screen - todo: find better solution for this
+  //vPos.xy *= (1.0 +  fGridQuadSize*10);
+  vPos.xy *= 2.0;
+
+  // BFH: make sure edges go out of screen - todo: find better solution for this
+  //vPos.y *= 1.1;
+
+  vPos.z = 0.0;
+  vPos.w = 1.0;
+  float4 vPosWS = mul( mViewProjI, vPos );
+  vPosWS /= vPosWS.w;
+
+  float3 view = g_VS_WorldViewPos.xyz - float3(vPosWS.xy, OceanParams1.w);
+ float fDirSign = sign(view.z); // make sure to invert sign when bellow water
+
+  // get z plane intersections
+  float2 z_isecs = float2( max(fDirSign*g_VS_WorldViewPos.z - fDirSign*vPosWS.z, 0.05 / g_VS_NearFarClipDist.y),
+                           fDirSign*g_VS_WorldViewPos.z - fDirSign*OceanParams1.w );
+  //z_isecs *= fDirSign;
+  //z_isecs = max(z_isecs, 0.00001);
+
+  // clamp t just in case
+  float  t = min( z_isecs.y / z_isecs.x, g_VS_NearFarClipDist.y * 5.0 );
+
+  // project vertex along ray direction
+  float2 vRayDir = (vPosWS.xy - g_VS_WorldViewPos.xy);
+  vPos.xy = g_VS_WorldViewPos.xy + vRayDir.xy * t;
+
+  fDistToCam = t;
+
+  // BFH to avoid retarded artefacts at horizon line - and still not perfect - how to solve this ?
+  float fHeightDistanceSnap =(t / g_VS_NearFarClipDist.y);// * saturate(abs(view.z)*0.1);
+  //fHeightDistanceSnap *= (t > 0)? 0.05:1;   // avoid funky reverted height
+
+  vPos.z = OceanParams1.w;
+ if( t >= g_VS_NearFarClipDist.y * 3.5)
+    vPos.z = OceanParams1.w + fHeightDistanceSnap;
+#else
+
+  float atten = ( vPos.z );
+
+  // simple lod - keep nearby detail until 200 meters after that project all vertices to horizon
+  float fLod0 = 250 *( 1/ min(OceanParams0.w, 2.0 ));
+  fLod0 = (atten >0.98)?g_VS_NearFarClipDist.y*2:fLod0;
+
+  // Stupid hlsl bug, left for documentation purpose..
+  // This gets some funky rotation
+  //vPos.x = 0.707 * (vPos.x) - 0.707 * (vPos.y);
+  //vPos.y = 0.707 * (vPos.y) + 0.707 * (vPos.x);
+
+  // This works correctly..
+  //float tx = vPos.x;
+  //float ty = vPos.y;
+  //vPos.x = 0.707 * (vPos.x) - 0.707 * (ty);
+  //vPos.y = 0.707 * (vPos.y) + 0.707 * (tx);
+
+  // Set a 45 degree rotation to the grid
+  vPos.xy = 0.707 * vPos.xy + 0.707 * float2( - vPos.y, vPos.x);
+  // Orientate along camera direction - try keeping good amount of triangles on screen
+  float2 vPosRot =  mul(( (const float3x3) mCamera ), -fLod0 * float3(vPos.x, 0, vPos.y-0.3));
+
+  // for no rotation
+  // float2 vPosRot =  mul(( (const float3x3) mCamera ), -fLod0 * float3((vPos.x*2-1)*0.4, 0, vPos.y-0.25));
+
+  // martin trick: snap grid to avoid translation aliasing
+  float2 cpos = g_VS_WorldViewPos.xy;
+  cpos.xy -= frac(cpos.xy * 0.4) * 2.5;
+
+  float fHeightDistanceSnap = 3 * (atten >0.98);
+
+  vPos = float4( cpos.xy + vPosRot.xy , OceanParams1.w + fHeightDistanceSnap, 1);
+
+#endif
+}
+
+float3 ComputeSurfaceNormal( in float2 vFlowDir, in float3 vPosOrig, in float3 vPos, float fDisp, in a2vWater IN)
+{
+  float3 vNormal = float3(0,0,1);
+
+  float3 vPos1 = vPosOrig.xyz + float3(1,0,0);
+  float3 vPos1Orig = vPos1;
+  GetWave( vPos1.xyz, vFlowDir, IN);
+  vPos1.xyz = lerp(vPosOrig.xyz, vPos1.xyz, fDisp);                                        // 2 alu
+  vNormal.x = vPos.z - vPos1.z;
+
+  vPos1 = vPosOrig.xyz + float3(0,1,0);
+  vPos1Orig = vPos1;
+  GetWave( vPos1.xyz, vFlowDir, IN);
+  vPos1.xyz = lerp(vPosOrig.xyz, vPos1.xyz, fDisp);                                        // 2 alu
+  vNormal.y = vPos.z - vPos1.z;
+
+  return vNormal;
+}
+
+///////////////// vertex shader //////////////////
+
+v2fWater WaterVS(a2vWater IN)
+{
+  int nQuality = GetShaderQuality();
+
+  v2fWater OUT;
+#ifndef OPENGL
+  OUT = (v2fWater)1;
+#endif
+
+  // Position in screen space.
+  float4 vPos = IN.Position;
+  //float bEdgeDispl = 1-saturate(saturate((vPos.z+0.05))); //vPos.z;
+  float bEdgeDispl =1 - saturate(saturate(vPos.z +0.05)*2-1.0); //vPos.z;
+
+  float fNormalAtten = bEdgeDispl;
+
+  float bDebug = vPos.z;
+
+  float2 FlowDir = OceanParams1.yz;
+
+  // Output bump layers texture coordinates
+  float2 vTranslation= ( g_VS_AnimGenParams.z * OceanParams0.y  *  0.0025)* FlowDir;
+
+  float fVertexDist = 0;
+  float vBlendFogMax = 0;
+
+#if !%WAVE_DECAL
+  GetGridVertexPos( vPos, fVertexDist); // 30 alu
+  vBlendFogMax = vPos.w;
+
+  vPos.w = 1;
+
+#else
+  vPos = float4( mul(mWorldT, vPos).xy, OceanParams1.w, 1);
+  bEdgeDispl = 1;
+#endif
+
+  float4 vPosOrig = vPos;
+  float3 vPos0 = vPosOrig.xyz;
+
+  GetWave( vPos.xyz, FlowDir, IN, false);
+
+  float fDistToCam = length(g_VS_WorldViewPos.xyz - vPos.xyz);                                      // 2 alu
+  // Attenuate wave strength nearby camera
+  float fNearbyCameraAtten = (saturate( fDistToCam*fDistToCam));                                           // 1 alu
+
+#if !%WAVE_DECAL
+  vPos.xyz = lerp(vPosOrig.xyz, vPos.xyz, saturate(fNearbyCameraAtten * bEdgeDispl));                                        // 2 alu //* bEdgeDispl
+#endif
+
+  // Add small waves nearby camera
+#if !%WAVE_DECAL
+  //const float4 vNearWavesFreqPhases = float4(-11.0, -5.0, 10.0, 15.0);
+  //float fNearCamWaves = dot(ApproxSine2( g_VS_AnimGenParams.z * vNearWavesFreqPhases.xy + fDistToCam * vNearWavesFreqPhases.zw), float2(0.6, 0.4));
+  //float fDispAmount = saturate(  1 / (fDistToCam) );                                                // 1 alu
+  //vPos.z += fNearCamWaves * fDispAmount * 0.025;// * bEdgeDispl;                                                    // 2 alu
+#endif
+
+  // Output projected reflection texture coordinates
+  float4 vProjTex = mul(mReflProj, float4(vPos.xy, g_fWaterLevel.z, 1));                              // 4 alu
+  OUT.envTC = vProjTex;
+#if %_RT_FOG
+  OUT.localFogColor = GetVolumetricFogColor( vPos );
+  if( nQuality >= QUALITY_HIGH )
+    OUT.localFogColor = vPos;
+#endif
+
+  // compute normal vector
+  {
+    OUT.normalVec.xyz = ComputeSurfaceNormal( FlowDir, vPosOrig, vPos, bEdgeDispl, IN);
+    OUT.normalVec.z += 0.1;
+    OUT.screenProj.z = saturate(2*(vPos.z - OceanParams1.w)*saturate((-OUT.normalVec.x -OUT.normalVec.y )*0.9+0.2));
+  }
+
+  // chopiness - needs testing
+  float fWaveDispAmount = abs(vPosOrig.z - vPos.z);
+#if !%WAVE_DECAL && !%_RT_SAMPLE4
+  float2 vChoppy = normalize( OUT.normalVec.xyz  ).xy * FlowDir *OceanParams1.x;//* fWaveDispAmount;
+  vPos.xy -= vChoppy;
+  fWaveDispAmount = dot(vChoppy.xy, vChoppy.xy);
+#endif
+
+  // Output eye/light vector
+  float3 viewVec = g_VS_WorldViewPos.xyz - vPos.xyz;                                                // 1 alu
+
+  OUT.viewVec.xyz =  ( viewVec.xyz );                                                       // 3 alu
+  // verify diferences
+  OUT.normalVec.w = 1; //1.0 / dot( ( OUT.viewVec.xyz ) , miscCamFront.xyz );                       // 2 alu
+
+  OUT.Position = mul(mViewProj, vPos);                                                           // 4 alu
+  //OUT.Position.w *= ;
+
+  //bEdgeDispl *
+  // Attenuate normal strength to make tesselation artefacts less visible
+  //OUT.normalVec.xy*=  saturate(1- OUT.Position.w*0.0075*0.5 +  saturate(0.25 / OceanParams0.w));                   // 2 alu
+  // Scale texture coordinates to get mix of low/high frequency details
+  OUT.viewVec.w = OUT.Position.w * g_VS_NearFarClipDist.w;                                          // 1 alu
+
+  // Output projected refraction texture coordinates
+  OUT.screenProj.xyw = HPosToScreenTC( OUT.Position ).xyw;                                                  // 2 alu
+
+  // dont touch this scales !
+  float2 vTex = vPos.xy * 0.005;                                             // 1 alu
+#if %FAKE_CAMERA_MOVEMENT
+  vTex = (vPos.xy + float2(FlowDir.x, FlowDir.y)* (g_VS_AnimGenParams.x*FakeCameraSpeed*0.5)) * 0.005;
+#endif
+
+if( GetShaderQuality() == QUALITY_LOW )
+  vTranslation.xy *= 2;
+
+  // Output texture coordinates for water - don't touch texture scales! hand tweaked stuff
+  OUT.Wave0.xywz = vTex.xyxy * float4(4, 4, 2, 2) + vTranslation.xyxy * float4(1, 1, 2, 2);
+
+  OUT.Wave1.xywz = OUT.Wave0.xywz *2;
+if( GetShaderQuality() == QUALITY_LOW )
+  OUT.Wave1.wz = vTex.xy * 8 - 2*vTranslation.xy;
+
+#if %WAVE_DECAL
+  OUT.baseTC.xy = IN.baseTC.xy;
+
+  float fAnimFoam = frac( g_VS_AnimGenParams.z * OceanParams0.z * 0.01);
+  OUT.baseTC.wz = vTex.yx * 42.0 + fAnimFoam*FlowDir;
+#else
+
+  // Output texture coordinates for foam - don't touch texture scales! hand tweaked stuff
+  float2 fAnimFoam = frac( g_VS_AnimGenParams.z * OceanParams0.z * 0.01 * float2(0.2, 1)*2);
+  OUT.baseTC.xywz = vTex.xyxy * float4(58*0.2, 52*0.2, 38, 42)*3 + fAnimFoam.xxyy * float4(-1, -1, 1, 1);
+
+#endif
+
+#if %WAVE_DECAL
+
+   //float3 vWaterPos = float3(vPosOrig.xy, OceanParams1.w);
+   //GetWave( vWaterPos.xyz, FlowDir, IN);
+
+   // avoid intersections
+   //vPos.z -= 0.1;//+=sin(g_VS_AnimGenParams.z*3 + dot(vPos.xy,0.5)*4)*0.25 - 0.125; // 0.1 +
+
+   // color.x = x attenuation,
+   // color.y = y attenuation
+   // color.z = x sector attenuation
+   // color.w = edges attenuation -> (1-abs(color.x*2-1)) * (1-abs(color.y*2-1))
+
+   OUT.cColor = IN.Color.w;
+
+   // TEMPORARY FIX: NO WAVES VISIBLE FROM BELLOW WATER
+   //OUT.cColor *=saturate((g_VS_WorldViewPos.z - OceanParams1.w )*4);
+
+   // Add soft intersection with water plane
+   //OUT.cColor *= saturate( (OceanParams1.w - vPos.z) * 2);
+   //OUT.cColor *= saturate( (vWaterPos.z - vPos.z) * 2);
+
+   // No waves in terrain area
+   OUT.cColor *= WaveParams0.z;
+
+#else
+  OUT.cColor = float4(bDebug.xx, fWaveDispAmount, vBlendFogMax);
+#endif
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+half3 BumpGen( in v2fWater IN  )
+{
+  half3 bumpNormal;
+  half3 vVertexNormal = IN.normalVec.xyz;
+
+  // Scale first layer bump, for big waves
+  half2 bumpColorA = FetchNormalMap(oceanBumpMapSampler, IN.Wave0.xy);
+  half2 bumpColorB = FetchNormalMap(oceanBumpMapSampler, IN.Wave0.wz);
+
+  half2 bumpLowFreq;
+  bumpLowFreq = (bumpColorA + bumpColorB) - 1.0;
+  bumpLowFreq *= 2;
+
+  half2 bumpColorC = FetchNormalMap(oceanBumpMapSampler, IN.Wave1.xy);
+  half2 bumpColorD = FetchNormalMap(oceanBumpMapSampler, IN.Wave1.wz);
+
+  half2 bumpHighFreq;
+
+  bumpHighFreq = (bumpColorC + bumpColorD) - 1.0;
+
+  // Mix high and low frequency normals
+  if( GetShaderQuality() > QUALITY_LOW )
+    bumpNormal = half3(bumpLowFreq.xy + bumpHighFreq.xy,1);
+ else
+   bumpNormal = half3(bumpHighFreq.xy,1);
+
+  // Clamp max bump to 0.15
+  bumpNormal.xy *= 0.15;
+
+if( GetShaderQuality() > QUALITY_LOW )
+{
+  bumpNormal.z = 1;//sqrt(1 - dot(bumpNormal.xy, bumpNormal.xy));
+
+  bumpNormal.xyz += vVertexNormal.xyz;
+}
+
+  bumpNormal.xyz =  normalize( bumpNormal );
+  //bumpNormal.xyz += ;
+  //bumpNormal.xyz =  normalize( vVertexNormal.xyz + float3(bumpNormal.xy, 0) );
+
+  return bumpNormal;
+}
+
+pixout WaterLowQualityPS( v2fWater IN )
+{
+  pixout OUT = (pixout) 0;
+
+  half3 vVertexNormal = IN.normalVec.xyz;
+  half3 bumpNormal = BumpGen( IN );
+
+  half3 vFinalNormal = bumpNormal;//vVertexNormal.xyz ;//( vVertexNormal.xyz + float3(bumpNormal.xy, 0) ); // opt: no normalize
+  bumpNormal = vFinalNormal;
+
+  // Water edge softness
+  half3 viewVec = normalize(IN.viewVec.xyz);
+   float sceneDepth = DecodeSceneDepth( sceneDepthSampler, IN.screenProj );
+
+   float waterDepth = IN.screenProj.w;
+   float depth = ( sceneDepth - waterDepth ) * IN.normalVec.w;
+   half softIntersect =  saturate( SoftIntersectionFactor * depth );
+
+  // Get abs( NdotI ) and fresnel term
+
+  half NdotI = 1-abs( dot( viewVec.xyz, vFinalNormal.xyz ) );
+  half fFresnel= saturate( 0.5 + NdotI*NdotI*0.5);// FresnelBias + GetFresnelTex( NdotI, 0).z*FresnelScale;
+  //half fFresnel= 0.25 + NdotI *NdotI*0.8;// FresnelBias + GetFresnelTex( NdotI, 0).z*FresnelScale;
+
+  // Get reflection color
+  half2 reflNewst = (IN.envTC.xy/IN.envTC.w) + vFinalNormal.xy * 0.33;
+
+  // Should do bilinear filtering, but artefacts not much visible due to bump mapping
+  half4 reflectColor = tex2D(envMapSamplerRefl, reflNewst);
+  reflectColor += saturate(tex2D(waterGlossMapSampler,IN.Wave0.xy + vFinalNormal.xy * 0.33)-0.25)*0.125;
+    /*
+  // Get refraction
+  float2 refrNewst = ( IN.screenProj.xy / IN.screenProj.w );
+  float2 refrTC = bumpNormal.xy * 0.1;
+
+  // apply refraction masking
+  {
+    float depthRefr = tex2D( sceneDepthSampler, refrNewst + refrTC.xy * 1.15 ).r;
+    half fRefractionMask =  (IN.viewVec.w <depthRefr );
+    // Apply refraction mask to bump offsets
+    refrTC *= fRefractionMask;
+  }*/
+
+ // half3 refractColor = tex2D(envMapSamplerRefr, refrNewst + refrTC * 1.15 ).xyz;
+
+#if %SUN_SHINE
+ // half3 mirrorEye = ( 2 * dot( viewVec, bumpNormal) * bumpNormal - viewVec );
+ // half dotSpec =  saturate(dot( mirrorEye.xyz, g_PS_SunLightDir ) * 0.6 + 0.4);
+ // half3 vSunGlow = saturate(g_PS_SunLightDir.z) *( ( pow( dotSpec, SunShinePow ) ) *SunMultiplier) * g_PS_SunColor.xyz  ;
+#endif
+
+  fFresnel = ( fFresnel ); //* ReflectionAmount);
+
+  half3 final= reflectColor;
+
+#if %SUN_SHINE
+  // Add sun specular term
+  //final.xyz += vSunGlow.xyz;
+#endif
+
+  //final.xyz = lerp( IN.localFogColor.xyz, final, saturate( IN.localFogColor.w / softIntersect) );
+#if %_RT_FOG
+  final.xyz = lerp( IN.localFogColor.xyz, final, saturate( IN.localFogColor.w) );
+#endif
+
+  OUT.Color.xyz = final;
+  OUT.Color.w = saturate(fFresnel*softIntersect);
+
+  return OUT;
+}
+
+pixout WaterPS(v2fWater IN)
+{
+  pixout OUT = (pixout) 0;
+
+  int nQuality = GetShaderQuality();                                                                // shader quality level
+
+#ifdef D3D10
+
+  // workaround for usual dx10 incorrect order sampler binding
+
+  half4 c0 = 0;
+  c0 += tex2D(envMapSamplerRefl, IN.screenProj.xy);
+  c0 += tex2D(envMapSamplerRefr, IN.screenProj.xy);
+  c0 += tex2D(oceanBumpMapSampler, IN.screenProj.xy);
+  c0 += tex2D(sceneDepthSampler, IN.screenProj.xy);
+  c0 += tex2D(foamSampler, IN.screenProj.xy);
+  c0 += tex2D(waterGlossMapSampler, IN.screenProj.xy);
+  c0 += tex2D(foamSamplerSec, IN.screenProj.xy);
+
+#endif
+
+// envMapSamplerRefl    sampler      NA          NA    0        1
+// envMapSamplerRefr    sampler      NA          NA    1        1
+// oceanBumpMapSampler    sampler      NA          NA    2        1
+// sceneDepthSampler    sampler      NA          NA    3        1
+// foamSampler         sampler      NA          NA    4        1
+// waterGlossMapSampler    sampler      NA          NA    5        1
+// foamSamplerSec      sampler      NA          NA    6        1
+
+  //OUT.Color = 1;
+  //return OUT;
+
+  if( !nQuality )
+    return WaterLowQualityPS( IN );
+
+  OUT.Color = IN.cColor *4;
+  OUT.Color.w = 1;
+
+  //return OUT;
+
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, IN.baseTC);
+   return OUT;
+ #endif
+
+  //get shadow from sun
+  half fShadowOccl = 1; //1.0f - tex2Dproj(shadowOccludeMapSampler, IN.screenProj.xyzw).x;
+
+  /* Begin:: Generate normal map from 4 normal map layers */
+
+  half3 vVertexNormal = IN.normalVec.xyz;
+  half3 bumpNormal = BumpGen( IN );
+
+//  bumpNormal = float3(0,0,1);
+
+  half3 vFinalNormal = ( vVertexNormal.xyz + float3(bumpNormal.xy, 0) ); // opt: no normalize
+
+  // opt: - 15 alu
+
+  /* End:: Generate normal map from 4 normal map layers */
+  /*
+  // Get glossy color (used for adding detail to sun specular, and fake big waves foam) =  5 alu
+  half fFoamGloss = tex2D(waterGlossMapSampler, IN.Wave0.wz*0.5*2 + vFinalNormal.xy*0.1).x;                // 1 alu
+  fFoamGloss *= tex2D(waterGlossMapSampler, -IN.Wave0.xy*0.33*2 + vFinalNormal.xy*0.1).x;                     // 2 alu, 1 mov
+  fFoamGloss *= 2;                                                                                  // 1 alu
+
+  // Get foam = 5 alu
+  half fFoam = tex2D(foamSampler, IN.baseTC.xy*2 + vFinalNormal.xy*0.3).x;                   // 1 alu
+  fFoam += tex2D(foamSampler, IN.baseTC.wz*2 + vFinalNormal.xy*0.3).x;                        // 2 alu
+*/
+
+  half fFoamGloss = tex2D(waterGlossMapSampler, IN.Wave0.wz*0.5*2 + vFinalNormal.xy*0.1).x;                // 1 alu
+  fFoamGloss *= tex2D(waterGlossMapSampler, -IN.Wave0.xy*0.33*2 + vFinalNormal.xy*0.1).x;                     // 2 alu, 1 mov
+  fFoamGloss *= 2;                                                                                  // 1 alu
+
+  // Get foam = 5 alu
+  half fFoam = saturate(tex2D(foamSamplerSec, IN.baseTC.xy - vFinalNormal.xy*0.1).x);                   // 1 alu
+  fFoam += tex2D(foamSampler, IN.baseTC.wz  + vFinalNormal.xy*0.4).x;                        // 2 alu
+
+  half fFoamLuminance = saturate( fFoam -0.85 );                                             // 1 alu
+
+  //////////////////////////////////////////////////////////////////////////////////////////////////
+  // Water edge and foam softness
+
+  half3 viewVec = normalize(IN.viewVec.xyz);
+   float sceneDepth = DecodeSceneDepth( sceneDepthSampler, IN.screenProj );
+
+   float waterDepth = IN.screenProj.w;
+   float depth = ( sceneDepth - waterDepth ) * IN.normalVec.w;
+   half softIntersect = saturate( SoftIntersectionFactor * depth );
+
+  // soften camera intersections (and foam also) - test - using alpha blending now to save some instructions
+  // softIntersect *= saturate( (IN.viewVec.w - PS_NearFarClipDist.x)  * 1.5);
+  // foamSoftIntersect *= saturate( (IN.viewVec.w - PS_NearFarClipDist.x)  * 0.75);
+
+   //////////////////////////////////////////////////////////////////////////////////////////////////
+  // Get abs( NdotI ) and fresnel term
+
+  half NdotI = (dot( viewVec.xyz, vFinalNormal.xyz ) );    // need detail textures rendering for underwater reflection
+  //half fInsideReflection = (1 - saturate(1000.0 * (NdotI+0.1)));
+  half fInsideReflection = 0;
+  if( nQuality >= QUALITY_HIGH )
+    fInsideReflection = saturate(-viewVec.z*1000);
+
+  NdotI = abs( NdotI ) ;
+  half fInternalRefl = 0;
+  //if( nQuality >= QUALITY_HIGH )
+//    fInternalRefl = saturate(1 - (saturate(NdotI-0.25))) * fInsideReflection;
+
+  half fFresnel= GetFresnel( NdotI , 0, 5) * FresnelScale;
+
+  //////////////////////////////////////////////////////////////////////////////////////////////////
+  // Get reflection color
+  half2 reflNewst = (IN.envTC.xy/IN.envTC.w) + bumpNormal.xy * (0.33 )*0.5;
+
+  // Should do bilinear filtering, but artefacts not much visible due to bump mapping
+  half4 reflectColor = tex2D(envMapSamplerRefl, reflNewst);
+
+//  OUT.Color = reflectColor;
+  //OUT.Color.w = 1;
+
+    // foam soft isec, also add a bit of foam nearby camera intersections
+  half foamSoftIntersect = saturate( (0.1 / saturate(fFoamLuminance)) * (depth) );
+
+  //////////////////////////////////////////////////////////////////////////////////////////////////
+  // Get refraction ( using chroma dispersion )
+
+   // Compute refraction mask
+  float2 refrNewst = ( IN.screenProj.xy / IN.screenProj.w );
+  float2 refrTC = bumpNormal.xy *(0.1+ 0.1*fInsideReflection)*saturate( softIntersect*4); // Difraction amount always 0.1
+
+  //if( nQuality == QUALITY_HIGH )
+  {
+    // only hi-specs get refraction masking
+
+    // Add small bias to avoid leaking when extremelly nearby camera/water plane
+    const float fRefrMaskBias = 0.0001;
+    IN.viewVec.w += fRefrMaskBias;
+#if !%NO_REFRACTION_BUMP
+  #if  !%_RT_SAMPLE4
+       float depthRefr = tex2D( sceneDepthSampler, refrNewst + refrTC.xy * 1.15 ).r;
+      half fRefractionMask =  (IN.viewVec.w <depthRefr );
+       // Apply refraction mask to bump offsets
+       refrTC *= fRefractionMask;
+  #else
+       float3 depthRefr = tex2D( sceneDepthSampler, refrNewst + refrTC.xy * 1.15 ).r;
+       depthRefr.y = tex2D( sceneDepthSampler, refrNewst + refrTC.xy ).r;
+       depthRefr.z = tex2D( sceneDepthSampler, refrNewst + refrTC.xy * 0.85 ).r;
+
+       half3 fRefractionMask =  (IN.viewVec.www < depthRefr.xyz );
+
+       // Apply refraction mask to bump offsets
+       refrTC *= fRefractionMask.x * fRefractionMask.y * fRefractionMask.z;
+  #endif
+#endif
+
+  }
+
+#ifdef OPENGL
+  refrNewst.y = 1.0 - refrNewst.y;
+#endif
+
+  half3 refractColor = 0;
+#if !%NO_REFRACTION_BUMP
+  // Achromatic aberration taking about 2 ms. Only enable on very high specs (>=g8)0
+   #if  %_RT_SAMPLE4
+    // since we need bilinear filtering in HDR anyway, use 3 lookups instead and get chroma dispersion for free
+    // 6 instructions extra for chroma dispersion
+    refractColor.x = tex2D(envMapSamplerRefr, refrNewst + refrTC * 1.15 ).x;;
+    refractColor.y = tex2D(envMapSamplerRefr, refrNewst + refrTC ).y;
+    refractColor.z = tex2D(envMapSamplerRefr, refrNewst + refrTC * 0.85 ).z;
+  #else
+    // no color dispersion for lower specs
+    refractColor.xyz = tex2D(envMapSamplerRefr, refrNewst + refrTC * 1.15 ).xyz;
+  #endif
+#else
+    // no color dispersion for lower specs
+    refractColor.xyz = tex2D(envMapSamplerRefr, refrNewst ).xyz;
+#endif
+
+#if %SUN_SHINE
+  half3 mirrorEye = ( 2 * dot( viewVec, bumpNormal) * bumpNormal - viewVec );
+  half dotSpec =  saturate(dot( mirrorEye.xyz, g_PS_SunLightDir ) * 0.5 + 0.5);
+
+  half3 vSunGlow = fFresnel*saturate(g_PS_SunLightDir.z) *( ( pow( dotSpec, 512 ) )*(fFoamGloss*1.8+0.2))* g_PS_SunColor.xyz  ;
+  vSunGlow += vSunGlow *25 *saturate(fFoamGloss-0.05)* g_PS_SunColor.xyz;
+#endif
+
+  fFresnel = saturate( fFresnel * ReflectionAmount*(fFoamGloss*0.2+0.8));
+  float fA = 1;
+
+#if !%WAVE_DECAL
+  half3 final= lerp(refractColor,reflectColor,saturate(fFresnel +saturate(1-NdotI*2)*fInsideReflection));
+#else
+  half3 final=0;
+
+#endif
+
+  // no foam for low-specs
+  if( nQuality == QUALITY_HIGH )
+  {
+    // procedural foam
+    half foam = smoothstep(0.4, 0.8, 1-foamSoftIntersect ) *0.5* softIntersect;
+    half3 cFoamFinal = foam;
+
+    half fCrestFoam = 0.5 * (fFoamLuminance * fFoamGloss  * (IN.cColor.z +  IN.screenProj.z));
+    half3 cWavesFoam =fFoamGloss*0.3;
+    cWavesFoam *= WhiteCapsAmount;               // 2 alu
+    cFoamFinal = (fFoamGloss*0.5+0.5) * saturate( (cFoamFinal  + cWavesFoam)*fFoamLuminance +fCrestFoam *WhiteCapsAmount);    // 2 alu
+
+    // Add foam
+    final += (g_PS_SkyColor.xyz + g_PS_SunColor.xyz )  * cFoamFinal ; // 2 alu
+
+    // 6 alu
+  }
+
+#if %SUN_SHINE
+  // Add sun specular term
+  final.xyz += vSunGlow.xyz * fShadowOccl * SunMultiplier;
+#endif
+
+#if !%WAVE_DECAL
+  fA = 1;
+  // soft intersection with camera
+  if( nQuality == QUALITY_HIGH )
+    fA *= saturate((IN.screenProj.w- PS_NearFarClipDist.x)  * 50);
+#endif
+
+#if %_RT_FOG
+  half4 localFogColor = IN.localFogColor;
+  if( nQuality >= QUALITY_HIGH ) // compute per-pixel instead for hi specs
+    localFogColor = GetVolumetricFogColor( IN.localFogColor.xyz );
+
+  final.xyz = lerp( localFogColor.xyz, final, localFogColor.w );
+#endif
+
+  final.xyz = lerp( refractColor, final.xyz, softIntersect * saturate(IN.screenProj.w));
+
+   // Add global fog - make sure fog doens't affect refraction on shore
+  // Soften camera intersections
+
+   // maybe 4 hi-spec
+#if %WAVE_DECAL
+//final = fA ;
+//fA =1;
+   //fA *= saturate( (IN.viewVec.w - PS_NearFarClipDist.x)  *100);
+   //fA *= saturate( (IN.viewVec.w/PS_NearFarClipDist.w - PS_NearFarClipDist.x) * 100);
+#endif
+
+  //fA *= IN.screenProj.z;//*IN.screenProj.z*IN.screenProj.z;
+
+#if !%WAVE_DECAL
+//   fA *= IN.cColor.w;
+#endif
+
+#if WHITE_OUTPUT
+final = 1;
+#endif
+
+  //OUT.Color = float4(IN.cColor.xxx, 1); //;max( half4(final.xyz, fA), 0);
+  OUT.Color = max( half4(final.xyz, fA), 0);
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique Water
+<
+  string Script = 
+  "TechniqueShadowPass=ShadowPassWater;"
+>
+{
+  pass p0
+  {
+
+    ZEnable = true;
+    ZFunc = LEqual;
+    ZWriteEnable = true;
+    CullMode = None;
+
+    SrcBlend = SRC_ALPHA;
+    DestBlend = ONE_MINUS_SRC_ALPHA;
+    AlphaBlendEnable = true;
+    IgnoreMaterialState = true;
+
+#if %WAVE_DECAL
+    SrcBlend = SRC_ALPHA;
+    DestBlend = ONE_MINUS_SRC_ALPHA;
+    AlphaBlendEnable = true;
+
+    CullMode = None;
+
+    ZEnable = false;
+    ZWriteEnable = false;
+#endif
+
+    VertexShader = compile vs_Auto WaterVS() GeneralVS;
+    PixelShader = compile ps_Auto WaterPS() GeneralPS;
+  }
+}
+
+technique WaterFFT
+<
+  string Script = 
+  "TechniqueShadowPass=ShadowPassWaterFFT;"
+>
+{
+  pass p0
+  {
+
+    ZEnable = true;
+    ZFunc = LEqual;
+
+    ZWriteEnable = true;
+    CullMode = None;
+
+    SrcBlend = SRC_ALPHA;
+    DestBlend = ONE_MINUS_SRC_ALPHA;
+    AlphaBlendEnable = true;
+    IgnoreMaterialState = true;
+
+#if %WAVE_DECAL
+    SrcBlend = SRC_ALPHA;
+    DestBlend = ONE_MINUS_SRC_ALPHA;
+    AlphaBlendEnable = true;
+
+    CullMode = None;
+
+    ZEnable = false;
+    ZWriteEnable = false;
+#endif
+
+    VertexShader = compile vs_3_0 WaterVS() GeneralVS;
+    PixelShader = compile ps_3_0 WaterPS() GeneralPS;
+  }
+}
+
+/////////////// Shadow Pass ////////////////////////
+#include "ShadowCommon.cfi"
+#include "CommonShadowPass.cfi"
+vert2fragShadow Water_ShadowVS(a2vWater IN)
+{
+  vert2fragShadow OUT;
+#ifndef OPENGL
+  OUT = (vert2fragShadow)0;
+#endif
+  // Position in screen space.
+  float4 vPos = IN.Position;
+  float4 vPosOrig = IN.Position;
+
+  float2 FlowDir = OceanParams1.yz;
+
+  float fVertexDist = 0;
+
+#if !%WAVE_DECAL
+
+  GetGridVertexPos( vPos, fVertexDist);
+
+#else
+
+  vPos.z = (vPos.z < OceanParams1.w)? OceanParams1.w: vPos.z;
+
+#endif
+
+  vPosOrig.xyz = vPos.xyz;
+  float viewAngle = abs( normalize(g_VS_WorldViewPos.xyz-vPosOrig.xyz).z *10);
+
+  float3 vPos0 = vPosOrig.xyz;
+  GetWave( vPos0.xyz, FlowDir, IN);
+
+  // todo: Store previous frame position,transformation - use for interpolating. Might help hiding some artefacts
+  float3 vDisp = vPos0 - vPos.xyz;
+
+  float fDistToCam = length(g_VS_WorldViewPos.xyz - vPos.xyz);
+  float fDispLen = length( vDisp.xyz );
+  // Attenuate wave strength nearby camera
+  float fNearbyCameraAtten = (saturate( fDistToCam / 5));
+
+  vPos.xyz += vDisp.xyz * fNearbyCameraAtten;
+
+  // Add small waves nearby camera
+#if !%WAVE_DECAL
+
+  float fNearCamWaves = sin( - g_VS_AnimGenParams.z * 11 + fDistToCam * 10 )*0.6;
+  fNearCamWaves += sin( - g_VS_AnimGenParams.z * 5 + fDistToCam * 15)*0.4;
+  float fDispAmount = saturate(  1 / (fDistToCam) );
+  vPos.z += (fNearCamWaves )* fDispAmount*0.025;
+
+#endif
+
+  OUT.HPosition = mul(mViewProj, vPos);
+
+  OUT.RandDirTC.xy = mul(vPos.xyz, (float3x3) TexGen0).xy / 800;
+
+  //  compute shadow tex coords and depth
+  GenShadowTC(vPos,  OUT.shadowTC);
+
+  return OUT;
+}
+
+pixout_cl Water_ShadowPS(vert2fragShadow IN)
+{
+  pixout_cl OUT;
+
+  float4 vCompare = (float4)0;
+
+#ifndef %_RT_GSM_COMBINED
+//non-combined GSM
+
+  vCompare = ShadowDepthTest(IN.shadowTC, IN.RandDirTC.xy);
+
+#else
+//GSM ATLAS
+
+  vCompare = ShadowDepthTestAtlas(IN.shadowTC, IN.RandDirTC.xy);
+
+//GSM ATLAS
+#endif
+
+  //shadow fading - is not supported currently
+  //vCompare *= IN.RandDirTC.z;
+
+  OUT.Color = 1 - vCompare;
+
+  return OUT;
+}
+
+technique ShadowPassWater
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto Water_ShadowVS();
+    PixelShader = compile ps_Auto Water_ShadowPS();
+
+    ZEnable = true;
+    ZFunc = LEqual;
+    ZWriteEnable = false;
+    CullMode = None;
+    ZEnable = true;
+    ZWriteEnable = true;
+    CullMode = None;
+  }
+}
+
+technique ShadowPassWaterFFT
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto Water_ShadowVS();
+    PixelShader = compile ps_Auto Water_ShadowPS();
+
+    ZEnable = true;
+    ZFunc = LEqual;
+    ZWriteEnable = false;
+    CullMode = None;
+    ZEnable = true;
+    ZWriteEnable = true;
+    CullMode = None;
+  }
+}
+
+/////////////////////// eof ///

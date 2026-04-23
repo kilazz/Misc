@@ -1,0 +1,75 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: Water.ext
+// Created: 13/02/2005 by Tiago Sousa
+
+Version (1.00)
+
+Property
+{
+  Name            = %BUMP_MAP
+  Mask            = 0x1
+  Property        (Bump map)
+  Description     (Use bump-map texture)
+  DependencySet   = $TEX_Bump
+  DependencyReset = $TEX_Bump
+  Hidden
+}
+
+Property
+{
+  Name            = %ENVIRONMENT_MAP
+  Mask            = 0x4
+  Property        (Environment map)
+  Description     (Use environment map as separate texture)
+  DependencySet   = $TEX_EnvCM
+  DependencyReset = $TEX_EnvCM
+  Hidden
+}
+
+Property
+{
+  Name        = %WATER_VOLUME
+  Mask        = 0x10
+  Property    (Water Volume)
+  Description (Use shader in water volumes, like for example in river/indoor water rendering. Requires cube map)
+}
+
+Property
+{
+  Name        = %SUN_SHINE
+  Mask        = 0x20
+  Property    (Sunshine)
+  Description (Activate for water sunshine)
+}
+
+Property
+{
+  Name        = %REALTIME_REFLECTIONS
+  Mask        = 0x80
+  Property    (Real-Time Reflections)
+  Description (Real time reflections)
+}
+
+Property
+{
+  Name        = %NO_VERTEX_FOG
+  Mask        = 0x100
+  Property    (No vertex fog)
+  Description (Disable fog per vertex. Might be usefull on some cases where fog kicks in too much)
+}
+
+Property
+{
+  Name        = %NO_FLOW
+  Mask        = 0x200
+  Property    (No flow)
+  Description (Disable water flow animation)
+}
+
+Property
+{
+  Name        = %SUN_SHADING
+  Mask        = 0x2000
+  Property    (Sun shading)
+  Description (Enables sun shading, use when water is located outdoors)
+}

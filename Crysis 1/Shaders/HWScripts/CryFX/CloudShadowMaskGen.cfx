@@ -1,0 +1,84 @@
+#include "Common.cfi"
+#include "ModificatorVT.cfi"
+
+float4x4 CompMatrix : PI_Composite;    // View*Projection
+
+float4 InvTerrainSize;
+float4 TerrainTexGenInfo;
+
+sampler2D zMap             : register(s0);
+sampler2D cloudShadowMap   : register(s1);
+sampler2D terrainShadowMap : register(s2);
+
+struct pixout_cl
+{
+  float4 Color  : COLOR0;
+};
+
+struct app2vertShadow
+{
+  IN_P
+  IN_TBASE
+  float3 viewDir : TEXCOORD1;
+};
+
+struct vert2fragShadow
+{
+  float4 HPosition   : POSITION;
+  float2 baseTC       : TEXCOORD0;
+  float3 viewDir     : TEXCOORD1;
+};
+
+vert2fragShadow CloudShadowMaskGenVS(app2vertShadow IN)
+{
+  vert2fragShadow OUT = (vert2fragShadow)0;
+
+  float4 vPos = IN.Position;
+  OUT.HPosition = mul(CompMatrix, vPos);
+  OUT.baseTC = IN.baseTC.xy;
+  OUT.viewDir = IN.viewDir;
+  return OUT;
+}
+
+pixout_cl CloudShadowMaskGenPS(vert2fragShadow IN)
+{
+  pixout_cl OUT;
+
+  float sceneDepth = tex2D(zMap, IN.baseTC.xy).r;
+//  sceneDepth = min(sceneDepth * NearFarClipDist.w, 0.999999);
+  float3 cameraToWorldPos = sceneDepth * IN.viewDir.xyz;
+  float3 worldPos = cameraToWorldPos + vfViewPos.xyz;
+
+  half3 cloudShadow = tex2D(cloudShadowMap, worldPos.yx * InvTerrainSize.xy-InvTerrainSize.wz).xyz;
+
+  //half3 terrainShadow = tex2D(terrainShadowMap, (worldPos.yx - TerrainTexGenInfo.yx) * TerrainTexGenInfo.z).xyz;
+  //half2 terrainShadowFadeDist = (vfViewPos - worldPos) * TerrainTexGenInfo.w;
+
+  half shadow = (1 - dot(cloudShadow, half3(0.2, 0.7, 0.1)));
+  //shadow += (1 - terrainShadow.g) * (1 - pow(saturate(dot(terrainShadowFadeDist, terrainShadowFadeDist)), 10));
+  shadow = saturate(shadow) * saturate(1 - sceneDepth);
+
+  OUT.Color = shadow;
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique CloudShadowMaskGen
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto CloudShadowMaskGenVS();
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = None;
+
+    SrcBlend = ONE;
+    DestBlend = ONE;
+    AlphaBlendEnable = true;
+
+    PixelShader = compile ps_Auto CloudShadowMaskGenPS();
+  }
+}

@@ -1,0 +1,567 @@
+#include "Common.cfi"
+#include "ParticleVT.cfi"
+
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "NoPreview;"
+           "ShaderDrawType = Light;"
+           "ShaderType = Particle;"
+>;
+
+//DIFFUSEMAP
+//GLOSSMAP
+//BUMPMAP
+//BUMPDIFFUSEMAP
+
+sampler2D customSampler
+{
+  Texture = $CustomMap;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Clamp;
+  AddressV = Wrap;
+};
+
+sampler3D noiseSampler = sampler_state
+{
+  Texture = textures/defaults/Noise3D.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+  AddressW = Wrap;
+};
+
+sampler2D frostBumpPatternSampler = sampler_state
+{
+  Texture = textures/defaults/frostBumpPattern.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D sceneDepthSampler = sampler_state
+{
+ Texture = $ZTarget;
+ MinFilter = POINT;
+ MagFilter = POINT;
+ MipFilter = POINT;
+ AddressU = Clamp;
+ AddressV = Clamp;
+};
+
+// Tweakables /////////////////
+
+/*float BaseDarkening
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Set base layer darkening amount";
+  string UIName   = "Base layer darkening amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.005;
+> = 0.4;
+*/
+
+float TileX
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Tilling in X axis";
+  string UIName   = "TileX";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 0.5;
+  float UIStep    = 0.005;
+> = 0.2;
+
+float TileY
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Tilling in Y axis";
+  string UIName   = "TileY";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 0.5;
+  float UIStep    = 0.005;
+> = 0.2;
+
+float TileZ
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIHelp   = "Tilling in Z axis";
+  string UIName   = "TileZ";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 0.5;
+  float UIStep    = 0.005;
+> = 0.2;
+
+float VolumeOpacity
+<
+  psregister      = PS_REG_PM_3.w;
+  string UIName   = "Volume opacity";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float FinalMultiplier
+<
+  psregister      = PS_REG_PM_4.x;
+  string UIName   = "Color multiplier";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 1;
+
+float PowerFactor
+<
+  psregister      = PS_REG_PM_4.y;
+  string UIName   = "Pow factor";
+  string UIWidget = "slider";
+  float UIMin     = 0.1;
+  float UIMax     = 32.0;
+  float UIStep    = 0.005;
+> = 1;
+
+float SmoothMin
+<
+  psregister      = PS_REG_PM_4.z;
+  string UIName   = "SmoothMin";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.005;
+> = 0;
+
+float SmoothMax
+<
+  psregister      = PS_REG_PM_4.w;
+  string UIName   = "SmoothMax";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.005;
+> = 0.5;
+
+float NoiseScale
+<
+  psregister      = PS_REG_PM_7.w;
+  string UIName   = "Noise Scale";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 2.0;
+
+float NoiseThreshold
+<
+  psregister      = PS_REG_PM_8.x;
+  string UIName   = "NoiseThreshold";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float SpeedX
+<
+  vsregister      = VS_REG_PM_5.x;
+  string UIHelp   = "Speed in X axis";
+  string UIName   = "SpeedX";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.005;
+> = 0.0;
+
+float SpeedY
+<
+  vsregister      = VS_REG_PM_5.y;
+  string UIHelp   = "Speed in Y axis";
+  string UIName   = "SpeedY";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.005;
+> = 0.0;
+
+float SpeedZ
+<
+  vsregister      = VS_REG_PM_5.z;
+  string UIHelp   = "Speed in Z axis";
+  string UIName   = "SpeedZ";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.005;
+> = 0.0;
+
+float SpeedMultiplier
+<
+  vsregister      = VS_REG_PM_5.w;
+  string UIHelp   = "Speed multiplier";
+  string UIName   = "Speed multiplier";
+  string UIWidget = "slider";
+  float UIMin     = -10.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float PositionOffset
+<
+  vsregister      = VS_REG_PM_4.y;
+  string UIName   = "Position Offset";
+  string UIWidget = "slider";
+  float UIMin     = -10.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 0.0;
+
+float4 StartColor
+<
+  psregister      = PS_REG_PM_5;
+  string UIHelp   = "Set start color";
+  string UIName   = "Start color";
+  string UIWidget = "color";
+> = { 0.25, 0.25, 0.25, 1.0 };
+
+float4 EndColor
+<
+  psregister      = PS_REG_PM_6;
+  string UIHelp   = "Set end color";
+  string UIName   = "End color";
+  string UIWidget = "color";
+> = { 0.75, 0.75, 0.75, 1.0 };
+
+/////////// Common vertex shader ////////////////
+
+struct vtxCommonOut
+{
+  float4 Position  : POSITION;
+  float4 tcBase : TEXCOORDN;
+
+  float4 vPos : TEXCOORDN;
+  float4 vCenterPos : TEXCOORDN;
+  float4 vView : TEXCOORDN;
+
+  float4 screenProj : TEXCOORDN;
+
+#ifdef %_RT_SOFT_PARTICLE
+  float4 particleFade : TEXCOORDN;
+#endif
+
+  float4 Color     : COLOR0;
+
+  float4 localFogColor : TEXCOORDN;
+};
+
+vtxCommonOut VolumeParticleVS(app2vertParticleGeneral IN)
+{
+  vtxCommonOut OUT;
+#ifndef OPENGL
+  OUT = (vtxCommonOut)0;
+#endif
+
+  //////////////////////////////////////////////////////
+  // Setup particle
+
+  vert2FragParticleGeneral outParticle;
+  float4 vPos = IN.Position;
+  float4 vCenterPos = vPos;
+
+#ifdef D3D10
+  IN.Expansion.xyzw = IN.Expansion.zyxw;
+#endif
+  IN.Expansion.xy = IN.Expansion.xy * 2.0 - 1.0;
+
+  Particle_Setup_General( vPos, g_VS_ViewProjMatr, IN, outParticle);
+
+  OUT.Position = outParticle.Position;
+
+  #ifdef %_RT_SOFT_PARTICLE
+    OUT.particleFade = outParticle.particleFade;
+  #endif
+
+  //////////////////////////////////////////////////////
+  // procedural textures generation setup
+
+  OUT.tcBase.xy = IN.baseTC.xy;
+  //OUT.tcDetail.xy = IN.baseTC.xy * DetailTile ;
+
+  OUT.Color = GetInputColor(IN.Color);
+
+  const float fParticleSize = 20;
+
+  // Make sure we don't get into ATI precision isses by rescaling values.
+  // Cannot use particle radius, since it's not constant size (would look strange in movement)
+
+  // Get vertex position in "particle space". Add fractional part from world position particle mid-point for variation
+  float3 vPosRescaled = vPos.xyz; //(vPos.xyz - IN.Position.xyz) + frac(IN.Position.xyz /fParticleSize) * fParticleSize;
+
+  half3 vSpeed = ( g_VS_AnimGenParams.z * half3(SpeedX, SpeedY, SpeedZ) * SpeedMultiplier );
+
+  // compute view vector
+  OUT.vView.xyz = g_VS_WorldViewPos - vPos.xyz;
+  OUT.vPos.xyz = vPos + vSpeed + PositionOffset ;
+  OUT.vCenterPos.xyz = vCenterPos.xyz + vSpeed + PositionOffset;
+
+  // Output the screen-space texture coordinates
+  OUT.screenProj = HPosToScreenTC(OUT.Position);
+
+  OUT.localFogColor = GetVolumetricFogColor( vPos );
+
+  return OUT;
+}
+
+sampler2D jitterMapSampler = sampler_state
+{
+  Texture = Textures/defaults/dither_2.dds;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+  AddressW = Wrap;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout VolumeParticlePS(vtxCommonOut IN)
+{
+  pixout OUT;
+
+  half4 cBump = half4(0,0,1,1);
+
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, IN.vPos);
+   return OUT;
+ #endif
+
+  half fSoftIsec = 1;
+#ifdef %_RT_SOFT_PARTICLE
+  ////////////////////////////////////////////////////////////////
+  // evaluate travel length through particle volume to fade
+  // out particle when getting close to scene geometry
+#define cameraFade              IN.particleFade.x
+#define particleThicknessInv    IN.particleFade.y
+#define particleRadius          IN.particleFade.z
+#define particleDepth            IN.particleFade.w
+#define sceneDepthTexLookup      IN.screenProj
+
+  float sceneDepth = DecodeSceneDepth( sceneDepthSampler, sceneDepthTexLookup );
+  float scaleBackground = saturate( ( sceneDepth - particleDepth ) * particleThicknessInv );
+  float fadeParticle = min( scaleBackground, cameraFade );
+
+  fSoftIsec = fadeParticle;
+#endif
+
+  // accumulate 2 noise patterns to smooth tilling pattern
+
+  half3 vView = normalize( IN.vView.xyz );
+
+  // hardcoded quality setting
+  const int nSamples =4;
+
+  const float fSamplingRate = .33;///(float)nSamples; //0.25;
+  //const float fRadius = 0.3;
+
+  half fAtten = fSoftIsec * saturate( 1 - length(IN.tcBase.xy*2-1) );
+  //fAtten = saturate(fAtten*4);
+
+  IN.vPos.xyz *= half3(TileX, TileY, TileZ);
+  IN.vCenterPos.xyz *= half3(TileX, TileY, TileZ);
+
+  half3 fJitter = tex2Dproj(jitterMapSampler, IN.screenProj * float4(PS_ScreenSize.xy / 4.0, 1,1)).xyz*2-1 ;
+  fJitter*= 0.05;
+
+  half4 cAccum = 0;
+  for(int s = 0; s < nSamples; s++)
+  {
+    float3 vSampledPos = IN.vPos.xyz + vView.xyz * (( (s+fJitter) / (float) nSamples)*2-1) * fSamplingRate;
+
+    float3 vVec = IN.vCenterPos.xyz - vSampledPos.xyz;
+    float3 vDist = vVec * (half3(TileX, TileY, TileZ));  //Radius
+    float fFallOff = 1- saturate( length(vDist) / fAtten );
+
+    half4 cCurr = tex3D(noiseSampler, vSampledPos ).w * NoiseScale - NoiseThreshold;
+    #if %TURBULENCE
+      cCurr.w = saturate( abs( cCurr.w  ) );
+    #else
+      cCurr.w = saturate( cCurr.w );
+    #endif
+
+    #if %INVERSE
+      cCurr.w = 1 - cCurr.w;
+    #endif
+
+    cCurr = pow( cCurr.w, PowerFactor );
+    cCurr = smoothstep(SmoothMin, SmoothMax, cCurr.w * fAtten);
+
+    #if %GRADIENT_COLOR
+      cCurr.xyz = tex2D( customSampler, saturate(fFallOff * cCurr.w )) * cCurr;
+    #else
+      cCurr = lerp(StartColor, EndColor, saturate(fFallOff * cCurr.w )) *cCurr ;
+    #endif
+
+    cAccum  +=  cCurr;
+  }
+
+  //fNoiseAccum = ( fNoiseAccum * 2 - (float) nSamples );
+
+  cAccum /= (float) nSamples;
+  //cAccum+= 0.1;
+  //cAccum *= fAtten;
+
+//  fNoiseAccum = saturate( fNoiseAccum );
+
+half fNoiseAccum = 0;
+
+  OUT.Color = cAccum * IN.Color * FinalMultiplier * 10.0 + 1;
+
+//  OUT.Color *= OUT.Color.w;
+
+#ifndef %_RT_HDR_MODE
+  OUT.Color.xyz = 1 - exp( -1 * OUT.Color.xyz );
+#endif
+
+  OUT.Color.w = fSoftIsec * saturate(OUT.Color.w*cAccum.w *2* VolumeOpacity);
+
+  return OUT;
+
+  //fNoise += tex3D(noiseSampler, IN.tcPos1.xyz).w;
+
+    /*
+  half fDetail = saturate(tex2D(frostBumpPatternSampler, IN.tcDetail.xy).w);
+
+  // Compute base variation
+  half fVariation = saturate(0.5 * fNoise * fNoise * fDetail);
+
+  half3 cBaseLayer = 0;
+  cBaseLayer.x = fDetail;
+  cBaseLayer.y = tex2D(frostBumpPatternSampler, IN.tcDetail.xy*4).w;
+  cBaseLayer.z = tex2D(frostBumpPatternSampler, IN.tcDetail.xy*8).w;
+
+  // Compute procedural transition/growing
+  half2 fCommonPatternGrow = (fVariation + IN.tcBase.zw);
+
+  // Vectorize grow transition for 4 layer
+  half4 vCommonGrow = half4( fCommonPatternGrow.x*3 , fCommonPatternGrow.y *5, fCommonPatternGrow.y *7, fCommonPatternGrow.y*7);
+  vCommonGrow *= vCommonGrow;
+  vCommonGrow = saturate(1 - vCommonGrow);
+
+  cBump.xyz += EXPAND(tex2D(frostBumpPatternSampler, IN.tcDetail.xy)).xyz;
+  //cBump.xy *= vCommonGrow.x * (half) BurnAmount;
+
+  // Compute procedural transitions
+  half3 fTransition = 0;
+  half fDarkening = 0;
+  half4 cLayerAccum = 0;
+
+  // Accumulate results, using burn transition for variation
+  fTransition = vCommonGrow.x * cBaseLayer.x;
+  cLayerAccum.xyz =  fTransition * ((half3) StartColor);
+  fDarkening = fTransition;
+
+  fTransition = vCommonGrow.y * cBaseLayer.y;
+  cLayerAccum.xyz += fTransition * ((half3) StartColor) ;
+  fDarkening += fTransition;
+
+  half3 fMedLayer = (vCommonGrow.z * cBaseLayer.z * vCommonGrow.z * cBaseLayer.y * (half3) EndColor);
+  half3 fTopLayer = (vCommonGrow.w * cBaseLayer.z * (half3) EndColor);
+
+  // medium strength layer + strong sharp layer
+  cLayerAccum.xyz += fMedLayer + (fTopLayer * 4);
+  */
+
+  half4 vFinalDif = 0;
+
+#ifdef %_LT_LIGHTS
+
+  half NdotL;
+
+  // 0 type = directional light source (no attenuation)
+  // 1 type = omni light source
+  // 2 type = projected light source
+  int aLType[4];
+  aLType[0] = %_LT_0_TYPE;
+  aLType[1] = %_LT_1_TYPE;
+  aLType[2] = %_LT_2_TYPE;
+  aLType[3] = %_LT_3_TYPE;
+
+  // Only specular pass is used for light-map light sources
+  int i;
+
+  half fOcclShadow = 1;
+  half fAttenFunction = 4.f/16.f;
+  for (i=0; i<%_LT_NUM; i++)
+  {
+
+    //fOcclShadow = 1-dot(shadowOccl, ShadowChanMasks[i]);
+
+    //if (atten > 0)
+    {
+      // Get projector filter color if needed
+  /*    half3 filterColor = half3 (1,1,1);
+ if %_LT_HASPROJ
+      if (aLType[i] == LT_PROJECTED)
+        filterColor = texCUBE(projMapSampler, IN.projTC.xyz);
+ endif
+
+      half3 lVec = normalize(IN.lightVec[i].xyz);
+*/
+      // Calculate diffuse contribution, lightVec.w = backlighting param
+      //NdotL = saturate(dot(lVec.xyz, bumpNormal.xyz)) * (1-IN.lightVec[i].w) + IN.lightVec[i].w;
+      //half3 dif = baseColor.xyz * NdotL * (half3)Diffuse[i].xyz * fFallOff * fOcclShadow * filterColor.xyz;
+      //dif.xyz = HDREncode(dif.xyz);
+      //vFinalDif += Diffuse[i];
+    }
+  }
+#endif
+
+  float fLen = length( vFinalDif );
+  half4 cFinal  = 4 * fNoiseAccum * fLen; //fNoiseAccum *
+  //cFinal.xyz *= IN.Color.xyz;
+  //w * cBase.w * ( fDarkening + cBaseLayer.z ) * BaseDarkening;
+
+  // Output alpha for semi-opaque and darkening areas
+  //cFinal.w = IN.Color.w * cBase.w * ( fDarkening + cBaseLayer.z) * BaseDarkening;
+  cFinal.w =  saturate(fNoiseAccum*4);// * IN.Color.w;//: * IN.Color.w;//IN.Color.w;// * cBase.w * ( fDarkening + cBaseLayer.z) * BaseDarkening;
+
+  //cFinal *= IN.localFogColor.w;
+  //cFinal.xyz *= AvgFogVolumeContrib.w;
+
+//cFinal.xyz = IN.tcPos0.xyz/50;
+//cFinal.w = 0;
+
+  HDROutput( OUT, cFinal, 1 );
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique General
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto VolumeParticleVS();
+    PixelShader = compile ps_Auto VolumeParticlePS();
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = None;
+    ZFunc = LEqual;
+  }
+}
+
+/////////////////////// eof ///

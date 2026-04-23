@@ -1,0 +1,420 @@
+// - move into Particles.cfi
+
+#include "Common.cfi"
+#include "ParticleVT.cfi"
+
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "NoPreview;"
+           "ShaderDrawType = Light;"
+           "ShaderType = Particle;"
+>;
+
+/// Un-Tweakables //////////////////////
+
+sampler2D diffuseSampler = sampler_state
+{
+  Texture = $Diffuse;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+};
+
+sampler2D normalMapSampler = sampler_state
+{
+  Texture = $Bump;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+};
+
+sampler3D noiseMapSampler = sampler_state
+{
+  Texture = textures/defaults/Noise3D.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+  AddressW = Wrap;
+};
+
+sampler2D fireAttenSampler = sampler_state
+{
+  Texture = textures/defaults/fire_atten.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler2D firePaleteSampler = sampler_state
+{
+  Texture = textures/defaults/fire_palete.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Clamp;
+  AddressV = Wrap;
+};
+
+sampler2D sceneDepthSampler = sampler_state
+{
+ Texture = $ZTarget;
+ MinFilter = POINT;
+ MagFilter = POINT;
+ MipFilter = POINT;
+ AddressU = Clamp;
+ AddressV = Clamp;
+};
+
+// Tweakables /////////////////
+
+#if !%FAKE_FIRE
+
+float AnimSpeed
+<
+  vsregister      = VS_REG_PM_4.y;
+  psregister      = PS_REG_PM_3.w;
+  string UIHelp   = "Set fire animation translation speed";
+  string UIName   = "Fire animation speed";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float BaseDarkening
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Set base layer darkening amount";
+  string UIName   = "Base layer darkening amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.005;
+> = 0.5;
+
+float BurnOffset
+<
+  vsregister      = VS_REG_PM_4.z;
+  string UIHelp   = "Set burn variation layer offsetting. Use for giving diferent variation to fire.";
+  string UIName   = "Burn offset";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.005;
+> = 0.0;
+
+float VariationTileU
+<
+  vsregister      = VS_REG_PM_5.x;
+  string UIHelp   = "Set fire volumetric tilling in U axis";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 0.2;
+
+float VariationTileV
+<
+  vsregister      = VS_REG_PM_5.y;
+  string UIHelp   = "Set fire volumetric tilling in V axis";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 0.2;
+
+float VariationTileW
+<
+  vsregister      = VS_REG_PM_5.w;
+  string UIHelp   = "Set fire volumetric tilling in W axis";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 0.1;
+
+float Saturation
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Set fire color saturation";
+  string UIName   = "Saturation";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 0.5;
+
+float Contrast
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIHelp   = "Set fire color contrast";
+  string UIName   = "Contrast";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 2.0;
+
+#else
+
+float AnimSpeed
+<
+  vsregister      = VS_REG_PM_5.z;
+  psregister      = PS_REG_PM_3.w;
+  string UIHelp   = "Set fire animation translation speed";
+  string UIName   = "Fire animation speed";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 0.2;
+
+float PerturbationScale
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Set perturbation tilling scale";
+  string UIName   = "Perturbation tilling";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 0.5;
+
+float PerturbationStrenght
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Set fire diffuse texture perturbation strenght";
+  string UIName   = "Perturbation amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 0.01;
+
+#endif
+
+float4  AnimGenParams = { PB_time 1.0, PB_time 0.5, PB_time 0.25, PB_time 0.125};
+
+/////////// Common vertex shader ////////////////
+
+struct vtxCommonOut
+{
+  float4 Position  : POSITION;
+
+  float4 tcBase : TEXCOORDN;
+
+#if !%FAKE_FIRE
+
+  float4 tcPos0 : TEXCOORDN;
+  float4 tcPos1 : TEXCOORDN;
+  float4 tcPos2 : TEXCOORDN;
+  float4 tcPos3 : TEXCOORDN;
+#endif
+
+  float4 screenProj : TEXCOORDN;
+
+#ifdef %_RT_SOFT_PARTICLE
+  float4 particleFade : TEXCOORDN;
+#endif
+
+  float4 Color     : COLOR0;
+
+  float4 localFogColor : TEXCOORDN;
+};
+
+vtxCommonOut FireVS(app2vertParticleGeneral IN)
+{
+  vtxCommonOut OUT;
+#ifndef OPENGL
+  OUT = (vtxCommonOut)0;
+#endif
+
+  //////////////////////////////////////////////////////
+  // Setup particle
+
+  vert2FragParticleGeneral outParticle;
+  float4 vPos = IN.Position;
+
+#ifdef D3D10
+  IN.Expansion.xyzw = IN.Expansion.zyxw;
+#endif
+  IN.Expansion.xy = IN.Expansion.xy * 2.0 - 1.0;
+
+  Particle_Setup_General( vPos, g_VS_ViewProjMatr, IN, outParticle);
+
+  OUT.Position = outParticle.Position;
+
+  #ifdef %_RT_SOFT_PARTICLE
+    OUT.particleFade = outParticle.particleFade;
+  #endif
+
+  //////////////////////////////////////////////////////
+  // procedural textures generation setup
+
+  OUT.tcBase.xy = IN.baseTC.xy;
+  OUT.Color = GetInputColor(IN.Color);
+
+  const float fParticleSize = 20;
+
+#if !%FAKE_FIRE
+
+  // Make sure we don't get into ATI precision isses by rescaling values.
+  // Cannot use particle radius, since it's not constant size (would look strange in movement)
+
+  // Get vertex position in "particle space". Add fractional part from world position particle mid-point for variation
+  //float3 vPosRescaled = (vPos.xyz - IN.Position.xyz) + frac(IN.Position.xyz /fParticleSize) * fParticleSize;
+  float3 vPosRescaled = vPos.xyz;
+
+  float3 vVariationTilling = float3(VariationTileU, VariationTileV, VariationTileW);
+
+  float3 vAnimParam = float3(0, 0, -frac(g_VS_AnimGenParams.z * AnimSpeed)) + BurnOffset.xxx;
+  OUT.tcPos0.xyz = vPosRescaled.xyz * vVariationTilling + vAnimParam;
+  OUT.tcPos1.xyz = 0;//vPosRescaled.xyz * vVariationTilling * 2  + vAnimParam + 0.2;
+  OUT.tcPos2.xyz = vPosRescaled.xyz * vVariationTilling * 3  + vAnimParam*3+ 0.4;
+  OUT.tcPos3.xyz = vPosRescaled.xyz * vVariationTilling * 6  + vAnimParam*6 + 0.6;
+#else
+
+  // Output the screen-space texture coordinates
+  OUT.screenProj = HPosToScreenTC(OUT.Position);
+
+#endif
+
+  // Compute some common coeficients from vertex shader to save pixel shader instructions
+  OUT.tcBase.z = -0.5; //BurnAmount - (1.5);
+  OUT.tcBase.w = -0.3; //BurnAmount - (1.3);
+
+  OUT.localFogColor = GetVolumetricFogColor( vPos );
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout FirePS(vtxCommonOut IN)
+{
+  pixout OUT;
+
+   // Debug output
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, IN.tcBase);
+   return OUT;
+ #endif
+
+#if !%FAKE_FIRE
+
+  half fAtten = (tex2D(fireAttenSampler, IN.tcBase.xy)).x; // get attenuation factor
+
+  // accumulate 4 noise patterns to smooth tilling pattern - optimized using 3 for now
+  half4 fNoiseOct = half4( tex3D(noiseMapSampler, IN.tcPos0.xyz ).w,
+                             0.5, //tex3D(noiseMapSampler, IN.tcPos1.xyz ).w,
+                             tex3D(noiseMapSampler, IN.tcPos2.xyz ).w,
+                             tex3D(noiseMapSampler, IN.tcPos3.xyz ).w );
+
+  half fNoise = dot( fNoiseOct.xyzw, half4(0.6, 0.0, 0.25, 0.15));
+
+  // Compute base variation
+  half fVariation =  saturate( fNoise  +  fAtten -1);
+
+  half4 cBaseLayer = fNoiseOct;
+
+  // Compute procedural transition/growing
+  half2 fCommonPatternGrow = (fVariation + IN.tcBase.zw);
+
+  // Vectorize grow transition for 4 layer
+  half4 vCommonGrow = fCommonPatternGrow.xyyx * half4(3, 4, 6, 8);
+  vCommonGrow *= vCommonGrow;
+  vCommonGrow = saturate(1- vCommonGrow);
+
+  // Compute procedural transitions
+  half fAccum = dot(vCommonGrow.xyzw, cBaseLayer.xyzw * half4(2, 2, 1, 1));
+
+  half4 cFinal  =1;
+
+  //half fFinalMul = dot(cBaseLayer.zw, half2(0.3, 0.2)) ;
+  half fFinalMul = dot(cBaseLayer.xyzw, half4(0.1, 0.0, 0.15, 0.2));
+
+  // Get fire color from artist palete
+  cFinal.xyz =  tex2D(firePaleteSampler,  float2(fFinalMul * fAccum,0)).xyz;
+
+  // Adjust color properties
+  half fLum = dot( cFinal.xyz, half3(0.3086, 0.6094, 0.082));
+  cFinal.xyz = lerp(fLum.xxx, cFinal.xyz, (half) Saturation); // saturation amount
+  cFinal.xyz = lerp(half3(0.5, 0.5, 0.5), cFinal.xyz, (half) Contrast); // contrast amount
+
+  // Output alpha for semi-opaque and darkening areas
+  cFinal *=  fAccum;
+
+  // final multipliers
+  cFinal *= IN.Color.w * Ambient * BaseDarkening;
+  //cFinal = fFinalMul;//IN.Color.w * Ambient * BaseDarkening;
+
+#else
+
+  // fake fire
+
+  half3 vBump = half3(0,0,1);
+  vBump = GetNormalMap(normalMapSampler, ((IN.screenProj.xy/IN.screenProj.w)-0.5) * PerturbationScale + 0.5 + float2(0, AnimGenParams.z)*AnimSpeed );
+  vBump += GetNormalMap(normalMapSampler, ((IN.screenProj.xy/IN.screenProj.w)-0.5) * PerturbationScale * 1.5 + 0.5 + float2(0, AnimGenParams.z)*AnimSpeed );
+  vBump.xyz = normalize(vBump.xyz);
+
+  half4 cDiffuse = tex2D(diffuseSampler, IN.tcBase.xy + vBump.xy * PerturbationStrenght) * IN.Color;
+
+  half4 cFinal = cDiffuse;
+
+#endif
+
+  //cFinal.xyz *= AvgFogVolumeContrib.w; - disable for now. looks better withouth
+  cFinal *= saturate(IN.localFogColor.w);
+
+  HDROutput( OUT, cFinal, 1 );
+
+  // +/- 26 instructions
+
+#ifdef %_RT_SOFT_PARTICLE
+
+  ////////////////////////////////////////////////////////////////
+  // evaluate travel length through particle volume to fade
+  // out particle when getting close to scene geometry
+#define cameraFade              IN.particleFade.x
+#define particleThicknessInv    IN.particleFade.y
+#define particleRadius          IN.particleFade.z
+#define particleDepth            IN.particleFade.w
+#define sceneDepthTexLookup      IN.screenProj
+
+  float sceneDepth = DecodeSceneDepth( sceneDepthSampler, sceneDepthTexLookup );
+  half scaleBackground = saturate( ( sceneDepth - particleDepth ) * particleThicknessInv );
+  half fadeParticle = min( scaleBackground, cameraFade );
+
+  OUT.Color *= fadeParticle;
+#endif
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique General
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto FireVS();
+    PixelShader = compile ps_Auto FirePS();
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = None;
+    ZFunc = LEqual;
+
+    SrcBlend =  ONE;
+    DestBlend = ONE_MINUS_SRC_ALPHA;
+    AlphaBlendEnable = true;
+  }
+}
+
+/////////////////////// eof ///

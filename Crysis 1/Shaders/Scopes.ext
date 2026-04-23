@@ -1,0 +1,13 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: Scopes.ext
+// Created: 21/06/2007 by Tiago Sousa
+
+Version (1.00)
+
+Property
+{
+  Name        = %REFLEX_SIGHT
+  Mask        = 0x1
+  Property    (Reflex sight)
+  Description (Use diffuse for reflex sight)
+}

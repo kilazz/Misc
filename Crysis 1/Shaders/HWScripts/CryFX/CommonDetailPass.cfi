@@ -1,0 +1,139 @@
+////////////////////////////////////////////////////////////////////////////
+//
+//  Crytek Engine Source File.
+//  Shader extension
+//  Copyright (C), Crytek Studios, 2001-2004.
+// -------------------------------------------------------------------------
+//  File name:   CommonDetailPass.cfi
+//  Version:     v1.00
+//  Created:     23/11/2004 by Tiago Sousa
+//  Compilers:
+//  Description: Common/Shared passes bettwen shaders. Should be included after
+//    main shader technique
+//
+//  NOTE: ALWAYS MAKE SURE VERTEX INPUTS MATCH CORRECTLY BEFORE INCLUDING THIS!
+//  TODO: Add support for texture modifiers, since Illum and others require it
+//  "Common_" name convention - for shader sharing in cache files
+//
+//
+// -------------------------------------------------------------------------
+////////////////////////////////////////////////////////////////////////////
+
+/// Un-Tweakables //////////////////////
+float3 DetailScale = { PB_FromRE[0], PB_FromRE[1], PB_FromRE[3] };
+
+////////////////////////////////////////////////////////
+//                DETAIL PASS
+////////////////////////////////////////////////////////
+
+///////////////// vertex input/output //////////////////
+struct vert2fragDetail
+{
+  OUT_P
+  float4 tcDetail0 : TEXCOORDN;
+#if %_RT_SAMPLE2
+  float2 tcDetail1 : TEXCOORDN;
+#endif
+#if %_RT_SAMPLE3
+  float2 tcDetail2 : TEXCOORDN;
+#endif
+
+  float4 vView  : TEXCOORDN;
+};
+
+///////////////// vertex shaders //////////////////
+vert2fragDetail Common_DetailPassVS(app2vertZGeneral IN)
+{
+  vert2fragDetail OUT;
+
+#ifndef OPENGL
+  OUT = (vert2fragDetail)0;
+#endif
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromZ(IN, vertPassPos);
+
+#if %TEMP_TERRAIN
+  OUT.HPosition = Pos_VS_Terrain(fTerrainOffset, g_VS_ViewProjZeroMatr, vertPassPos);
+#else
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+#endif
+
+  OUT.vView.xyz = mul(vertPassPos.InstMatrix, vertPassPos.Position).xyz;
+#if %_RT_OBJ_IDENTITY
+  OUT.vView.xyz -= g_VS_WorldViewPos.xyz;
+#endif
+
+  OUT.vView.w = DetailScale.z*0.8;
+
+  OUT.tcDetail0.xy = IN.baseTC.xy * DetailScale.xy;
+#if %_RT_SAMPLE2
+  OUT.tcDetail1.xy = OUT.tcDetail0.xy*1.5;
+#endif
+#if %_RT_SAMPLE3
+  OUT.tcDetail2.xy = OUT.tcDetail0.xy*3;
+#endif
+
+#if %ALPHAMASK_DETAILMAP
+  OUT.tcDetail0.wz = IN.baseTC;
+#endif
+
+  return OUT;
+}
+
+///////////////// pixel shaders //////////////////
+pixout Common_DetailPassPS(vert2fragDetail IN)
+{
+  pixout OUT = (pixout)0;
+
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, float4(IN.tcDetail0.xy, 0, 0));
+   return OUT;
+ #endif
+
+  // load the detail
+  half4 detColor = tex2D(detailMapSampler, IN.tcDetail0.xy);
+  half fDist = length(IN.vView.xyz);
+  half fLerp = fDist / IN.vView.w;
+
+#if %ALPHAMASK_DETAILMAP
+  half fMask = tex2D(diffuseMapSampler, IN.tcDetail0.wz).w;
+  fLerp /= fMask + 0.001;
+#endif
+
+  detColor.xyz = lerp(detColor.xyz, 0.5, saturate(fLerp));
+
+  half4 vColor = detColor;
+#if %_RT_SAMPLE2
+  detColor = tex2D(detailMapSampler, IN.tcDetail1.xy);
+  detColor.xyz = lerp(detColor.xyz, 0.5, saturate(fLerp*1.5));
+  vColor.xyz *= detColor.xyz * 2;
+#endif
+#if %_RT_SAMPLE3
+  detColor = tex2D(detailMapSampler, IN.tcDetail2.xy);
+  detColor.xyz = lerp(detColor.xyz, 0.5, saturate(fLerp*3));
+  vColor.xyz *= detColor.xyz * 2;
+#endif
+
+  OUT.Color = vColor;
+
+  return OUT;
+}
+
+technique DetailPass
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto Common_DetailPassVS() DetailVS;
+    PixelShader = compile ps_Auto Common_DetailPassPS() DetailPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    ZFunc = Equal;
+    IgnoreMaterialState = true;
+
+    SrcBlend = DestColor;
+    DestBlend = SrcColor;
+    AlphaBlendEnable = true;
+  }
+}

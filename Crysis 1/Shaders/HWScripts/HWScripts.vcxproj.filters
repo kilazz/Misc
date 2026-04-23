@@ -1,0 +1,477 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	<ItemGroup>
+		<Filter Include="CryFX"/>
+		<Filter Include="CryFX\Include"/>
+		<Filter Include="CryFX\Extensions"/>
+		<Filter Include="CryFX\Shadows"/>
+		<Filter Include="CryFX\Shadows\Include"/>
+		<Filter Include="CryFX\Particles"/>
+		<Filter Include="CryFX\Effects"/>
+		<Filter Include="CryFX\Shading"/>
+		<Filter Include="CryFX\Layers"/>
+		<Filter Include="CryFX\Misc"/>
+		<Filter Include="Composer"/>
+		<Filter Include="Composer\Export"/>
+		<Filter Include="Composer\Graph"/>
+		<Filter Include="Composer\Nodes"/>
+	</ItemGroup>
+	<ItemGroup>
+		<None Include=".\CryFX\ClothValidations.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\Common.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\CommonCausticsPass.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\CommonDetailPass.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\CommonGlowPass.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\CommonMotionBlurPass.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\CommonRainPass.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\CommonRAM.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\CommonViewsPass.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\CommonZModifyPass.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\CommonZPass.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\fragLib.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\FXConstantDefs.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\FXSamplerDefs.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\FXSetupEnvVars.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\FXStreamDefs.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\IllumValidations.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\LightmapCommon.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\LowSpecValidations.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\MetalValidations.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\ModificatorTC.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\ModificatorVT.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\Particles.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\ParticleVT.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\PostEffectsLib.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\ShadeLib.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\SpecialEffectsValidations.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\SubSurfScat.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\TerrainValidations.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\VegetationValidations.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\vertexLib.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include=".\CryFX\VolumetricFog.cfi">
+			<Filter>CryFX\Include</Filter>
+		</None>
+		<None Include="..\AmbientOcclusion.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\BurningLayer.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Cloak.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Cloth.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Custom.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\DistanceClouds.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Eye.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\FireParticles_vs2.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\FrozenLayerWip.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\FX_EnergyField.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\FX_OuterSphere.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\FX_VelocityBeamParticles.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Glass.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Hair.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\HumanSkin.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Ice.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Illum.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\LightBeam.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\LowSpec.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Metal.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Methagen.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Particles.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\PostEffects.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\PostProcess.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\RunTime.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Scopes.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\ShadowMaskGen.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\SkyHDR.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\SpecialEffects.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\TemplBeamProc.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Terrain.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Vegetation.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\VolumeObject.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\VolumeParticles.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\Water.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\WaterOcean.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\WaterSurface.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\WaterVols.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\WaterVortex.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include="..\WetLayer.ext">
+			<Filter>CryFX\Extensions</Filter>
+		</None>
+		<None Include=".\CryFX\AmbientOcclusion.cfx">
+			<Filter>CryFX\Shadows</Filter>
+		</None>
+		<None Include=".\CryFX\CloudShadowMaskGen.cfx">
+			<Filter>CryFX\Shadows</Filter>
+		</None>
+		<None Include=".\CryFX\ShadowBlur.cfx">
+			<Filter>CryFX\Shadows</Filter>
+		</None>
+		<None Include=".\CryFX\ShadowMaskGen.cfx">
+			<Filter>CryFX\Shadows</Filter>
+		</None>
+		<None Include=".\CryFX\CommonShadowGenPass.cfi">
+			<Filter>CryFX\Shadows\Include</Filter>
+		</None>
+		<None Include=".\CryFX\CommonShadowGenPassGS.cfi">
+			<Filter>CryFX\Shadows\Include</Filter>
+		</None>
+		<None Include=".\CryFX\CommonShadowPass.cfi">
+			<Filter>CryFX\Shadows\Include</Filter>
+		</None>
+		<None Include=".\CryFX\ShadowCommon.cfi">
+			<Filter>CryFX\Shadows\Include</Filter>
+		</None>
+		<None Include=".\CryFX\FireParticles.cfx">
+			<Filter>CryFX\Particles</Filter>
+		</None>
+		<None Include=".\CryFX\FireParticles_vs2.cfx">
+			<Filter>CryFX\Particles</Filter>
+		</None>
+		<None Include=".\CryFX\FX_VelocityBeamParticles.cfx">
+			<Filter>CryFX\Particles</Filter>
+		</None>
+		<None Include=".\CryFX\Particles.cfx">
+			<Filter>CryFX\Particles</Filter>
+		</None>
+		<None Include=".\CryFX\ParticlesNoMat.cfx">
+			<Filter>CryFX\Particles</Filter>
+		</None>
+		<None Include=".\CryFX\SketchParticles.cfx">
+			<Filter>CryFX\Particles</Filter>
+		</None>
+		<None Include=".\CryFX\VolumeParticles.cfx">
+			<Filter>CryFX\Particles</Filter>
+		</None>
+		<None Include=".\CryFX\Cloak.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\Clouds.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\Common.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\Debug.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\DistanceClouds.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\FogVolume.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\FX_EnergyField.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\FX_OuterSphere.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\Hologram.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\Light.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\LightBeam.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\LightFlares.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\Liquid.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\OceanBottom.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\PostEffects.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\PostEffectsGame.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\PostProcess.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\Scopes.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\Sky.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\SkyHDR.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\SpecialEffects.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\TemplBeamProc.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\VolumeObject.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\Water.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\WaterOcean.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\WaterSurface.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\WaterVols.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\WaterVolume.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\WaterVortex.cfx">
+			<Filter>CryFX\Effects</Filter>
+		</None>
+		<None Include=".\CryFX\Cloth.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\Custom.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\Eye.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\FarTreeSprites.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\Glass.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\Hair.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\HumanSkin.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\Ice.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\Illum.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\LowSpec.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\Metal.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\Methagen.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\Sketch.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\SpeedTest.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\Terrain.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\Vegetation.cfx">
+			<Filter>CryFX\Shading</Filter>
+		</None>
+		<None Include=".\CryFX\CloakLayer.cfx">
+			<Filter>CryFX\Layers</Filter>
+		</None>
+		<None Include=".\CryFX\FrozenLayerWip.cfx">
+			<Filter>CryFX\Layers</Filter>
+		</None>
+		<None Include=".\CryFX\WetLayer.cfx">
+			<Filter>CryFX\Layers</Filter>
+		</None>
+		<None Include=".\CryFX\AuxGeom.cfx">
+			<Filter>CryFX\Misc</Filter>
+		</None>
+		<None Include=".\CryFX\CriMw.cfx">
+			<Filter>CryFX\Misc</Filter>
+		</None>
+		<None Include=".\CryFX\DebugLight.cfx">
+			<Filter>CryFX\Misc</Filter>
+		</None>
+		<None Include=".\CryFX\FallBack.cfx">
+			<Filter>CryFX\Misc</Filter>
+		</None>
+		<None Include=".\CryFX\FixedPipelineEmu.cfx">
+			<Filter>CryFX\Misc</Filter>
+		</None>
+		<None Include=".\CryFX\Helper.cfx">
+			<Filter>CryFX\Misc</Filter>
+		</None>
+		<None Include=".\CryFX\NoDraw.cfx">
+			<Filter>CryFX\Misc</Filter>
+		</None>
+		<None Include=".\CryFX\OcclusionTest.cfx">
+			<Filter>CryFX\Misc</Filter>
+		</None>
+		<None Include=".\CryFX\Scaleform.cfx">
+			<Filter>CryFX\Misc</Filter>
+		</None>
+		<None Include=".\CryFX\Stars.cfx">
+			<Filter>CryFX\Misc</Filter>
+		</None>
+		<None Include=".\Composer\Graph\Example.cgr">
+			<Filter>Composer\Graph</Filter>
+		</None>
+		<None Include=".\Composer\Nodes\Constants.cnd">
+			<Filter>Composer\Nodes</Filter>
+		</None>
+		<None Include=".\Composer\Nodes\Functions.cnd">
+			<Filter>Composer\Nodes</Filter>
+		</None>
+		<None Include=".\Composer\Nodes\InputsOutputs.cnd">
+			<Filter>Composer\Nodes</Filter>
+		</None>
+		<None Include=".\Composer\Nodes\Samplers.cnd">
+			<Filter>Composer\Nodes</Filter>
+		</None>
+		<None Include=".\Composer\Nodes\Textures.cnd">
+			<Filter>Composer\Nodes</Filter>
+		</None>
+		<None Include="..\Aliases.txt"/>
+		<None Include="..\CustomAliases.txt"/>
+		<None Include="..\ShaderProfiles.txt"/>
+	</ItemGroup>
+</Project>

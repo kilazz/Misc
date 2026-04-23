@@ -1,0 +1,812 @@
+#include "Common.cfi"
+#include "ShadowCommon.cfi"
+#include "SubSurfScat.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = "Public;"
+                  "ShaderDrawType = Light;"
+                  "ShaderType = Ice;"
+                  "SupportsSubSurfaceScattering;";
+>;
+
+struct fragPassCustom
+{
+  // Custom per pass data
+  half3 vTangent;        // perturbed tangent vector
+  half3 vBinormal;       // perturbed binormal vector
+
+  half3 ScatterFinalColor;
+
+  half3 cScatterAcc;
+
+  float4 vDepthMapProj;
+
+  float4 cAirBubbles;
+
+  float4 cLayerAlpha;
+};
+
+struct fragLightPassCustom
+{
+};
+
+#include "ShadeLib.cfi"
+
+//rotation to light space
+float4x4 rotMatrix    : PB_TempMatr0[1];
+
+// Tweakable uniform parameters
+float4 scatterShadowColor
+<
+  psregister      = PS_REG_PM_6;
+  string UIName   = "Scattering color";
+  string UIWidget = "color";
+> = {0.14, 0.827, 0.89, 0};
+
+float Absorption
+<
+  psregister      = PS_REG_PM_2.x;
+  string UIWidget = "slider";
+  string UIName   = "Absorption coefficient";
+  float UIMin     = 0.0;
+  float UIMax     = 300.0;
+  float UIStep    = 0.01;
+> = 15.0;
+
+float g_absorbCoeffR
+<
+  psregister      = PS_REG_PM_2.y;
+  string UIName   = "Absobtion coeff RED";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float g_absorbCoeffG
+<
+  psregister      = PS_REG_PM_2.z;
+  string UIName   = "Absobtion coeff GREEN";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.005;
+> = 0.55;
+
+float g_absorbCoeffB
+<
+  psregister      = PS_REG_PM_2.w;
+  string UIName   = "Absobtion coeff BLUE";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.005;
+> = 0.1;
+
+float g_fScatterTile
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Scatter Tiles";
+  string UIName   = "Scatter Tiles";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 1500000.0;
+  float UIStep    = 10;
+> = 1500000.0;
+
+float AirBubblesOffsetScale
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Air bubbles offset scale";
+  string UIName   = "Air bubbles offset scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 0.16;
+  float UIStep    = 0.0005;
+> = 0.0;
+
+float AirBubblesVisibility
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIHelp   = "Air bubbles visibility";
+  string UIName   = "Air bubbles visibility";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.01;
+> = 0.0;
+
+float AirBubblesTilesScale
+<
+  psregister      = PS_REG_PM_3.w;
+  string UIHelp   = "Air bubbles tiling";
+  string UIName   = "Air bubbles tiling";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.01;
+> = 1.0;
+
+float AirBubblesShift
+<
+  psregister      = PS_REG_PM_4.x;
+  string UIHelp   = "Air bubbles layers' shift";
+  string UIName   = "Air bubbles layers' shift";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 0.5;
+  float UIStep    = 0.01;
+> = 0.1;
+
+float g_PSRefractionAmount
+<
+  psregister      = PS_REG_PM_4.y;
+  string UIHelp   = "One-sample scattering refraction approximation";
+  string UIName   = "Per pixel refraction amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 30.5;
+  float UIStep    = 0.001;
+> = 0.81;
+
+#if %ENVCMSPEC
+
+  // EnvMap amount
+
+  float fReflectAmount
+  <
+    psregister      = PS_REG_PM_4.z;
+    string UIWidget = "slider";
+    string UIName   = "Reflect";
+    float UIMin     = 0.0;
+    float UIMax     = 2.0;
+    float UIStep    = 0.01;
+  > = 0.5;
+
+  // Fresnel parameters
+  float FresnelScale
+  <
+    psregister      = PS_REG_PM_4.w;
+    string UIWidget = "slider";
+    string UIName   = "Fresnel Scale";
+    float UIMin     = 0.0;
+    float UIMax     = 32.0;
+    float UIStep    = 0.01;
+  > = 1;
+
+  // Fresnel parameters
+  float FresnelBias = 4;
+
+#endif
+
+//=== Branching parameters ================================================
+
+float SPECULARPOW_GLOSSALPHA < psregister = PS_REG_PB_7.x; > = { PB_GlobalShaderFlag %SPECULARPOW_GLOSSALPHA };
+float GLOSS_DIFFUSEALPHA < psregister = PS_REG_PB_7.y; > = { PB_GlobalShaderFlag %GLOSS_DIFFUSEALPHA };
+
+//=========================================================================
+
+float g_RefractionAmount
+<
+  vsregister      = VS_REG_PM_4.y;
+  string UIHelp   = "One-sample scattering refraction approximation";
+  string UIName   = "Refraction amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 30.5;
+  float UIStep    = 0.001;
+> = 0.81;
+
+//default samples number = 8
+float NumRefrSteps = 8.0;
+
+float sigma_t = 20.0;
+
+float eta = 1.3049;
+
+float g_RefractionEta = 1.3049;
+
+float g_DepthRampAdjust = 1.8;
+
+float g_DepthShift = 0.0;
+
+float FadingDist = 120; //should be matched to whole GSM range
+
+ //Samplers
+
+//Shared samplers
+ENVIRONMENTMAP
+ENVIRONMENTCUBEMAP
+OPACITYMAP
+
+sampler2D scatterFadeRamp = sampler_state
+{
+ Texture = $Subsurface;
+ //Texture = textures/defaults/ice_gradient.dds;
+ MinFilter = LINEAR;
+ MagFilter = LINEAR;
+ MipFilter = NONE;
+ AddressU = Wrap;
+ AddressV = Wrap;
+};
+
+sampler2D screenMapSampler = sampler_state
+{
+  Texture = $ScatterLayer;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler2D globalScatterSampler = sampler_state
+{
+ Texture = textures/defaults/depth.dds;
+ MinFilter = LINEAR;
+ MagFilter = LINEAR;
+ MipFilter = NONE;
+ AddressU = Wrap;
+ AddressV = Wrap;
+};
+
+sampler2D airBubblesSampler = sampler_state
+{
+ Texture = $DecalOverlay;
+ //Texture = textures/defaults/bubble.dds;
+ MinFilter = LINEAR;
+ MagFilter = LINEAR;
+ MipFilter = LINEAR;
+ AddressU = Wrap;
+ AddressV = Wrap;
+};
+
+//=======================================================================
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//Modifiers
+#include "VertexLib.cfi"
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////
+// structs
+
+struct vert2fragIce
+{
+  float4 HPosition  : POSITION;
+
+#if !%GLOBALSCATTERMAP
+  vert2fragShadowCommon shadowTC;
+#else
+  float2 scatterTC    : TEXCOORDN;
+#endif
+  //common interp
+  float4 baseTC     : TEXCOORDN;
+
+  float4 ScreenTC   : TEXCOORDN_centroid;
+
+  float4 tangVec    : TEXCOORDN;
+  float4 binormVec  : TEXCOORDN;
+  float4 Pos        : TEXCOORDN;
+
+#if %_LT_LIGHTS && %_LT_HASPROJ
+  float4 projTC     : TEXCOORDN;
+#endif
+
+  float4 Ambient    : TEXCOORDN;
+
+  float4 Color      : COLOR0;
+};
+
+///////////////// vertex shader //////////////////
+vert2fragIce IceVS(app2vertGeneral IN)
+{
+  vert2fragIce OUT = (vert2fragIce)0;
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+ //output shadowmask TC
+ OUT.ScreenTC = HPosToScreenTC(OUT.HPosition);
+
+#ifdef %_RT_ALPHATEST || %_RT_INSTANCING_ATTR
+    OUT.baseTC.xy = IN.baseTC.xy;
+#endif
+
+//------------------------------------------------------------------------------
+//  compute shadow tex coords and depth
+//------------------------------------------------------------------------------
+#if %_RT_SHADOW_JITTERING
+    //OUT.RandDirTC.xyz = mul(vPos, (float3x3) shadowM) / 5000;
+#endif
+
+  //compute tangent to world transformation
+  float3 worldTangentS = normalize(mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]));
+  float3 worldTangentT = normalize(mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]));
+  OUT.tangVec = float4(worldTangentS.xyz, IN.Tangent.w);
+  OUT.binormVec.xyz = worldTangentT;
+
+  float3 vWorldView = vertPassPos.WorldPos.xyz;
+  OUT.Pos.xyz = vWorldView;
+
+  vertPassPos.WorldPos.xyz += g_VS_WorldViewPos.xyz;
+
+#if %_RT_FOG
+  float4 fogColor = GetVolumetricFogColor(vertPassPos.WorldPos.xyz);
+  OUT.Pos.w = fogColor.w;
+#endif
+
+  float3 vNormalWS = normalize(cross(worldTangentS, worldTangentT) * IN.Tangent.w);
+  float3 vRefractWS = refract( normalize(vWorldView), vNormalWS, 1.003/1.33 );
+
+  //global scattering depth texture
+#if %GLOBALSCATTERMAP
+  float4x4 ProjMat = mul(vertPassPos.InstMatrix, RotMatrix);
+  OUT.scatterTC.xy = mul(vertPassPos.Position.xyz, (float3x3)ProjMat).xy / g_fScatterTile; //FIX: ScatterTile should be encoded to the RotMatrix
+#else
+  //compute refracted shade position
+  GenShadowTC(float4(vertPassPos.WorldPos.xyz+g_RefractionAmount*vRefractWS, 1.0), OUT.shadowTC);
+#endif
+
+  //compute light parameters
+  _TCModify(IN.baseTC, OUT.baseTC, vertPassPos.Position, vertPassPos.ObjToTangentSpace[2], TS_DIFFUSE);
+
+  float fDist = length(vWorldView);
+  fDist = pow(min(fDist/max(0.001, FadingDist), 1), 4);
+  OUT.Color.a = /*fWeight * */(1-fDist);
+
+#if %VERTCOLORS
+  OUT.Color = GetInputColor(IN.Color);
+#endif
+
+//projectors are not
+#ifdef %_LT_LIGHTS
+ #if %_LT_HASPROJ
+   OUT.projTC = mul(LightMatrix, vertPassPos.WorldPos);
+ #endif
+#endif
+
+  //TOFIX: add instancing support
+  OUT.Ambient = half4(0.3,0.3,0.3,1);//AmbientOp;
+
+  return OUT;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_unify_parameters( inout fragPass pPass )
+{
+
+  pPass.bCustomComposition = true;
+  pPass.bRenormalizeNormal = true;
+  pPass.bHemisphereLighting = true;
+
+#if %ENVCMSPEC
+  #if %_TT3_TCUBE
+    pPass.nReflectionMapping = REFLECT_CUBE;
+  #else
+    pPass.nReflectionMapping = REFLECT_SPHERE;
+  #endif
+
+  pPass.fReflection_Amount = fReflectAmount;
+  pPass.fFresnel_Bias = 0.2f;//FresnelBias;
+  pPass.fFresnel_Scale = 5.0f;//FresnelScale;
+
+#endif
+
+//FIX is envmap & offset bumpmapping needed
+#if %OFFSETBUMPMAPPING || %PARALLAX_OCCLUSION_MAPPING
+  pPass.fBumpHeightScale = Displacement;
+  #if %PARALLAX_OCCLUSION_MAPPING
+    pPass.bParallaxOcclusionMapping = true;
+  #elif %OFFSETBUMPMAPPING
+    pPass.bOffsetBumpMapping = true;
+  #endif
+#endif
+
+#if %BUMP_DIFFUSE
+  pPass.bDiffuseBump = true;
+#endif
+
+#if %VERTCOLORS
+  //pPass.bVertexColors = true;
+#endif
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_unify_ice(inout fragPass pPass, in vert2fragIce IN)
+{
+  frag_unify_parameters( pPass );
+
+#if !%GLOBALSCATTERMAP
+  pPass.pCustom.vDepthMapProj = IN.shadowTC.shadTC0;
+#else
+  pPass.pCustom.vDepthMapProj.xy = IN.scatterTC.xy;
+#endif
+
+  // Set quality level (LOW or HIGH)
+  pPass.nQuality = GetShaderQuality();
+///
+  pPass.IN.baseTC = IN.baseTC;
+  pPass.IN.bumpTC = pPass.IN.baseTC;
+  pPass.IN.vTangent = IN.tangVec;
+  pPass.IN.vBinormal = IN.binormVec;
+  pPass.IN.vNormal.xyz = (cross(IN.tangVec.xyz, IN.binormVec.xyz)) * IN.tangVec.w;                  // 4 alu
+  pPass.IN.vView = IN.Pos;
+  pPass.IN.screenProj = IN.ScreenTC;
+  pPass.IN.Ambient = IN.Ambient;
+
+#if %_LT_LIGHTS && %_LT_HASPROJ
+  pPass.IN.projTC = IN.projTC;
+#endif
+
+  pPass.IN.Color = IN.Color;
+
+  //TOFIX: add support for terrain ambient occlusion
+  //pPass.IN.OutdoorAOInfo.xyz
+
+  frag_unify_parameters( pPass );
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//------------------------------------------------------------------------------
+//  Pixel shader
+//------------------------------------------------------------------------------
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void frag_custom_begin( inout fragPass pPass )
+{
+
+  if (pPass.nQuality == QUALITY_VERYHIGH)
+  {
+    //per pixel refraction
+    float3 vWorldView = pPass.IN.vView;
+    float3 vWorldPos =  vWorldView + PS_WorldViewPos.xyz;
+    float3 vNormalWS = pPass.vNormal.xyz;
+    float3 vRefractWS = refract( normalize(vWorldView), vNormalWS, 1.003/1.33 );
+
+    float4 vDepthMapPos = float4(vWorldPos+g_PSRefractionAmount*vRefractWS, 1.0);
+    //vert2fragShadowCommon sShadowTC;
+    //GenShadowTC(float4(vWorldPos+g_PSRefractionAmount*vRefractWS, 1.0), sShadowTC);
+    //simplified version
+    vDepthMapPos = mul(TexGen0, vDepthMapPos);
+    vDepthMapPos.z = vDepthMapPos.z * fOneDivFarDist.x;
+    pPass.pCustom.vDepthMapProj = vDepthMapPos;
+  }
+
+#if !%GLOBALSCATTERMAP
+  //real-time scattering depth map
+  half ScatterDepth = GetGlobalDepthZ(pPass.pCustom.vDepthMapProj);
+#else
+  //fake scattering map
+  half ScatterDepth = tex2D( globalScatterSampler, pPass.pCustom.vDepthMapProj.xy).x;
+  fCompare /= 20.0;
+#endif
+
+  //--------------------------------------------------------------------------------------------
+  //precise shading model
+  half oneovereta = 1.0/g_RefractionEta;
+  half oneovereta2 = oneovereta*oneovereta;
+
+  //--------------------------------------------------------------------------------------------
+
+  #if %LAYERSALPHABLEND
+    float4 vLayerAlpha = tex2D(opacityMapSampler, pPass.IN.baseTC.xy);
+  #endif
+
+  half4 ScatterSingle = half4(0,0,0,0);
+
+  #if (%_RT_SAMPLE0  && !%_RT_CUBEMAP0) || %GLOBALSCATTERMAP
+    #if %RAMP_SCATTER_MODEL
+      ScatterDepth = max(ScatterDepth,0.01);
+
+      float fDist = min(ScatterDepth*g_DepthRampAdjust + g_DepthShift, 1);
+      fDist = clamp(fDist,0.001, 0.999);
+      ScatterSingle = tex2D( scatterFadeRamp, float2(0.5,fDist));
+    #else
+      float4 absorbCoeffs  = float4(g_absorbCoeffR, g_absorbCoeffG, g_absorbCoeffB, 1);
+      ScatterSingle = exp(-ScatterDepth*Absorption * absorbCoeffs);
+    #endif
+    if( pPass.nQuality == QUALITY_MEDIUM )
+    {
+      ScatterSingle*= scatterShadowColor;
+    }
+  #else
+
+    ScatterSingle = scatterShadowColor; //float4(g_absorbCoeffR, g_absorbCoeffG, g_absorbCoeffB, 1);
+  #endif
+
+  pPass.pCustom.ScatterFinalColor = ScatterSingle;
+  //float3 Tp_o = normalize(refract(IN.viewVec.xyz,bumpNormal,oneovereta));
+  // should be placed into the loop when we have multi-lights shadow passes
+
+  //old shading
+  //float Kfresnel = GetFresnel(ViewDotNorm, 0.2, 2);
+
+  //--------------------------------------------------------------------------------------------
+  // BUBBLES parallax effect
+  //--------------------------------------------------------------------------------------------
+#if %PARALLAX_AIR_BUBBLES
+  int i=0;
+  int nLayers=4;
+  half4 AirBubbles= half4(0,0,0,0);
+
+  //TOFIX: is Tangents linear matrix always
+  //half3 vVecTan = mul(viewVec, Tangents);
+
+  //  get view vector tangent space
+  //it's only dx10 feature
+  half3 WorldViewVector = normalize(-pPass.IN.vView.xyz);
+
+  half2 ViewVecTan;
+  ViewVecTan.x = dot(pPass.IN.vTangent.xyz, WorldViewVector);
+  ViewVecTan.y = dot(pPass.IN.vBinormal.xyz, WorldViewVector);
+
+  for(i=0; i<nLayers; i++)
+  {
+    float i1=i+1;
+    float2 newUv = pPass.IN.baseTC.xy-(AirBubblesOffsetScale*ViewVecTan.xy)*(i1*i1*2.0f) - i1*AirBubblesShift;
+    AirBubbles.xyz += tex2D(airBubblesSampler, newUv.xy * AirBubblesTilesScale).xyz * ((1.0f-((float)i*AirBubblesVisibility)));
+  }
+
+  pPass.pCustom.cAirBubbles.xyz = AirBubbles.xyz/(half)nLayers;
+  //alpha for bubbles blending
+  pPass.pCustom.cAirBubbles.a = 0.8f;
+
+  pPass.pCustom.ScatterFinalColor.xyz += pPass.pCustom.cAirBubbles.xyz;
+#endif
+  //--------------------------------------------------------------------------------------------
+
+  //--------------------------------------------------------------------------------------------
+  // Waves layers blending
+  //--------------------------------------------------------------------------------------------
+  #if %LAYERSALPHABLEND
+    pPass.pCustom.cLayerAlpha = tex2D(opacityMapSampler, pPass.IN.baseTC.xy);
+  #endif
+  //--------------------------------------------------------------------------------------------
+
+  // Output alpha
+  half fAlpha = pPass.cDiffuseMap.a;
+  if (pPass.bVertexColors)
+    fAlpha *= pPass.IN.Color.w;
+
+#if %_RT_AMBIENT
+  fAlpha *= pPass.IN.Ambient.w;
+#endif
+
+  pPass.fAlpha = fAlpha;
+
+  // load the gloss
+  pPass.cGlossMap = 1;
+#if %GLOSS_MAP
+  pPass.cGlossMap = GetTexture2D(glossMapSampler, pPass.IN.baseTC.xy);
+
+  #ifndef %STAT_BRANCHING
+    #if %SPECULARPOW_GLOSSALPHA
+      pPass.fSpecPow *= pPass.cGlossMap.a;
+    #endif
+  #else
+    if (SPECULARPOW_GLOSSALPHA)
+      pPass.fSpecPow *= pPass.cGlossMap.a;
+  #endif
+
+#endif
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+void frag_custom_per_light( inout fragPass pPass, inout fragLightPass pLight )
+{
+  //if( pPass.bDiffuseBump )
+  //{
+  //  pLight.fNdotL = dot(pPass.vNormalDiffuse.xyz, pLight.vLight.xyz);
+  //}
+
+  pLight.fNdotL = saturate(pLight.fNdotL);
+
+  half3 CiD = pLight.cDiffuse.xyz * pLight.fNdotL;                                            // 1 alu
+  //half fFrontContribution = saturate(pLight.fNdotL*0.5 + 0.5);
+  //CiD *= fFrontContribution;
+
+  //FIX: change to blinn
+  half fSpec = Phong(pPass.vReflVec, pLight.vLight,  pPass.fSpecPow); // 4 alu
+
+  // Final specular term
+  half3 CiS = pLight.cSpecular.xyz * fSpec;                                                   // 1 alu
+
+  half3 Ko = pLight.fOcclShadow * pLight.fFallOff * pLight.cFilter;                                // 2 alu
+
+  pPass.cDiffuseAcc.xyz += CiD.xyz * Ko.xyz;                                                   // 1 alu
+  pPass.cSpecularAcc.xyz += CiS.xyz * Ko.xyz;                                                 // 1 alu
+
+  //float kFresnelScatter = GetFresnel(pLight.fNdotL, eta, 2);
+
+  //scattering component
+  pPass.pCustom.cScatterAcc.xyz += pLight.cDiffuse.xyz * pPass.pCustom.ScatterFinalColor.xyz /** Ko.xyz */* pLight.fFallOff; /** kFresnelScatter */
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
+    //Enable for low spec
+    //Diffuse scattering
+/*  #if %DIFFUSE_SCATTERING
+    half3 DiffuseScatter = saturate(1 - dot(bumpNormal.xyz, WorldViewVector)) * saturate(dot(WorldViewVector, -LightVec));
+    DiffuseScatter = pow(DiffuseScatter, 4) * scatterShadowColor * Diffuses[i].rgb * 4;
+    scatterColor.xyz += DiffuseScatter;
+  #endif
+*/
+
+///////////
+  //half4 iceSimpleShading = (distantScatterColor / 3.0);
+
+////////////////
+
+/*  half3 iceShading = half3(0,0,0);
+
+  iceShading.xyz += ScatterFinalColor.xyz ;
+
+  #if %LAYERSALPHABLEND
+    //Force blending by diffuse alpha channel
+    float fLayerAlpha = baseColor.w; // FIX:: Add shader generation parameter fo blending
+
+    half3 SecondLayer = fOcclShadow * ( (1-vLayerAlpha.xyz)*diffuse + finalSpec ); // diffuse component
+    SecondLayer.xyz += (1-vLayerAlpha.xyz)*AmbientOp*baseColor.xyz;// ambient component
+    SecondLayer.xyz += vLayerAlpha.xyz*iceShading.xyz; // ice scattering
+
+    vAccumColor.xyz += SecondLayer;
+  #else
+    vAccumColor.xyz += fOcclShadow * diffuse +  iceShading;
+  #endif
+
+*/
+//////////////////////
+
+  //FIX: add using of VERTEXCOLOR instead of scatterShadowColor for far distance
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+void frag_custom_ambient( inout fragPass pPass, inout half3 cAmbient)
+{
+  //if( pPass.bDiffuseBump )
+  //{
+    // darken ambient if there is unoccluded area direction
+  //  cAmbient.xyz *= saturate( dot(pPass.vNormalDiffuse.xyz, pPass.vNormal.xyz) );
+  //}
+
+  pPass.cAmbientAcc.xyz += cAmbient.xyz;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_end( inout fragPass pPass, inout half3 cFinal )
+{
+  #if %PARALLAX_AIR_BUBBLES
+    //iceShading += IN.Color.a * AirBubbles * 0.8; //fix
+  #endif
+
+  //cFinal.xyz = pPass.cDiffuseAcc.xyz * (half3(1,1,1) - pPass.pCustom.cAirBubbles.xyz);
+  //cFinal.xyz = pPass.cDiffuseAcc.xyz + pPass.pCustom.cAirBubbles.xyz;
+
+  cFinal.xyz = ( pPass.cAmbientAcc.xyz + pPass.cDiffuseAcc.xyz ) * pPass.cDiffuseMap.xyz * MatDifColor.xyz;  // 3 alu
+
+  half3 cScatter = pPass.pCustom.cScatterAcc.xyz * pPass.cDiffuseMap.xyz * MatDifColor.xyz;
+  #if %LAYERSALPHABLEND
+    cFinal.xyz = lerp(cFinal.xyz, cScatter.xyz, pPass.pCustom.cLayerAlpha.xyz);
+  #else
+    cFinal.xyz += cScatter.xyz;
+  #endif
+
+  //apply scatter component
+  //cFinal.xyz += cScatter.xyz;
+
+  //cFinal.xyz = pPass.pCustom.scatterFinalColor.xyz;
+
+  half3 cSpecular = pPass.cSpecularAcc.xyz * pPass.cGlossMap.xyz;                    // 2 alu
+  if( pPass.nQuality != QUALITY_LOW )
+    cSpecular.xyz *= MatSpecColor.xyz;
+
+  if( pPass.nReflectionMapping )
+  {
+    // apply shading to environment map
+    pPass.cEnvironment.xyz *= ( pPass.cAmbientAcc.xyz + pPass.cDiffuseAcc.xyz ) ;                 // 2 alu
+    cSpecular.xyz += pPass.cEnvironment.xyz;                                // 1 alu
+  }
+
+  cFinal.xyz += cSpecular;
+
+#if %_RT_AMBIENT
+    //cFinal.xyz  += pPass.cAmbientAcc.xyz ;
+  //cFinal.xyz = lerp(pPass.pCustom.scatterFinalColor.xyz , cFinal.xyz, 1- rAlpha) ;
+#endif
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#include "fragLib.cfi"
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pixout NewIcePS(vert2fragIce IN)
+{
+  pixout OUT = (pixout)0;
+  // Initialize fragPass structure
+  fragPass pPass = (fragPass) 0;
+  frag_unify_ice(pPass, IN);
+
+  half4 cFinal = frag_shared_output(pPass);
+
+  HDROutput(OUT, cFinal, 1);
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+technique General
+<
+  string Script = 
+        "TechniqueZ=ZPass;"
+        "TechniqueDetail=DetailPass;"
+        "TechniqueShadowGen=IceShadowGen;"
+        //fix - all Shadow LODs should be combined in ShadowPass to ShadowMask
+        //"TechniqueShadowPass=ShadowPass;"
+        //fix specific DetailPass should be added
+>
+{
+  pass p0
+  {
+    #if %USE_SM30 || %DYN_BRANCHING
+      VertexShader = compile vs_3_0 IceVS() IceVS;
+      PixelShader = compile ps_3_0 NewIcePS() IcePS;
+    #else
+      VertexShader = compile vs_2_0 IceVS() IceVS;
+      PixelShader = compile ps_2_x NewIcePS() IcePS;
+    #endif
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    CullMode = Back;
+  }
+}
+
+//===========================================================================
+// Common passes support (zpass/fog/detail)
+
+#include "CommonZPass.cfi"
+#include "CommonDetailPass.cfi"
+#include "CommonShadowGenPass.cfi"
+
+technique IceShadowGen
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto Common_SG_VS() ShadowGenVS;
+    PixelShader = compile ps_Auto Common_SG_PS() ShadowGenPS;
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    CullMode = Back;
+
+    #if %GRASS || %LEAVES
+      CullMode = None;
+    #endif
+  }
+}
+
+/////////////////////// eof ///

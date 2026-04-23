@@ -1,0 +1,486 @@
+#include "common.cfi"
+
+//////////////////////////////////////////////////
+// shader constants
+
+// VS
+float4x4 cCompositeMat : PB_SFCompMat;
+float2x4 cTexGenMat0 : PB_SFTexGenMat0;
+float2x4 cTexGenMat1 : PB_SFTexGenMat1;
+
+// PS
+float2x4 cBitmapColorTransform : PB_SFBitmapColorTransform;
+
+//////////////////////////////////////////////////
+// samplers
+
+sampler2D texMap0 = sampler_state
+{ Texture = $FromSF0; };
+
+sampler2D texMap1 = sampler_state
+{ Texture = $FromSF1; };
+
+//////////////////////////////////////////////////
+// input signatures
+
+#ifdef D3D10
+#define SF_INPUT_POS  int4 pos : POSITION;
+#else
+#define SF_INPUT_POS  float4 pos : POSITION;
+#endif
+
+// VS
+struct a2v_XY
+{
+  SF_INPUT_POS
+};
+
+struct a2v_Glyph
+{
+  float4 pos : POSITION;
+  float2 tex0 : TEXCOORD0;
+  float4 col0 : COLOR0;
+};
+
+struct a2v_XY_C
+{
+  SF_INPUT_POS
+  float4 diff : COLOR;
+};
+
+struct a2v_XY_C_F
+{
+  SF_INPUT_POS
+  float4 diff : COLOR0;
+  float4 spec : COLOR1;
+};
+
+// PS
+struct v2f_XY
+{
+  float4 pos : POSITION;
+  float2 tex0 : TEXCOORD0;
+};
+
+struct v2f_XY_noTex
+{
+  float4 pos : POSITION;
+};
+
+struct v2f_Glyph
+{
+  float4 pos : POSITION;
+  float2 tex0 : TEXCOORD0;
+  float4 col0 : COLOR0;
+};
+
+struct v2f_XY_C
+{
+  float4 pos : POSITION;
+  float4 diff : COLOR;
+};
+
+struct v2f_XY_C_F
+{
+  float4 pos : POSITION;
+  float2 tex0 : TEXCOORD0;
+  float4 diff : COLOR0;
+  float4 spec : COLOR1;
+};
+
+struct v2f_XY_C_F_noTex
+{
+  float4 pos : POSITION;
+  float4 diff : COLOR0;
+  float4 spec : COLOR1;
+};
+
+struct v2f_XY_C_F_T2
+{
+  float4 pos : POSITION;
+  float2 tex0 : TEXCOORD0;
+  float2 tex1 : TEXCOORD1;
+  float4 diff : COLOR0;
+  float4 spec : COLOR1;
+};
+
+//////////////////////////////////////////////////
+// Vertex shaders (shared)
+
+#ifdef D3D10
+#define CONVERT_INPUT_POS float4 pos = float4((float2)IN.pos.xy, 0, 1);
+#else
+#define CONVERT_INPUT_POS float4 pos = IN.pos;
+#endif
+
+v2f_XY VS_XY( a2v_XY IN )
+{
+  v2f_XY OUT = (v2f_XY) 0;
+  CONVERT_INPUT_POS
+  OUT.pos = mul( cCompositeMat, pos );
+  OUT.tex0 = mul( cTexGenMat0, pos );
+  return OUT;
+}
+
+v2f_XY_noTex VS_XY_noTex( a2v_XY IN )
+{
+  v2f_XY_noTex OUT = (v2f_XY_noTex) 0;
+  CONVERT_INPUT_POS
+  OUT.pos = mul( cCompositeMat, pos );
+  return OUT;
+}
+
+v2f_Glyph VS_Glyph( a2v_Glyph IN )
+{
+  v2f_Glyph OUT = (v2f_Glyph) 0;
+  OUT.pos = mul( cCompositeMat, IN.pos );
+  OUT.tex0 = IN.tex0;
+  OUT.col0 = IN.col0;
+  return OUT;
+}
+
+v2f_XY_C VS_XY_C( a2v_XY_C IN )
+{
+  v2f_XY_C OUT = (v2f_XY_C) 0;
+  CONVERT_INPUT_POS
+  OUT.pos = mul( cCompositeMat, pos );
+  OUT.diff = IN.diff;
+  return OUT;
+}
+
+v2f_XY_C_F VS_XY_C_F( a2v_XY_C_F IN )
+{
+  v2f_XY_C_F OUT = (v2f_XY_C_F) 0;
+  CONVERT_INPUT_POS
+  OUT.pos = mul( cCompositeMat, pos );
+  OUT.tex0 = mul( cTexGenMat0, pos );
+  OUT.diff = IN.diff;
+  OUT.spec = IN.spec;
+  return OUT;
+}
+
+v2f_XY_C_F_noTex VS_XY_C_F_noTex( a2v_XY_C_F IN )
+{
+  v2f_XY_C_F_noTex OUT = (v2f_XY_C_F_noTex) 0;
+  CONVERT_INPUT_POS
+  OUT.pos = mul( cCompositeMat, pos );
+  OUT.diff = IN.diff;
+  OUT.spec = IN.spec;
+  return OUT;
+}
+
+v2f_XY_C_F_T2 VS_XY_C_F_T2( a2v_XY_C_F IN )
+{
+  v2f_XY_C_F_T2 OUT = (v2f_XY_C_F_T2) 0;
+  CONVERT_INPUT_POS
+  OUT.pos = mul( cCompositeMat, pos );
+  OUT.tex0 = mul( cTexGenMat0, pos );
+  OUT.tex1 = mul( cTexGenMat1, pos );
+  OUT.diff = IN.diff;
+  OUT.spec = IN.spec;
+  return OUT;
+}
+
+//////////////////////////////////////////////////
+// Pixel shader fragments (shared)
+
+half4 AdjustForMultiply( half4 col )
+{
+  return lerp( half4( 1, 1, 1, 1 ), col, col.a );
+}
+
+//////////////////////////////////////////////////
+// SolidColor
+
+half4 PS_SolidColor( v2f_XY_noTex IN ) : COLOR
+{
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   half4 ret = 0;
+   DebugOutput(ret, float4(0, 0, 0, 1));
+   return ret;
+ #endif
+
+  return cBitmapColorTransform[0];
+}
+
+technique SolidColor
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto VS_XY_noTex();
+    PixelShader = compile ps_Auto PS_SolidColor();
+  }
+}
+
+//////////////////////////////////////////////////
+// CxformTexture / CxformMultiplyTexture
+
+half4 CxformTexture( v2f_XY IN )
+{
+  half4 tex = tex2D( texMap0, IN.tex0 );
+  half4 res = tex * cBitmapColorTransform[0] + cBitmapColorTransform[1];
+  return res;
+}
+
+half4 PS_CxformTexture( v2f_XY IN ) : COLOR
+{
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   half4 ret = 0;
+   DebugOutput(ret, float4(0, 0, 0, 1));
+   return ret;
+ #endif
+
+  return CxformTexture( IN );
+}
+
+half4 PS_CxformMultiplyTexture( v2f_XY IN ) : COLOR
+{
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   half4 ret = 0;
+   DebugOutput(ret, float4(0, 0, 0, 1));
+   return ret;
+ #endif
+
+  return AdjustForMultiply( CxformTexture( IN ) );
+}
+
+technique CxformTexture
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto VS_XY();
+    PixelShader = compile ps_Auto PS_CxformTexture();
+  }
+}
+
+technique CxformMultiplyTexture
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto VS_XY();
+    PixelShader = compile ps_Auto PS_CxformMultiplyTexture();
+  }
+}
+
+//////////////////////////////////////////////////
+// Glyph
+
+half4 PS_Glyph( v2f_Glyph IN ) : COLOR
+{
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   half4 ret = 0;
+   DebugOutput(ret, float4(0, 0, 0, 1));
+   return ret;
+ #endif
+
+  half4 res = half4(IN.col0.rgb, IN.col0.a * tex2D( texMap0, IN.tex0 ).a);
+  return res * cBitmapColorTransform[0] + cBitmapColorTransform[1];
+}
+
+technique Glyph
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto VS_Glyph();
+    PixelShader = compile ps_Auto PS_Glyph();
+  }
+}
+
+//////////////////////////////////////////////////
+// CxformGouraud / CxformGouraudMultiply
+
+half4 CxformGouraud( v2f_XY_C_F_noTex IN )
+{
+  half4 res = IN.diff * cBitmapColorTransform[0] + cBitmapColorTransform[1];
+  return half4( res.rgb, res.a * IN.spec.a );
+}
+
+half4 PS_CxformGouraud( v2f_XY_C_F_noTex IN ) : COLOR
+{
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   half4 ret = 0;
+   DebugOutput(ret, float4(0, 0, 0, 1));
+   return ret;
+ #endif
+
+  return CxformGouraud( IN );
+}
+
+half4 PS_CxformGouraudMultiply( v2f_XY_C_F_noTex IN ) : COLOR
+{
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   half4 ret = 0;
+   DebugOutput(ret, float4(0, 0, 0, 1));
+   return ret;
+ #endif
+
+  return AdjustForMultiply( CxformGouraud( IN ) );
+}
+
+technique CxformGouraud
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto VS_XY_C_F_noTex();
+    PixelShader = compile ps_Auto PS_CxformGouraud();
+  }
+}
+
+technique CxformGouraudMultiply
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto VS_XY_C_F_noTex();
+    PixelShader = compile ps_Auto PS_CxformGouraudMultiply();
+  }
+}
+
+//////////////////////////////////////////////////
+// CxformGouraudNoAddAlpha / CxformGouraudMultiplyNoAddAlpha
+
+half4 CxformGouraudNoAddAlpha( v2f_XY_C IN )
+{
+  return IN.diff * cBitmapColorTransform[0] + cBitmapColorTransform[1];
+}
+
+half4 PS_CxformGouraudNoAddAlpha( v2f_XY_C IN ) : COLOR
+{
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   half4 ret = 0;
+   DebugOutput(ret, float4(0, 0, 0, 1));
+   return ret;
+ #endif
+
+  return CxformGouraudNoAddAlpha( IN );
+}
+
+half4 PS_CxformGouraudMultiplyNoAddAlpha( v2f_XY_C IN ) : COLOR
+{
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   half4 ret = 0;
+   DebugOutput(ret, float4(0, 0, 0, 1));
+   return ret;
+ #endif
+
+  return AdjustForMultiply( CxformGouraudNoAddAlpha( IN ) );
+}
+
+technique CxformGouraudNoAddAlpha
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto VS_XY_C();
+    PixelShader = compile ps_Auto PS_CxformGouraudNoAddAlpha();
+  }
+}
+
+technique CxformGouraudMultiplyNoAddAlpha
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto VS_XY_C();
+    PixelShader = compile ps_Auto PS_CxformGouraudMultiplyNoAddAlpha();
+  }
+}
+
+//////////////////////////////////////////////////
+// CxformGouraudTexture / CxformGouraudMultiplyTexture
+
+half4 CxformGouraudTexture( v2f_XY_C_F IN )
+{
+  half4 tex = tex2D( texMap0, IN.tex0 );
+  half4 res = lerp( IN.diff, tex, IN.spec.b );
+  res = res * cBitmapColorTransform[0] + cBitmapColorTransform[1];
+  return half4( res.rgb, res.a * IN.spec.a );
+}
+
+half4 PS_CxformGouraudTexture( v2f_XY_C_F IN ) : COLOR
+{
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   half4 ret = 0;
+   DebugOutput(ret, float4(0, 0, 0, 1));
+   return ret;
+ #endif
+
+  return CxformGouraudTexture( IN );
+}
+
+half4 PS_CxformGouraudMultiplyTexture( v2f_XY_C_F IN ) : COLOR
+{
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   half4 ret = 0;
+   DebugOutput(ret, float4(0, 0, 0, 1));
+   return ret;
+ #endif
+
+  return AdjustForMultiply( CxformGouraudTexture( IN ) );
+}
+
+technique CxformGouraudTexture
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto VS_XY_C_F();
+    PixelShader = compile ps_Auto PS_CxformGouraudTexture();
+  }
+}
+
+technique CxformGouraudMultiplyTexture
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto VS_XY_C_F();
+    PixelShader = compile ps_Auto PS_CxformGouraudMultiplyTexture();
+  }
+}
+
+//////////////////////////////////////////////////
+// Cxform2Texture / CxformMultiply2Texture
+
+half4 Cxform2Texture( v2f_XY_C_F_T2 IN )
+{
+  half4 tex0 = tex2D( texMap0, IN.tex0 );
+  half4 tex1 = tex2D( texMap1, IN.tex1 );
+  half4 res = lerp( tex1, tex0, IN.spec.b );
+  return res * cBitmapColorTransform[0] + cBitmapColorTransform[1];
+}
+
+half4 PS_Cxform2Texture( v2f_XY_C_F_T2 IN ) : COLOR
+{
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   half4 ret = 0;
+   DebugOutput(ret, float4(0, 0, 0, 1));
+   return ret;
+ #endif
+
+  return Cxform2Texture( IN );
+}
+
+half4 PS_CxformMultiply2Texture( v2f_XY_C_F_T2 IN ) : COLOR
+{
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   half4 ret = 0;
+   DebugOutput(ret, float4(0, 0, 0, 1));
+   return ret;
+ #endif
+
+  return AdjustForMultiply( Cxform2Texture( IN ) );
+}
+
+technique Cxform2Texture
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto VS_XY_C_F_T2();
+    PixelShader = compile ps_Auto PS_Cxform2Texture();
+  }
+}
+
+technique CxformMultiply2Texture
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto VS_XY_C_F_T2();
+    PixelShader = compile ps_Auto PS_CxformMultiply2Texture();
+  }
+}

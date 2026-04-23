@@ -1,0 +1,112 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: TerrainLayer.ext
+// Created: 16/2/2004 by Andrey Honich.
+
+Version (1.00)
+
+Property
+{
+  Name            = %BUMP_MAP
+  Mask            = 0x4
+  Property        (Bump map)
+  Description     (Use bump-map texture)
+  DependencySet   = $TEX_Bump
+  DependencyReset = $TEX_Bump
+  Hidden
+}
+
+Property
+{
+  Name            = %ENVCMSPEC
+  Mask            = 0x80
+  Property        (Specular EnvCM)
+  Description     (Use per-pixel Env. CM reflections with fresnel)
+  DependencyReset = $TEX_EnvCM
+}
+
+Property
+{
+  Name            = %GLOSS_MAP
+  Mask            = 0x200
+  Property        (Gloss map)
+  Description     (Use gloss map as separate texture)
+  DependencySet   = $TEX_Gloss
+  DependencyReset = $TEX_Gloss
+  Hidden
+}
+
+Property
+{
+  Name        = %GLOSS_DIFFUSEALPHA
+  Mask        = 0x400
+  Property    (Gloss map DifAlpha)
+  Description (Use gloss map as alpha channel in diffuse texture)
+}
+
+Property
+{
+  Name            = %OFFSETBUMPMAPPING
+  Mask            = 0x1000
+  Property        (Offset bump mapping)
+  Description     (Use Offset bump mapping (requires height-map in alpha-channel of bump texture))
+  DependencyReset = $TEX_Bump
+}
+
+Property
+{
+  Name            = %SPECULARPOW_GLOSSALPHA
+  Mask            = 0x4000
+  Property        (PerPixel Spec. Shinines)
+  Description     (Use specular shininess coef. as alpha channel of gloss texture)
+  DependencyReset = $TEX_Gloss
+}
+
+Property
+{
+  Name        = %DETAIL_BUMP_MAPPING
+  Mask        = 0x8000
+  Property    (Detail bump mapping)
+  Description (Use detail bump mapping)
+}
+
+Property
+{
+  Name            = %ALLOW_POM
+  Mask            = 0x1000000
+  DependencySet   = $HW_AllowPOM
+  DependencyReset = $HW_AllowPOM
+  Hidden
+}
+
+Property
+{
+  Name            = %PARALLAX_OCCLUSION_MAPPING
+  Mask            = 0x8000000
+  Property        (Parallax occlusion mapping)
+  Description     (Use parallax occlusion mapping (requires height map in alpha channel of bump texture))
+  DependencyReset = $TEX_Bump
+}
+
+Property
+{
+  Name            = %STAT_BRANCHING
+  Mask            = 0x10000000
+  DependencySet   = $HW_StaticBranching
+  DependencyReset = $HW_StaticBranching
+  Hidden
+}
+
+Property
+{
+  Name            = %DYN_BRANCHING
+  Mask            = 0x20000000
+  DependencySet   = $HW_DynamicBranching
+  DependencyReset = $HW_DynamicBranching
+  Hidden
+}
+
+Property
+{
+  Name = %TEMP_TERRAIN
+  Mask = 0x40000000
+}

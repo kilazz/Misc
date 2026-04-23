@@ -1,0 +1,21 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: TemplBeamProc.ext
+// Created: 07/02/2007 by Tiago Sousa
+
+Version (1.00)
+
+Property
+{
+  Name        = %NOISE
+  Mask        = 0x1
+  Property    (Noise map)
+  Description (Use animated 3D noise)
+}
+
+Property
+{
+  Name        = %MUZZLEFLASH
+  Mask        = 0x2
+  Property    (Muzzleflash)
+  Description (Use as muzzle flash)
+}

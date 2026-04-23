@@ -1,0 +1,309 @@
+////////////////////////////////////////////////////////////////////////////
+//
+//  Crytek Engine Source File.
+//  Shader extension
+//  Copyright (C), Crytek Studios, 2001-2004.
+// -------------------------------------------------------------------------
+//  File name:   CommonRainPass.cfi
+//  Version:     v1.00
+//  Created:     13/08/2007 by Tiago Sousa
+//  Compilers:
+//  Description: Common/Shared passes bettwen shaders. Should be included after
+//    main shader technique
+//
+// -------------------------------------------------------------------------
+////////////////////////////////////////////////////////////////////////////
+
+/// Un-Tweakables //////////////////////
+float4 MaterialLayersParams : PI_MaterialLayersParams;//x=frozen, y=wet, z = cloak, w = unused
+float4 RainAnimParams = { PB_time 0.333, PB_time 0.1665, PB_time 0.0832, PB_time 0.0416}; // (1, 0.5, 0.25, 0.125) * 0.333
+
+sampler2D rainBumpShiftMap = sampler_state
+{
+  Texture = textures/defaults/perlinNoiseNormal.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D rainEnvMap = sampler_state
+{
+  Texture = textures/defaults/frost_refl2.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D rainVariationMap = sampler_state
+{
+  Texture = textures/defaults/perlinNoise2D.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D rainVariationLookupMap = sampler_state
+{
+  Texture = textures/defaults/rain_variation.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D rainWavesMap = sampler_state
+{
+  Texture = $WaterPuddlesDDN;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+/////////// Common vertex shader ////////////////
+
+struct vtxCommonOut
+{
+  OUT_P
+  float4 tcBase : TEXCOORDN;
+
+  float4 tcVariation : TEXCOORDN;
+  float4 tcShifting : TEXCOORDN;
+
+  float4 vView : TEXCOORDN;
+
+  float4 vTangent  : TEXCOORDN;
+  float4 vBinormal : TEXCOORDN;
+  float4 vNormal : TEXCOORDN;
+
+  float4 screenProj : TEXCOORDN_centroid;
+};
+
+vtxCommonOut Common_RainLayerVS(app2vertRainPass IN)
+{
+  vtxCommonOut OUT;
+#ifndef OPENGL
+  OUT = (vtxCommonOut)0;
+#endif
+
+  float RainShiftTile = 3;
+  float PuddlesTile = 3;
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromRainPass(IN, vertPassPos);
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+  OUT.vView.xyz = vertPassPos.WorldPos.xyz; // + g_VS_WorldViewPos.xyz;
+  OUT.vView.w = OUT.HPosition.w;
+
+  float3 worldTangentS = normalize(mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]));
+  float3 worldTangentT = normalize(mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]));
+  float3 worldTangentN = normalize(cross(worldTangentS, worldTangentT)) * IN.Tangent.w;
+
+  OUT.vTangent.xyz = worldTangentS;
+  OUT.vBinormal.xyz = worldTangentT;
+
+  // Support for double sided lighting
+  float3 vEye = normalize( -OUT.vView.xyz );
+  float eyeTangentDot = dot(vEye.xyz, worldTangentN.xyz);
+  worldTangentN *= sign(eyeTangentDot);
+
+  OUT.vNormal.xyz = worldTangentN;
+
+  // Output uv coordinates from base mesh
+  float4 baseTC = IN.baseTC;
+  _TCModify(baseTC, OUT.tcBase, vertPassPos.Position, vertPassPos.ObjToTangentSpace[2], TS_DIFFUSE);
+  OUT.tcBase.xy = baseTC.xy;
+
+  // Output projected uv coordinates for water puddles
+  OUT.tcBase.wz = (vertPassPos.WorldPos.xy + g_VS_WorldViewPos.xy) * PuddlesTile ;
+
+  // Make flow along gravity direction
+  float3 vGravity = float3(0,0,1);
+  vGravity = normalize( mul( vGravity, (const float3x3)vertPassPos.InstMatrix) );
+
+  OUT.tcShifting.xyz = (vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz) * RainShiftTile;
+
+  // Output texture coordinates for rain variation
+  OUT.tcVariation = OUT.tcShifting.xyxy * 0.01 * float4(0.5, 0.5, 2.0, 2.0) + float4(0.1, 0.1, 0.2, 0.2);
+
+  // Output texture coordinates for rain shifting, using diferent z offsets
+  OUT.tcShifting = OUT.tcShifting.xyzz * half4(0.4, 0.4, 0.2, 0.4) + float4(0, 0, RainAnimParams.yz);
+
+  // Output the screen-space texture coordinates - for shadows and general projections
+  OUT.screenProj = HPosToScreenTC(OUT.HPosition);
+
+#if %_RT_INSTANCING_ATTR
+  OUT.screenProj.z = IN.InstMaterialLayersParams.y;
+#else
+  OUT.screenProj.z = MaterialLayersParams.y;
+#endif
+
+  // Attenuate wet amount at distance
+  OUT.screenProj.z *= (1-saturate(OUT.screenProj.w*0.005));
+
+#if (%_RT_ALPHATEST || %_RT_DISSOLVE)
+  #if %_RT_INSTANCING_ATTR && (%_RT_ALPHATEST || %_RT_DISSOLVE)
+    AlphaTest = IN.InstAlphaTest;
+  #endif
+
+  OUT.vTangent.w = AlphaTest.w;
+#endif
+
+  // Output commonly some used constants
+  OUT.vBinormal.w = 0.5 * saturate( OUT.vNormal.z * 2 - 1 );
+  OUT.vNormal.w = saturate( OUT.vNormal.z * 0.6 + 0.4 );
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout Common_RainLayerPS(vtxCommonOut IN)
+{
+  pixout OUT;
+
+  // Debug output
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, IN.tcBase);
+   return OUT;
+ #endif
+
+   int nQuality = GetShaderQuality();
+
+  float3x3 mTangentToWS = float3x3(IN.vTangent.xyz, IN.vBinormal.xyz, IN.vNormal.xyz);
+
+  float fAlphaRef = IN.vTangent.w;
+  half fWetBlendAmount = IN.screenProj.z;
+
+  float fShadowOcclMap = saturate(1.0 - tex2Dproj(shadowOccludeMapSampler, IN.screenProj.xyzw).x);
+
+  //////////////////////////////////////////////////////////////////////////////////////////////////
+  // Rain variation
+
+  // no variation on lower specs
+  half fVariation = 1;
+
+#ifndef PS20Only
+  if( nQuality >= QUALITY_HIGH )
+  {
+    // todo check variation - compare with old version
+    float4 tcRainVariation = IN.tcVariation;
+      //float2 tcRainVariation = IN.tcDetail1.xy * 0.01; // 1 inst
+
+    fVariation = 0.5 - 0.5 * tex2D(rainVariationMap, IN.tcBase.wz * 0.01).x; // 1 inst
+
+  //  float4 tcRainVariationLookup = tcRainVariation.xyxy * float4(0.5, 0.5, 2.0, 2.0) + float4(0.1, 0.1, 0.2, 0.2) + float4(0.5, 0.5, 0.25, 0.25) * fVariation; // 2 inst
+    float4 tcRainVariationLookup = tcRainVariation + float4(0.5, 0.5, 0.25, 0.25) * fVariation; // 1 inst
+
+    half2 vVariationLookup = half2( tex2D(rainVariationMap,tcRainVariationLookup.xy).x, tex2D(rainVariationMap,tcRainVariationLookup.zw).w );
+    vVariationLookup += fVariation + RainAnimParams.w * half2(0.5, 1.0); // 2 inst
+
+    // using lookup table to save 8 instructions
+    fVariation += tex2D(rainVariationLookupMap, vVariationLookup).x;
+  }
+#endif
+
+  //////////////////////////////////////////////////////////////////////////////////////////////////
+  // Horizontal rain using wave propagation
+
+  half3 cBump = GetNormalMap(bumpMapSampler, IN.tcBase.xy);
+  half3 vEye = normalize( -IN.vView.xyz );
+
+  half4 cWaves = tex2D(rainWavesMap, IN.tcBase.wz);
+  cWaves.xyz = cWaves.xyz * 2.0 - 1.0;
+
+  half fPuddlesBlendAmount = IN.vBinormal.w;
+  cBump.xyz = lerp(cBump.xyz, cWaves.xyz, saturate(fPuddlesBlendAmount + cWaves.w) ); // 5 inst
+
+  //////////////////////////////////////////////////////////////////////////////////////////////////
+  // Vertical shifting rain layers
+
+  float3 tcRainShiftLow = IN.tcShifting.xyz;
+  float3 tcRainShiftHi = IN.tcShifting.xyw * float3(2.5, 2.5, 1);
+
+  float3 vRainShiftY = tex2D( rainBumpShiftMap, tcRainShiftLow.yz);
+  vRainShiftY.xyz += tex2D( rainBumpShiftMap, tcRainShiftHi.yz ).xyz;
+  vRainShiftY.xyz = vRainShiftY.xyz * 2.0 - 2.0;
+
+  float3 vRainShiftZ = tex2D( rainBumpShiftMap, tcRainShiftLow.xz);
+  vRainShiftZ.xyz += tex2D( rainBumpShiftMap, tcRainShiftHi.xz).xyz;;
+  vRainShiftZ.xyz = vRainShiftZ.xyz * 2.0 - 2.0;
+
+  // Blend normals
+  half2 vRainShiftBlend = abs( IN.vNormal.xy );
+  half3 vRainShiftN = ( vRainShiftY * vRainShiftBlend.x + vRainShiftZ * vRainShiftBlend.y ); //opt: no normalize
+
+  half fShiftLerp = 0.5 - fPuddlesBlendAmount; // 2 inst
+  cBump.xyz += ( cBump.xyz + vRainShiftN.xyz ) * fShiftLerp;
+
+  //////////////////////////////////////////////////////////////////////////////////////////////////
+  // Main shading
+
+  // Get main vectors/coeficients
+  half3 vNormal = normalize( mul(cBump.xyz, mTangentToWS) );
+
+  half NdotE = ( dot(vNormal.xyz, vEye.xyz) );
+
+  half fFresnel =  GetFresnelTex(NdotE, 0.8).y; //0.8 + 0.2 * (1-NdotE)*(1-NdotE);
+
+  half3 vReflectionWS = (2.0 * NdotE * vNormal) - vEye.xyz;
+
+  half3 envMap = tex2D(rainEnvMap, vReflectionWS );
+  envMap = max(envMap*2-1,0);
+  envMap *= fFresnel;
+
+  half3 cDiffuse = saturate( dot(g_PS_SunLightDir.xyz, vNormal.xyz) ) * g_PS_SunColor * fShadowOcclMap + g_PS_SkyColor;
+  half dotSpec =  saturate(dot( vReflectionWS.xyz, g_PS_SunLightDir ));
+  half3 cSpecular =  pow(dotSpec,256) * g_PS_SunColor* fShadowOcclMap;
+
+  half4 cFinal = 0;
+  cFinal.xyz =(cDiffuse * envMap + cSpecular * fVariation);
+
+  cFinal.xyz *= IN.vNormal.w; // apply back rain blend amount
+  cFinal.w = saturate( fVariation ) * 0.5;
+
+  cFinal *= fWetBlendAmount;
+
+  HDROutput(OUT, cFinal, 1);
+
+#if %_RT_ALPHATEST
+  half fAlpha = tex2D(diffuseMapSampler, IN.tcBase.xy);
+  clip( fAlpha - fAlphaRef );
+#endif
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique RainPass
+{
+  pass rain
+  {
+    VertexShader = compile vs_Auto Common_RainLayerVS() RainLayerVS;
+    PixelShader = compile ps_Auto Common_RainLayerPS() RainLayerPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    ZFunc = LEqual;
+    CullMode = Back;
+
+#if %GRASS || %LEAVES
+    CullMode = None;
+#endif
+
+    SrcBlend = ONE;
+    DestBlend = ONE_MINUS_SRC_ALPHA;
+    AlphaBlendEnable = true;
+  }
+}

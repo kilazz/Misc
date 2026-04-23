@@ -1,0 +1,367 @@
+#ifndef D3D10
+ #if %TEMP_VEGETATION
+  #define MAX_NUM_BONES_PER_GROUP 50
+ #else
+  #define MAX_NUM_BONES_PER_GROUP 100
+ #endif
+  #define MAX_NUM_BONES_PER_GROUP_WITH_MB 50
+#else
+  #define MAX_NUM_BONES_PER_GROUP 150
+  #define MAX_NUM_BONES_PER_GROUP_WITH_MB 75
+#endif
+
+//============================================================================
+//=== Uniform parameters =====================================================
+
+// Parameter semantic prefixes:
+// PF - Per-Frame
+// PB - Per-Batch
+// PI - Per-Instance
+// PM - Per-Material
+// PL - Per-Light group
+
+// Vertex shader parameters range:
+// c0-c3, c8-c28 = PB, PI
+// c4-c7   = PL
+// c8-c15  = PM (tweakables)
+// c29-c34 = PF
+// c40-c255 = Skinning, Instancing, etc
+
+#ifndef D3D10
+  #define VS_REG_PL_0 c4
+  #define VS_REG_PL_1 c5
+  #define VS_REG_PL_2 c6
+  #define VS_REG_PL_3 c7
+
+  #define VS_REG_PM_0 c8
+  #define VS_REG_PM_1 c9
+
+  #define VS_REG_PM_2 c10
+  #define VS_REG_PM_3 c11
+  #define VS_REG_PM_4 c12
+  #define VS_REG_PM_5 c13
+  #define VS_REG_PM_6 c14
+  #define VS_REG_PM_7 c15
+
+  #define VS_REG_PB_0 c8
+  #define VS_REG_PB_1 c9
+  #define VS_REG_PB_2 c10
+  #define VS_REG_PB_3 c11
+  #define VS_REG_PB_4 c12
+  #define VS_REG_PB_5 c13
+  #define VS_REG_PB_6 c14
+  #define VS_REG_PB_7 c15
+  #define VS_REG_PB_8 c16
+  #define VS_REG_PB_9 c17
+  #define VS_REG_PB_10 c18
+  #define VS_REG_PB_11 c19
+  #define VS_REG_PB_12 c20
+  #define VS_REG_PB_13 c21
+  #define VS_REG_PB_14 c22
+  #define VS_REG_PB_15 c23
+  #define VS_REG_PB_16 c24
+#else
+  #define VS_REG_PL_0 c0
+  #define VS_REG_PL_1 c1
+  #define VS_REG_PL_2 c2
+  #define VS_REG_PL_3 c3
+
+  #define VS_REG_PM_0 c0
+  #define VS_REG_PM_1 c1
+
+  #define VS_REG_PM_2 c2
+  #define VS_REG_PM_3 c3
+  #define VS_REG_PM_4 c4
+  #define VS_REG_PM_5 c5
+  #define VS_REG_PM_6 c6
+  #define VS_REG_PM_7 c7
+
+  #define VS_REG_PB_0 c0
+  #define VS_REG_PB_1 c1
+  #define VS_REG_PB_2 c2
+  #define VS_REG_PB_3 c3
+  #define VS_REG_PB_4 c4
+  #define VS_REG_PB_5 c5
+  #define VS_REG_PB_6 c6
+  #define VS_REG_PB_7 c7
+  #define VS_REG_PB_8 c8
+  #define VS_REG_PB_9 c9
+  #define VS_REG_PB_10 c10
+  #define VS_REG_PB_11 c11
+  #define VS_REG_PB_12 c12
+  #define VS_REG_PB_13 c13
+  #define VS_REG_PB_14 c14
+  #define VS_REG_PB_15 c15
+  #define VS_REG_PB_16 c16
+#endif
+
+//=============================================================================
+// Pixel shader parameters range:
+// c0-c11  = PL
+// c12-c15 = PM (Light material)
+// c16-c25 = PM (tweakables), PI, PB
+// c26-c31 = PF
+
+  #define PS_REG_PL_00 c0
+  #define PS_REG_PL_01 c1
+  #define PS_REG_PL_02 c2
+  #define PS_REG_PL_03 c3
+
+  #define PS_REG_PL_10 c3
+  #define PS_REG_PL_11 c4
+  #define PS_REG_PL_12 c5
+
+  #define PS_REG_PL_20 c6
+  #define PS_REG_PL_21 c7
+  #define PS_REG_PL_22 c8
+
+  #define PS_REG_PL_30 c9
+  #define PS_REG_PL_31 c10
+  #define PS_REG_PL_32 c11
+
+#ifndef D3D10
+  #define PS_REG_PM_0 c12
+  #define PS_REG_PM_1 c13
+  #define PS_REG_PM_2 c14
+
+  #define PS_REG_PM_3 c15
+  #define PS_REG_PM_4 c16
+  #define PS_REG_PM_5 c17
+  #define PS_REG_PM_6 c18
+  #define PS_REG_PM_7 c19
+  #define PS_REG_PM_8 c20
+  #define PS_REG_PM_9 c21
+
+  #define PS_REG_PB_0 c16
+  #define PS_REG_PB_1 c17
+  #define PS_REG_PB_2 c18
+  #define PS_REG_PB_3 c19
+  #define PS_REG_PB_4 c20
+  #define PS_REG_PB_5 c21
+  #define PS_REG_PB_6 c22
+  #define PS_REG_PB_7 c23
+  #define PS_REG_PB_8 c24
+  #define PS_REG_PB_9 c25
+#else
+  #define PS_REG_PM_0 c0
+  #define PS_REG_PM_1 c1
+  #define PS_REG_PM_2 c2
+
+  #define PS_REG_PM_3 c3
+  #define PS_REG_PM_4 c4
+  #define PS_REG_PM_5 c5
+  #define PS_REG_PM_6 c6
+  #define PS_REG_PM_7 c7
+  #define PS_REG_PM_8 c8
+
+  #define PS_REG_PB_0 c0
+  #define PS_REG_PB_1 c1
+  #define PS_REG_PB_2 c2
+  #define PS_REG_PB_3 c3
+  #define PS_REG_PB_4 c4
+  #define PS_REG_PB_5 c5
+  #define PS_REG_PB_6 c6
+  #define PS_REG_PB_7 c7
+  #define PS_REG_PB_8 c8
+  #define PS_REG_PB_9 c9
+#endif
+
+#ifdef D3D10
+  #define GS_REG_PM_0 c0
+#else
+  #define GS_REG_PM_0 c-1
+#endif
+
+// Vertex shader parameters
+float4x4 vpMatrix : PI_ViewProjection < vsregister = c0; >;
+float3x4 ObjWorldMatrix : PI_ObjMatrix < vsregister = c0; >;
+float4 AmbientOp  : PI_AmbientOpacity < psregister = PS_REG_PB_8; vsregister = c3; >;
+
+// Pixel shader parameters
+float4 MatDifColor  : PM_MatDiffuseColor  < psregister = PS_REG_PM_0; vsregister = VS_REG_PM_0; gsregister = GS_REG_PM_0; >;
+float4 MatSpecColor : PM_MatSpecularColor < psregister = PS_REG_PM_1; vsregister = VS_REG_PM_1; >;
+float4 MatEmissiveColor : PM_MatEmissiveColor < psregister = PS_REG_PM_2; >;
+
+float4 LDiffuses0 : PL_LDiffuseColors   < psregister = PS_REG_PL_00; >;
+float4 WorldLightsPos0 : PL_LightsPos   < psregister = PS_REG_PL_01; vsregister = VS_REG_PL_0; >;
+float4 ShadowChanMasks0 : PL_ShadowMasks < psregister = PS_REG_PL_02; >;
+float4 LSpeculars0 : PL_LSpecularColors  < psregister = PS_REG_PL_03; >;
+
+float4 LDiffuses1 : PL_LDiffuseColors   < psregister = PS_REG_PL_10; >;
+float4 WorldLightsPos1 : PL_LightsPos   < psregister = PS_REG_PL_11; vsregister = VS_REG_PL_1; >;
+float4 ShadowChanMasks1 : PL_ShadowMasks < psregister = PS_REG_PL_12; >;
+
+float4 LDiffuses2 : PL_LDiffuseColors   < psregister = PS_REG_PL_20; >;
+float4 WorldLightsPos2 : PL_LightsPos   < psregister = PS_REG_PL_21; vsregister = VS_REG_PL_2; >;
+float4 ShadowChanMasks2 : PL_ShadowMasks < psregister = PS_REG_PL_22; >;
+
+float4 LDiffuses3 : PL_LDiffuseColors   < psregister = PS_REG_PL_30; >;
+float4 WorldLightsPos3 : PL_LightsPos   < psregister = PS_REG_PL_31; vsregister = VS_REG_PL_3; >;
+float4 ShadowChanMasks3 : PL_ShadowMasks < psregister = PS_REG_PL_32; >;
+
+float4 Ambient      : PI_Ambient       < psregister = PS_REG_PB_9; vsregister = c3 >;
+
+//=============================================================================
+//=== Global constants ========================================================
+
+// !!! Be careful to avoid overlapping of global registers with any other PB/PI registers used in ALL shaders !!!
+
+#ifdef D3D10
+  #define VS_REG_VIEW_PROJ_MATR  c0
+  #define VS_REG_SUN_LIGHT_DIR   c4
+  #define VS_REG_SKY_COLOR       c5
+  #define VS_REG_WORLD_VIEW_POS  c6
+  #define VS_REG_SCREEN_SIZE     c7
+  #define VS_REG_ANIMGEN_PARAMS  c8
+  #define VS_REG_NEAR_FAR_DIST   c9
+  #define VS_REG_VIEW_PROJ_ZERO_MATR c10
+
+  #define VS_REG_SKIN_DATA       c0
+  #define VS_REG_INSTANCE_DATA   c0
+  #define VS_REG_NOISE_TABLE     c0
+  #define VS_REG_SHAPE_DEFORM_DATA c0
+
+  #define PS_REG_SKY_COLOR       c0
+  #define PS_REG_SUN_COLOR       c1
+  #define PS_REG_SUN_LIGHT_DIR   c2
+  #define PS_REG_FOG_COLOR       c3
+
+  #define GS_REG_VIEW_PROJ_MATR  c0
+  #define GS_REG_NEAR_FAR_DIST   c4
+  #define GS_REG_WORLD_VIEW_POS  c5
+  #define GS_REG_VIEW_PROJ_ZERO_MATR  c6
+#else
+  #define VS_REG_SUN_LIGHT_DIR   c29
+  #define VS_REG_SKY_COLOR       c30
+  #define VS_REG_WORLD_VIEW_POS  c31
+  #define VS_REG_SCREEN_SIZE     c32
+  #define VS_REG_ANIMGEN_PARAMS  c33
+  #define VS_REG_NEAR_FAR_DIST   c34
+  #define VS_REG_VIEW_PROJ_MATR  c36
+  #define VS_REG_VIEW_PROJ_ZERO_MATR  c25
+
+  #define VS_REG_SKIN_DATA       c40
+  #define VS_REG_INSTANCE_DATA   c40
+  #define VS_REG_NOISE_TABLE     c100
+  #define VS_REG_SHAPE_DEFORM_DATA c240
+
+  #define PS_REG_SKY_COLOR       c28
+  #define PS_REG_SUN_COLOR       c29
+  #define PS_REG_SUN_LIGHT_DIR   c30
+  #define PS_REG_FOG_COLOR       c31
+
+  #define GS_REG_VIEW_PROJ_MATR  c-1
+  #define GS_REG_VIEW_PROJ_ZERO_MATR  c-1
+  #define GS_REG_NEAR_FAR_DIST   c-1
+  #define GS_REG_WORLD_VIEW_POS  c-1
+#endif
+
+#ifdef D3D10
+  #define VS_SG_REG_FRUSTRUM     c0
+  #define PS_SG_REG_FRUSTRUM     c0
+
+  #define VS_SG_REG_ShadowMatr0  c2
+  #define VS_SG_REG_ShadowMatr1  c6
+  #define VS_SG_REG_ShadowMatr2  c10
+  #define VS_SG_REG_ShadowMatr3  c14
+#else
+  #define VS_SG_REG_FRUSTRUM     c35
+  #define PS_SG_REG_FRUSTRUM     c31
+#endif
+
+// .x = 1.0f / (fogEnd - fogStart)
+// .y = fogEnd / (fogEnd - fogStart)
+float4 g_VS_WorldViewPos  : PF_CameraPos < vsregister = VS_REG_WORLD_VIEW_POS; gsregister = GS_REG_WORLD_VIEW_POS; >;
+float4 g_VS_ScreenSize : PF_ScreenSize < vsregister = VS_REG_SCREEN_SIZE; >;
+float4 g_VS_AnimGenParams < vsregister = VS_REG_ANIMGEN_PARAMS; > = { PF_time 2.0, PF_time 0.5, PF_time 1.0, PF_time 0.125};
+float4 g_VS_NearFarClipDist  : PF_NearFarDist < vsregister = VS_REG_NEAR_FAR_DIST; gsregister = GS_REG_NEAR_FAR_DIST; >;
+float4 g_VS_SkyColor        : PF_SkyColor < vsregister = VS_REG_SKY_COLOR; >;
+float4 g_VS_SunLightDir : PF_SunDirection < vsregister = VS_REG_SUN_LIGHT_DIR; >;
+float4x4 g_VS_ViewProjMatr : PF_ViewProjMatrix < vsregister = VS_REG_VIEW_PROJ_MATR; gsregister = GS_REG_VIEW_PROJ_MATR; >;
+float4x4 g_VS_ViewProjZeroMatr : PF_ViewProjZeroMatrix < vsregister = VS_REG_VIEW_PROJ_ZERO_MATR; gsregister = GS_REG_VIEW_PROJ_ZERO_MATR; >;
+
+float4 g_PS_FogColor : PF_FogColor < psregister = PS_REG_FOG_COLOR; >;
+float4 g_PS_SunColor : PF_SunColor < psregister = PS_REG_SUN_COLOR; >;
+float4 g_PS_SkyColor : PF_SkyColor < psregister = PS_REG_SKY_COLOR; >;
+float4 g_PS_SunLightDir : PF_SunDirection < psregister = PS_REG_SUN_LIGHT_DIR; >;
+
+ float2x4 _g_SkinQuat[MAX_NUM_BONES_PER_GROUP] < vsregister = VS_REG_SKIN_DATA; >;
+ float4 _g_ShapeDeformationData[8] < vsregister = VS_REG_SHAPE_DEFORM_DATA; >;
+
+//==========================================================================================
+// Frequently used parameters
+
+float4x4 LightMatrix        : PB_LightMatrix;
+float4 FogInfo              : PB_Fog;
+float4 AvgFogVolumeContrib  : PI_AvgFogVolumeContrib;
+float4 PS_NearFarClipDist   : PB_NearFarDist;
+float4 PS_WorldViewPos      : PB_CameraPos;
+float4 PS_ScreenSize        : PB_ScreenSize;
+float4 AlphaTest            : PI_AlphaTest;    // .w=AlphaTest value, .x=GBuffer value(0..1)
+float4 PBAlphaTest          : PB_AlphaTest;    // .w=AlphaTest value, .x=GBuffer value(0..1)
+float3 CamFrontVector_POM   : PB_CameraFront;
+float4 ResInfoDiffuse       : PB_ResInfoDiffuse;
+float4 ResInfoBump          : PB_ResInfoBump;
+float4 BendInfo             : PI_BendInfo;
+float4 PS_ZRange;
+
+// Deprecated parameters
+float4 ViewPos              : PI_OSCameraPos;
+
+//==================================================================================
+
+float4 LGetDiffuse(int nID)
+{
+#if !%_RT_QUALITY && !%_RT_QUALITY1
+  return LDiffuses0;
+#else
+  if (nID == 0)
+    return LDiffuses0;
+  if (nID == 1)
+    return LDiffuses1;
+  if (nID == 2)
+    return LDiffuses2;
+  if (nID == 3)
+    return LDiffuses3;
+  return float4(0,0,0,0);
+#endif
+}
+
+float4 LGetSpecular(int nID)
+{
+  return LSpeculars0;
+}
+
+float4 LGetPosition(int nID)
+{
+#if !%_RT_QUALITY && !%_RT_QUALITY1
+  return WorldLightsPos0;
+#else
+  if (nID == 0)
+    return WorldLightsPos0;
+  if (nID == 1)
+    return WorldLightsPos1;
+  if (nID == 2)
+    return WorldLightsPos2;
+  if (nID == 3)
+    return WorldLightsPos3;
+  return float4(0,0,0,0);
+#endif
+}
+
+float4 LGetShadowMask(int nID)
+{
+#if !%_RT_QUALITY && !%_RT_QUALITY1
+  return ShadowChanMasks0;
+#else
+  if (nID == 0)
+    return ShadowChanMasks0;
+  if (nID == 1)
+    return ShadowChanMasks1;
+  if (nID == 2)
+    return ShadowChanMasks2;
+  if (nID == 3)
+    return ShadowChanMasks3;
+  return float4(0,0,0,0);
+#endif
+}

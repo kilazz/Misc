@@ -1,0 +1,15 @@
+//=== Components covering for Hemisphere  ===============================
+
+//Parameters should be matched to the IllumHandler.h
+#define NUM_COMPONENTS 4
+
+#define cos30 ( sqrt(3.0)/2.0 )
+#define sin30 ( 1.0/2.0 )
+
+/*const static FLOAT3 vBasisComponents[NUM_COMPONENTS] =
+{
+  FLOAT3(  sqrt(sin30/2.0),  sqrt(sin30/2.0), cos30), //XY
+  FLOAT3( -sqrt(sin30/2.0),  sqrt(sin30/2.0), cos30),  //-XY
+  FLOAT3( -sqrt(sin30/2.0), -sqrt(sin30/2.0), cos30), //-X-Y
+  FLOAT3(  sqrt(sin30/2.0), -sqrt(sin30/2.0), cos30)  //X-Y
+};*/

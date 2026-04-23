@@ -1,0 +1,271 @@
+// Uniform data
+#include "Common.cfi"
+#include "ShadeLib.cfi"
+#include "ModificatorVT.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "ShaderDrawType = General;"
+           "ShaderType = FX;"
+>;
+
+/// Un-Tweakables //////////////////////
+
+float Time = PB_Time;
+
+// Tweakables /////////////////
+
+float BeamLength
+<
+  vsregister      = VS_REG_PM_4.y;
+  string UIWidget = "slider";
+  string UIName   = "Length";
+  float UIMin     = 0.0;
+  float UIMax     = 20.0;
+  float UIStep    = 0.01;
+> = 10;
+
+float OrigLength
+<
+  vsregister      = VS_REG_PM_4.z;
+  string UIWidget = "slider";
+  string UIName   = "OriginalLength";
+  float UIMin     = 0.0;
+  float UIMax     = 20.0;
+  float UIStep    = 0.01;
+> = 10;
+
+float OrigWidth
+<
+  vsregister      = VS_REG_PM_4.w;
+  string UIWidget = "slider";
+  string UIName   = "OriginalWidth";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.01;
+> = 1;
+
+float StartRadius
+<
+  vsregister      = VS_REG_PM_5.x;
+  string UIWidget = "slider";
+  string UIName   = "StartRadius";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.01;
+> = 1;
+
+float EndRadius
+<
+  vsregister      = VS_REG_PM_5.y;
+  string UIWidget = "slider";
+  string UIName   = "EndRadius";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.01;
+> = 2;
+
+float FinalMultiplier
+<
+  vsregister      = VS_REG_PM_5.z;
+  string UIWidget = "slider";
+  string UIName   = "ColorMultiplier";
+  float UIMin     = 0.0;
+  float UIMax     = 32.0;
+  float UIStep    = 0.01;
+> = 1.0;
+
+float SoftIntersectionFactor
+<
+  psregister      = PS_REG_PM_4.x;
+  string UIHelp   = "Controls softness of water surface intersection with other opaque scene geometry";
+  string UIName   = "Soft intersection factor";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.1;
+> = 1.0;
+
+float viewDependencyFactor
+<
+  vsregister      = VS_REG_PM_5.w;
+  string UIHelp   = "Controls view dependence attenuation";
+  string UIName   = "View dependency factor";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.1;
+> = 2.0;
+
+float4 StartColor
+<
+  vsregister      = VS_REG_PM_6;
+  string UIWidget = "color";
+  string UIName   = "StartColor";
+  float UIMin     = 0.0;
+  float UIMax     = 4.0;
+  float UIStep    = 0.01;
+> = {1.0, 1.0, 1.0, 1.0};
+
+float4 EndColor
+<
+  vsregister      = VS_REG_PM_7;
+  string UIWidget = "color";
+  string UIName   = "EndColor";
+  float UIMin     = 0.0;
+  float UIMax     = 4.0;
+  float UIStep    = 0.01;
+> = {1.0, 1.0, 1.0, 0.0};
+
+sampler2D TexSampler = sampler_state
+{
+  Texture = $White;
+};
+
+sampler2D sceneDepthSampler = sampler_state
+{
+  Texture = $ZTarget;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler3D noiseMapSampler = sampler_state
+{
+  Texture = textures/defaults/Noise3D.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+  AddressW = Wrap;
+}
+
+/////////////////////////////
+
+struct v2f
+{
+  float4 HPosition  : POSITION;  //in projection space
+  float2 baseTC    : TEXCOORDN;
+  float4 screenProj : TEXCOORDN;
+  float4 Color     : TEXCOORDN;
+#if %NOISE
+  float4 noiseTC    : TEXCOORDN;
+#endif
+
+};
+
+///////////////// vertex shader //////////////////
+
+v2f BeamVS(app2vertGeneral IN)
+{
+  v2f OUT = (v2f)0;
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  float4 color = 1;
+  float fLerp = 1;
+#if !%MUZZLEFLASH
+  float fiOLength = 1/ OrigLength ;
+
+  // fLerp = vrt->x/OrigLength
+  fLerp = vertPassPos.Position.x * fiOLength ;
+
+  vertPassPos.Position.x = fLerp * BeamLength ;
+
+  // fCurRadius = Lerp(StartRadius, EndRadius, fLerp)
+  float fCurRadius = lerp( StartRadius, EndRadius , fLerp) ;
+
+  float fiOrigWidth = 1 / OrigWidth ;
+
+  vertPassPos.Position.yz = vertPassPos.Position.yz * fiOrigWidth * fCurRadius ;
+
+  color = lerp(StartColor, EndColor, fLerp);
+
+#endif
+
+  OUT.baseTC = IN.baseTC;
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+  float3 camVec = normalize(ViewPos.xyz - vertPassPos.Position.xyz);
+
+  float d = dot(camVec.xyz, vertPassPos.ObjToTangentSpace[2].xyz);
+  d *= d;
+  d = saturate( d  * viewDependencyFactor );
+
+  color.xyz *= FinalMultiplier * saturate(d);
+  OUT.Color = color;
+
+  // Output projected texture coordinates
+  OUT.screenProj = HPosToScreenTC( OUT.HPosition );
+
+#if %NOISE
+  // disabled public parameters usage atm, since there's some issue with it + shadows active at same time
+  float4 noiseGen = float4(0.05, 0, 0, Time*0.1);
+  OUT.noiseTC.x = dot(vertPassPos.Position, noiseGen);
+  noiseGen = float4(0, 0.05, 0, Time*0.15);
+  OUT.noiseTC.y = dot(vertPassPos.Position, noiseGen);
+  noiseGen = float4(0, 0, 0.1, Time*0.05);
+  OUT.noiseTC.z = dot(vertPassPos.Position, noiseGen);
+#endif
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout BeamPS(v2f IN)
+{
+  pixout OUT;
+
+  // load the base
+  half4 baseTex = tex2D(diffuseMapSampler, IN.baseTC.xy);
+  float sceneDepth = DecodeSceneDepth( sceneDepthSampler, IN.screenProj );
+  half fNoise = 1;
+#if %NOISE
+  if( GetShaderQuality() > QUALITY_LOW )
+    fNoise = saturate(tex3D(noiseMapSampler, IN.noiseTC.xyz).a *2 - 0.25);
+#endif
+
+  float beamDepth = IN.screenProj.w;
+  float depth = ( sceneDepth - beamDepth );
+  half softIntersect = 1;
+  if( GetShaderQuality() > QUALITY_LOW )
+    softIntersect = saturate( SoftIntersectionFactor * min(depth, IN.screenProj.w) ) ;
+
+  half fadeBeam = 1;
+  if( GetShaderQuality() > QUALITY_LOW )
+    fadeBeam = min(softIntersect, saturate( SoftIntersectionFactor * (beamDepth - PS_NearFarClipDist.x)) );
+
+  IN.Color.w = 1;
+  OUT.Color = baseTex * IN.Color * MatDifColor * fadeBeam * fNoise;
+
+  return OUT;
+}
+
+// Default technique for beams rendering
+//////////////////////////////// technique ////////////////
+
+technique General
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto BeamVS();
+    PixelShader = compile ps_Auto BeamPS();
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = None;
+
+    SrcBlend = ONE;
+    DestBlend = ONE;
+    AlphaBlendEnable = true;
+
+  }
+}

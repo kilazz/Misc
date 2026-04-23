@@ -1,0 +1,504 @@
+#include "Common.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "NoPreview;"
+           "SupportsAttrInstancing;"
+           "ShaderDrawType = Light;"
+#if %REFRACTION_MAP
+           "Refractive;"
+#endif
+#if %TWO_SIDED_SORTING
+          "ShaderType = Glass;"
+          "Cull = NONE;";
+#else
+          "ShaderType = Glass;";
+#endif
+>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////// Custom shading pass structure /////////////////////////////////////
+
+struct fragPassCustom
+{
+  // Custom per pass data
+  half fTintAmnt;      // tinting amount
+  half fBackLightMul;    // backlighting multiplier
+  half fRefrBumpScl;   // refraction bump scale
+  half3 cRefraction;     // refraction map
+};
+
+struct fragLightPassCustom
+{
+  // ... Custom per light data ...
+};
+
+#include "ShadeLib.cfi"
+
+// Un-Tweakables /////////////////
+float4x4 mCamera      : PB_CameraMatrix;
+float4 AmbientObjectCol : PI_ObjectAmbColComp;//x=Ambient.w, y=ObjColor.w, w = Obj Rend quality
+//////////////////////////////// Common vertex shader ////////////////
+
+#include "VertexLib.cfi"
+
+/// Samplers //////////////////////
+ENVIRONMENTMAP
+ENVIRONMENTCUBEMAP
+
+// Subsurface map is used as a gradient texture
+sampler2D subsurfaceMapSampler = sampler_state
+{
+  Texture = $Subsurface;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler2D screenMapSampler = sampler_state
+{
+  Texture = $BackBuffer;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler2D envMapSamplerRefr
+{
+  Texture = $SceneTarget;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+// Tweakables /////////////////
+
+float TintAmount
+<
+  vsregister      = VS_REG_PM_4.y;
+  string UIHelp   = "Set amount of color tinting";
+  string UIName   = "Tint Amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float RefrBumpScale
+<
+  vsregister      = VS_REG_PM_4.z;
+  string UIHelp   = "Set refraction bump scale";
+  string UIName   = "Refraction Bump Scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.1;
+> = 0.1;
+
+float ReflectionAmount
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Set how much reflective material is";
+  string UIName   = "Reflection Amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 0.25;
+
+float FresnelBias
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Set how much reflective material is";
+  string UIName   = "Fresnel bias";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.001;
+> = 0.2;
+
+float FresnelScale
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIHelp   = "Set fresnel term scale";
+  string UIName   = "Fresnel Scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 32.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float BackLightScale
+<
+  psregister      = PS_REG_PM_3.w;
+  string UIHelp   = "Set back lighting color scale";
+  string UIName   = "Back light scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.1;
+> = 1.0;
+
+float4 FilterColor
+<
+  psregister      = PS_REG_PM_4;
+  string UIHelp   = "Set filter color - diffuse texture also acts like filter color";
+  string UIName   = "Filter color";
+  string UIWidget = "color";
+> = {1.0, 1.0, 1.0, 1.0};
+
+#if %GRADIENT_COLORING
+
+  float GradientMultiplier
+  <
+    psregister      = PS_REG_PM_5.x;
+    string UIName   = "Gradient multiplier";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 10.0;
+    float UIStep    = 0.001;
+  > = 1.0;
+
+#endif
+
+////////////////////////////////////////////////////////
+//                GENERAL PASS
+////////////////////////////////////////////////////////
+
+///////////////// vertex input/output //////////////////
+
+// baseTC.z: tint amount, baseTC.w: reflection amount
+// screenProj.z: refraction bump scale
+
+///////////////// vertex shader //////////////////
+
+vert2FragGeneral GlassVS(app2vertGeneral IN)
+{
+  vert2FragGeneral OUT;
+
+#ifndef OPENGL
+  OUT = (vert2FragGeneral)0;
+#endif
+
+  vs_shared_output( IN, OUT, false );
+
+  // temporary solution until we get tweakables modifiers...
+
+  // custom vertex shader computation
+
+  // pre-multiply/compute constants per-vertex (optimization)
+  OUT.baseTC.z = TintAmount;
+
+  OUT.vBinormal.w = RefrBumpScale*0.1;
+
+  float3 worldTangentS = OUT.vTangent.xyz;
+  float3 worldTangentT = OUT.vBinormal.xyz;
+  float3 worldTangentN = normalize(cross(worldTangentS, worldTangentT)) * OUT.vTangent.w;
+
+  // Support for double sided lighting
+  float3 vEye = normalize( -OUT.vView.xyz );
+  float eyeTangentDot = sign(dot(vEye.xyz, worldTangentN.xyz));
+  OUT.vTangent.w *= eyeTangentDot;
+
+  return OUT;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_unify_parameters( inout fragPass pPass )
+{
+  pPass.bCustomComposition = true;
+  pPass.bHemisphereLighting = true;
+
+  // pre-multiplied constants per-vertex (optimization)
+  pPass.pCustom.fTintAmnt = pPass.IN.baseTC.z;
+  pPass.pCustom.fBackLightMul = BackLightScale;
+  pPass.pCustom.fRefrBumpScl = pPass.IN.vBinormal.w;
+
+  pPass.bRenormalizeNormal = true;
+
+#if %REFRACTION_MAP
+  pPass.bRefractionMap = true;
+#endif
+
+#if %BUMP_DIFFUSE
+  pPass.bDiffuseBump = true;
+#endif
+
+#if %ENVIRONMENT_MAP || %REALTIME_MIRROR_REFLECTION
+  #if %_TT3_TCUBE
+    pPass.nReflectionMapping = REFLECT_CUBE;
+  #else
+    pPass.nReflectionMapping = REFLECT_SPHERE;
+  #endif
+
+  pPass.fReflection_Amount = ReflectionAmount;
+  pPass.fFresnel_Bias = FresnelBias;
+  pPass.fFresnel_Scale = FresnelScale;
+
+#endif
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_begin(inout fragPass pPass)
+{
+  pPass.cDiffuseMap.xyz *= FilterColor.xyz;
+
+#if %REFRACTION_MAP
+  pPass.pCustom.fTintAmnt *= pPass.cDiffuseMap.w;
+#endif
+
+  pPass.cGlossMap = tex2D(glossMapSampler, pPass.IN.baseTC.xy);
+
+  // load the environment map
+  if( pPass.nReflectionMapping > 0 )
+  {
+    #if %REALTIME_MIRROR_REFLECTION
+      half fRecip = 1.0 / pPass.IN.screenProj.w; // 1 alu
+      half2 reflNewst = pPass.IN.screenProj.xy*float2(-1, 1) * fRecip + pPass.cBumpMap.xy;   // 1 alu
+      pPass.cEnvironment = tex2D(envMapSampler, reflNewst);
+    #else
+
+      if( pPass.nReflectionMapping == REFLECT_CUBE)
+      {
+        pPass.cEnvironment = GetEnvironmentCMap(envMapSamplerCUBE, pPass.vReflVec.xyz);
+      }
+      else
+      if( pPass.nReflectionMapping == REFLECT_SPHERE)
+      {
+        float3 vReflectES = pPass.vReflVec.xyz;
+
+        // Don't use correct mapping on low-specs
+        if( pPass.nQuality == QUALITY_HIGH )
+        {
+          // Xform reflection to eye-space (required for correct spherical env. mapping...)
+          float3 vReflectES = ( mul( (float3x3)mCamera, pPass.vReflVec.xyz ) );                           // 3 alu
+
+          float m = - 2.828 * sqrt( vReflectES.z + 1.0 );                                               // 3 alu
+          vReflectES.xy = (vReflectES.xy / m ) + 0.5;
+        }
+
+        pPass.cEnvironment = GetEnvironment2DMap(envMapSampler, vReflectES.xy);
+      }
+   #endif
+  }
+
+  pPass.fFresnel = pPass.fFresnel_Bias + GetFresnel(pPass.fNdotE, 0, 4) * pPass.fFresnel_Scale; // 1 alu
+  if( pPass.nQuality == QUALITY_LOW )
+  {
+    // cheap fresnel for low specs
+    pPass.fFresnel = 1 - saturate( pPass.fNdotE );
+  }
+
+  // Apply fresnel to environment map
+  pPass.cEnvironment *= pPass.fFresnel * pPass.fReflection_Amount;     // 2 alu
+
+   // Apply gradient coloring
+#if %GRADIENT_COLORING
+   half3 cGlassGradient = tex2D(subsurfaceMapSampler, pPass.fNdotE.xx);
+   pPass.cEnvironment.xyz += cGlassGradient * GradientMultiplier;
+#endif
+
+  pPass.pCustom.cRefraction = 0;
+#if %REFRACTION_MAP
+  // Get refraction color
+  float2 refrNewst = (pPass.IN.screenProj.xy/pPass.IN.screenProj.w) + (pPass.cBumpMap.xy * pPass.pCustom.fRefrBumpScl);
+
+  pPass.pCustom.cRefraction = tex2D(envMapSamplerRefr, refrNewst ).xyz;
+
+  // Apply tint
+  pPass.pCustom.cRefraction *= saturate( pPass.cDiffuseMap.xyz + (1 - pPass.pCustom.fTintAmnt)) ;
+#endif
+
+  // Output opacity
+
+  pPass.fAlpha = pPass.IN.Ambient.w;
+
+  // If refraction map used, keep reflections always visible
+#if %_RT_ALPHATEST && %REFRACTION_MAP
+
+  pPass.fAlpha *= pPass.cDiffuseMap.w;
+
+#elif %REFRACTION_MAP
+  pPass.fAlpha *= 0.5;
+#endif
+
+#if !%REFRACTION_MAP
+
+  //pPass.fAlpha *= pPass.cDiffuseMap.w * pPass.fFresnel * pPass.pCustom.fTintAmnt;
+  pPass.fAlpha *= pPass.cDiffuseMap.w * pPass.pCustom.fTintAmnt;
+
+#endif
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_per_light(inout fragPass pPass, inout fragLightPass pLight)
+{
+
+  // Kept for documentation: hlsl 1st saturate not working, swapping multiplication order works (using max(bla, ble) also)
+  //half NdotLBackLight = (saturate(pLight.fNdotL) + saturate(-pLight.fNdotL) * pPass.pCustom.fBackLightMul ) ;  // 1 alu
+
+  half NdotLBackLight = 0;
+  if( pPass.nQuality == QUALITY_HIGH )
+    NdotLBackLight = (saturate(-pLight.fNdotL) * pPass.pCustom.fBackLightMul + saturate(pLight.fNdotL)  ) ;  // 2 alu
+  else
+    NdotLBackLight = saturate(pLight.fNdotL);  // 1 alu
+
+  half3 cDiffuse = pLight.cDiffuse.xyz ;  // 2 alu
+
+  half3 cSpecular = Phong(pPass.vReflVec, pLight.vLight, pPass.fSpecPow);                          // 4 alu
+  cSpecular *= pLight.cSpecular.xyz;                           // 2 alu
+
+  half3 cK = pLight.fOcclShadow * pLight.fFallOff * pLight.cFilter * NdotLBackLight;               // 2 alu
+
+  pPass.cDiffuseAcc.xyz += cDiffuse.xyz * cK.xyz;                                                   // 1 alu
+  pPass.cSpecularAcc.xyz += cSpecular.xyz * cK.xyz;                                                 // 1 alu
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_ambient(inout fragPass pPass, inout half3 cAmbient)
+{
+
+//if !%_RT_REALTIMECM
+  pPass.cSpecularAcc.xyz += cAmbient.xyz * pPass.cEnvironment.xyz;
+//endif
+
+  pPass.cAmbientAcc.xyz = pPass.pCustom.cRefraction.xyz;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_end(inout fragPass pPass, inout half3 cFinal)
+{
+
+  // Final composition
+  cFinal.xyz = pPass.cAmbientAcc.xyz + pPass.pCustom.fTintAmnt * pPass.cDiffuseAcc.xyz * pPass.cDiffuseMap.xyz;  //4 alu
+  if (pPass.nQuality != QUALITY_LOW)
+    cFinal.xyz *= MatDifColor.xyz;
+
+  if( pPass.nReflectionMapping )
+  {
+    //if %_RT_REALTIMECM || %REALTIME_MIRROR_REFLECTION
+    #if %REALTIME_MIRROR_REFLECTION
+      pPass.cSpecularAcc.xyz += pPass.cEnvironment.xyz; // 1 alu
+    #else
+      pPass.cSpecularAcc.xyz += pPass.cEnvironment.xyz * pPass.cDiffuseAcc.xyz; // 1 alu
+    #endif
+  }
+  half3 cSpecular = pPass.cSpecularAcc.xyz * pPass.cGlossMap.xyz;                   // 1 alu
+  if (pPass.nQuality != QUALITY_LOW)
+    cSpecular *= MatSpecColor.xyz;
+  cFinal.xyz += cSpecular;
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#include "fragLib.cfi"
+
+///////////////// pixel shader //////////////////
+
+pixout GlassPS(vert2FragGeneral IN)
+{
+  pixout OUT = (pixout) 0;
+
+  // Initialize fragPass structure
+  fragPass pPass = (fragPass) 0;
+  frag_unify(pPass, IN);
+
+  half4 cFinal = frag_shared_output(pPass);
+
+  HDROutput(OUT, cFinal, 1);
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script = 
+        "TechniqueZ=ZPass;"
+        "TechniqueMotionBlur=MotionBlurPass;"
+        "TechniqueCaustics=CausticsPass;"
+#ifndef %DISABLE_RAIN_PASS
+        "TechniqueRainPass=RainPass;"
+#endif
+        "TechniqueShadowGen=ShadowGen;"
+#ifdef D3D10
+        "TechniqueShadowGenDX10=ShadowGenGS;"
+#endif
+        "TechniqueShadowPass=ShadowPass;"
+>
+{
+#if %TWO_SIDED_SORTING
+  pass p0
+  {
+    VertexShader = compile SHADER_MODEL_VS GlassVS() GeneralVS;
+    PixelShader = compile SHADER_MODEL_PS GlassPS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = Front;
+
+    SrcBlend = SRC_ALPHA;
+    DestBlend = ONE_MINUS_SRC_ALPHA;
+    AlphaBlendEnable = true;
+  }
+#endif
+
+  pass p1
+  {
+    VertexShader = compile SHADER_MODEL_VS GlassVS() GeneralVS;
+    PixelShader = compile SHADER_MODEL_PS GlassPS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+
+#if %TWO_SIDED_SORTING
+    ZWriteEnable = true; // force writtig
+#endif
+
+    CullMode = Back;
+
+    SrcBlend = SRC_ALPHA;
+    DestBlend = ONE_MINUS_SRC_ALPHA;
+    AlphaBlendEnable = true;
+  }
+
+}
+
+//////////////////////////////// Common techniques ////////////////
+
+#include "CommonZPass.cfi"
+#include "CommonMotionBlurPass.cfi"
+#include "CommonCausticsPass.cfi"
+#ifndef %DISABLE_RAIN_PASS
+  #include "CommonRainPass.cfi"
+#endif
+#include "ShadowCommon.cfi"
+#include "CommonShadowGenPass.cfi"
+#ifdef D3D10
+  #include "CommonShadowGenPassGS.cfi"
+#endif
+#include "CommonShadowPass.cfi"
+
+/////////////////////// eof ///

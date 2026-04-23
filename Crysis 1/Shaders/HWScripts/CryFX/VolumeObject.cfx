@@ -1,0 +1,230 @@
+#include "Common.cfi"
+#include "ModificatorVT.cfi"
+
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "ShaderDrawType = General;"
+           "ShaderType = FX;"
+           "LocalConstants;"
+>;
+
+float4x4 objMatrix        : PI_TransObjMatrix;
+float3 cameraFrontVector  : PB_CameraFront;
+
+float3x4  invObjSpaceMatrix;
+float3    eyePosInOS;
+float3    eyePosInWS;
+float2    viewerIsOutside;
+
+float4     darkColor;
+float4     brightColor;
+float4    volumeTraceStartPlane;
+float4    scaleConsts;
+
+sampler3D volDensitySampler = sampler_state
+{
+  Texture = $VolObj_Density;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Border;
+  AddressV = Border;
+  AddressW = Border;
+  BorderColor = {0, 0, 0, 0};
+};
+
+sampler3D volShadSampler = sampler_state
+{
+  Texture = $VolObj_Shadow;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Border;
+  AddressV = Border;
+  AddressW = Border;
+  BorderColor = {0, 0, 0, 0};
+};
+
+sampler2D sceneDepthSampler = sampler_state
+{
+  Texture = $ZTarget;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler2D grainNoiseSampler = sampler_state
+{
+  Texture = textures/defaults/vector_noise.dds;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+struct a2v
+{
+  float4 Position : POSITION;
+};
+
+struct v2f
+{
+  float4 hPos          : POSITION;
+  float3 eyeDirInWS    : TEXCOORDN;
+  float3 eyeDirInOS    : TEXCOORDN;
+  float4 hPosTexProj  : TEXCOORDN;
+
+  //float4 test  : TEXCOORDN;
+};
+
+v2f VS( a2v IN )
+{
+  v2f OUT = (v2f) 0;
+
+  float4 vPos = IN.Position;
+  float4 hPos = mul( vpMatrix, vPos );
+
+  OUT.hPos = hPos;
+  // multiply homogeneous z by either zero (inside) or one (outside) to prevent far clipping plane artifacts if we're inside a huge fog volume
+  OUT.hPos.z *= viewerIsOutside.x;
+
+  OUT.hPosTexProj = hPos;
+  OUT.hPosTexProj.x = (  OUT.hPosTexProj.x + OUT.hPosTexProj.w ) * 0.5;
+  OUT.hPosTexProj.y = ( -OUT.hPosTexProj.y + OUT.hPosTexProj.w ) * 0.5;
+#ifndef D3D10
+  OUT.hPosTexProj.xy += g_VS_ScreenSize.zw * OUT.hPosTexProj.w;
+#endif
+
+  OUT.eyeDirInWS = mul( (float3x4) objMatrix, vPos ) - eyePosInWS;
+  OUT.eyeDirInOS = mul( (float3x3) invObjSpaceMatrix, OUT.eyeDirInWS.xyz );
+
+  //OUT.test = viewerIsOutside.x * 10;
+  //OUT.test = viewerIsOutside.y * 10;
+
+  return OUT;
+}
+
+pixout PS( v2f IN )
+{
+  pixout OUT = (pixout) 0;
+
+  // Debug output
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, float4(0, 0, 0, 1));
+   return OUT;
+ #endif
+
+  ////////////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////
+
+  float sceneDepth = DecodeSceneDepth( sceneDepthSampler, IN.hPosTexProj );
+  //float3 noise = tex2Dproj(grainNoiseSampler, float4(IN.hPosTexProj.xy * 15, IN.hPosTexProj.zw));
+
+  float3 viewDirWS = normalize(IN.eyeDirInWS.xyz);
+  float3 viewDir = normalize(IN.eyeDirInOS.xyz);
+
+  float t1 = -volumeTraceStartPlane.w - dot(volumeTraceStartPlane.xyz, eyePosInWS.xyz);
+  t1 /= dot(volumeTraceStartPlane.xyz, viewDirWS);
+
+  float3 p = eyePosInWS + viewDirWS * t1;
+
+  p = mul( (float3x4) invObjSpaceMatrix, float4(p, 1));
+  p = p * 0.5 + 0.5;
+
+#if %USE_SM30
+  int numSamples = 64;
+#else
+  int numSamples = 32;
+#endif
+  float weight = 1;
+
+  float3 stepSize = sqrt(3) *  viewDir / numSamples; // TODO: sqrt(3) replaced by extend of tightBounds -> better sampling!
+  stepSize *= weight;
+
+  //float r = (noise.x * 2 - 1);
+  //p += r * stepSize ;
+
+  float density = 1;
+  float shad = 1;
+  float4 col = float4(0, 0, 0, 0.001);
+
+  float c = 1 / dot( viewDirWS, -cameraFrontVector );
+
+  sceneDepth *= c;
+  float fs = sqrt(3) * scaleConsts.x * 2.0 / numSamples;  // TODO: sqrt(3) replaced by extend of tightBounds -> better sampling!
+
+  //float f = -(dot(eyePosInWS, volumeTraceStartPlane.xyz) + volumeTraceStartPlane.w) * c;
+  float f = t1;
+  //f += r * fs;
+
+  float fogDist = f;
+
+  //for( int a = 0; a < numSamples; a++ )
+  for( int a = 0; a < numSamples; a += 2 )
+  {
+    float curShadow = tex3D(volShadSampler, p).a;
+
+    [unroll]
+    for( int i = 0; i < 2; ++i )
+    {
+      float curDensity = tex3D(volDensitySampler, p).a;
+
+  #if %SOFT_OBJECT_INTERSECTION
+      curDensity *= saturate((sceneDepth - f) / fs);
+  #endif
+
+      f += fs;
+
+      float3 sampleCol = lerp(darkColor.xyz, brightColor.xyz, curShadow);
+      col += (1 - col.w) * curDensity * float4(sampleCol, 1);
+
+      fogDist += fs * saturate(1 - col.w);
+
+      p += stepSize;
+    }
+  }
+
+  col.xyz /= col.w;
+
+#if %BACK_LIGHTING
+  half arg = 0.5 + ( -col.w + 0.4 ) * 0.8;
+  half mask = saturate( arg );
+  float spec = 5 * pow( saturate( dot( viewDirWS.xyz, g_PS_SunLightDir.xyz ) ), 20 );
+  col.xyz = col.xyz + col.w * mask * spec * brightColor;
+#endif
+
+#if %_RT_FOG
+  half4 fogColor = GetVolumetricFogColor(eyePosInWS.xyz + fogDist * viewDirWS.xyz);
+  col.xyz = lerp( fogColor.xyz, col.xyz, fogColor.w ).xyz;
+
+  //vRes.xyz = lerp( AvgFogVolumeContrib.xyz * vRes.w, vRes.xyz, AvgFogVolumeContrib.w );
+#endif
+
+  col.w *= darkColor.w;
+  //col = float4(IN.test.xyz, 1);
+  OUT.Color = half4(col);
+
+  return( OUT );
+}
+
+technique General
+{
+  pass p0
+  {
+#if %USE_SM30
+    VertexShader = compile vs_3_0 VS();
+    PixelShader = compile ps_3_0 PS();
+#else
+    VertexShader = compile vs_Auto VS();
+    PixelShader = compile ps_Auto PS();
+#endif
+
+    ZEnable = false;
+    ZWriteEnable = false;
+  }
+}

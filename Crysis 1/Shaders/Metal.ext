@@ -1,0 +1,101 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: Metal.ext
+// Created: 19/11/2004 by Tiago Sousa
+
+Version (1.00)
+
+Property
+{
+  Name            = %ENVIRONMENT_MAP
+  Mask            = 0x10
+  Property        (Environment map)
+  Description     (Use environment map as separate texture)
+  DependencyReset = $TEX_EnvCM
+}
+
+Property
+{
+  Name        = %ALPHAGLOW
+  Mask        = 0x20
+  Property    (Glow in Diffuse alpha)
+  Description (Use alpha channel of diffuse texture for glow)
+}
+
+Property
+{
+  Name            = %BUMP_DIFFUSE
+  Mask            = 0x100
+  Property        (BumpDiffuse)
+  Description     (Use separate bump map for diffuse lighting)
+  DependencySet   = $TEX_BumpDiffuse
+  DependencyReset = $TEX_BumpDiffuse
+  Hidden
+}
+
+Property
+{
+  Name            = %SPECULARPOW_GLOSSALPHA
+  Mask            = 0x200
+  Property        (PerPixel Spec. Shinines)
+  Description     (Use specular shininess coef. as alpha channel of gloss texture)
+  DependencyReset = $TEX_Gloss
+}
+
+Property
+{
+  Name        = %VERTCOLORS
+  Mask        = 0x1000
+  Property    (Vertex Colors)
+  Description (Use vertex colors)
+}
+
+Property
+{
+  Name        = %ANISO_SPECULAR
+  Mask        = 0x2000
+  Property    (Anisotropic specular)
+  Description (Use Anisotropic specular version)
+}
+
+Property
+{
+  Name            = %OFFSETBUMPMAPPING
+  Mask            = 0x4000
+  Property        (Offset bump mapping)
+  Description     (Use Offset bump mapping (requires height map in alpha channel of bump texture))
+  DependencyReset = $TEX_Bump
+}
+
+Property
+{
+  Name        = %DETAIL_BUMP_MAPPING
+  Mask        = 0x8000
+  Property    (Detail bump mapping)
+  Description (Use detail bump mapping)
+}
+
+Property
+{
+  Name        = %DISABLE_RAIN_PASS
+  Mask        = 0x10000
+  Property    (Disable rain layer)
+  Description (Disables rain layer)
+}
+
+Property
+{
+  Name            = %STAT_BRANCHING
+  Mask            = 0x10000000
+  DependencySet   = $HW_StaticBranching
+  DependencyReset = $HW_StaticBranching
+  Hidden
+}
+
+Property
+{
+  Name            = %DYN_BRANCHING
+  Mask            = 0x20000000
+  DependencySet   = $HW_DynamicBranching
+  DependencyReset = $HW_DynamicBranching
+  Hidden
+}

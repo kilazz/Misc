@@ -1,0 +1,683 @@
+///////////////////////////////////////////////
+// common samplers
+
+#ifdef %NO_MATERIAL
+
+  #ifdef %FAKE_SPECULAR
+    #undefine %FAKE_SPECULAR
+  #endif
+
+  #ifdef %REFRACTION
+    #undefine %REFRACTION
+  #endif
+
+  #ifdef %SCREEN_SPACE_DEFORMATION
+    #undefine %SCREEN_SPACE_DEFORMATION
+  #endif
+
+#endif
+
+sampler2D sceneDepthSampler = sampler_state
+{
+ Texture = $ZTarget;
+ MinFilter = POINT;
+ MagFilter = POINT;
+ MipFilter = POINT;
+ AddressU = Clamp;
+ AddressV = Clamp;
+};
+
+sampler2D envMapSamplerRefr
+{
+  Texture = $SceneTarget;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler2D fakeSpecMapSampler {  Texture = $CustomMap; };
+
+////////////////////////////////////////////////
+// shader constants
+
+float4 GlowParams         : PB_GlowParams;
+
+////////////////////////////////////////////////
+// structs
+
+struct v2f
+{
+  float4 Position  : POSITION;    // in projection space
+
+#if !%NO_MATERIAL
+  float4 vTangent  : TEXCOORDN;   // w is normal.x
+  float4 vBinormal : TEXCOORDN;   // w is normal.y
+#else
+  float4 vNormal  : TEXCOORDN;   // optimized case for particles with no material
+#endif
+
+  float4 vView     : TEXCOORDN;   // w is normal.z
+
+  float3 baseTC    : TEXCOORDN;    // z value used for backlighting coeff
+  float4 Color     : COLOR0;
+
+  float4 screenProj  : TEXCOORDN;
+
+ #if %_LT_LIGHTS && %_LT_HASPROJ
+  float4 projTC    : TEXCOORDN;
+ #endif
+
+#ifdef %_RT_SOFT_PARTICLE
+  float4 particleFade : TEXCOORDN;
+#endif
+
+  float4 localFogColor : TEXCOORDN;
+};
+
+/////////////////////////////////////////////////
+// shader code
+
+v2f ParticleTransform(in app2vertParticleGeneral IN)
+{
+  v2f OUT;
+#ifndef OPENGL
+  OUT = (v2f)0;
+#endif
+
+  //////////////////////////////////////////////////////
+  // Setup particle
+
+  vert2FragParticleGeneral outParticle;
+  float4 vPos = IN.Position;
+
+  Particle_Setup_General( vPos, g_VS_ViewProjMatr, IN, outParticle);
+
+  OUT.Position = outParticle.Position;
+
+  #ifdef %_RT_SOFT_PARTICLE
+    OUT.particleFade = outParticle.particleFade;
+  #endif
+
+  //////////////////////////////////////////////////////
+
+  // Output the screen-space texture coordinates
+  OUT.screenProj = HPosToScreenTC(OUT.Position);
+
+  OUT.baseTC.xy = IN.baseTC.xy;
+  OUT.Color = GetInputColor(IN.Color);
+
+#ifdef !%NO_MATERIAL
+  OUT.Color.xyz *= MatDifColor;
+#endif
+
+  //////////////////////////////////////////////////////
+  // camera-facing tangent space.
+
+  float3x3 tangentSpace;
+  tangentSpace[2] = normalize( vfViewPos - vPos );
+  float3 r = cross( CameraUpVector.xyz, tangentSpace[2] );
+  float3 u = cross( tangentSpace[2], r );
+
+  tangentSpace[0] = normalize( r * IN.ScreenRot.x + u * IN.ScreenRot.y );
+  tangentSpace[1] = -normalize( r * IN.ScreenRot.z + u * IN.ScreenRot.w );
+
+  // rotate tangents for fake round geometry
+  float3 offset = tangentSpace[0] * IN.Expansion.x - tangentSpace[1] * IN.Expansion.y;
+  float3 axis = ( cross(tangentSpace[2], offset) );
+  tangentSpace[0] = ( axis * dot(axis, tangentSpace[0]) + cross(axis, tangentSpace[0]) );
+  tangentSpace[1] = ( axis * dot(axis, tangentSpace[1]) + cross(axis, tangentSpace[1]) );
+  tangentSpace[2] = ( cross( axis, tangentSpace[2] ) );
+
+  OUT.vView.xyz = vPos.xyz- g_VS_WorldViewPos.xyz;
+
+#if !%NO_MATERIAL
+  OUT.vTangent.xyz = tangentSpace[0];
+  OUT.vBinormal.xyz = tangentSpace[1];
+
+  // Output normal in w components to save 1 interpolator (2 extra alu in pixel shader though..)
+  OUT.vTangent.w = tangentSpace[2].x;
+  OUT.vBinormal.w = tangentSpace[2].y;
+  OUT.vView.w = tangentSpace[2].z;
+#else
+
+  OUT.vNormal.xyz = tangentSpace[2].xyz;
+
+#endif
+
+#ifdef %_LT_LIGHTS
+  // backlighting coeff
+  OUT.baseTC.z = IN.Expansion.z;
+
+  // 0 type = directional light source (no attenuation)
+  // 1 type = omni light source
+  // 2 type = projected light source
+  const int aLType[4] = { %_LT_0_TYPE, %_LT_1_TYPE, %_LT_2_TYPE, %_LT_3_TYPE };
+  for (int i=0; i<%_LT_NUM; i++)
+  {
+    #if %_LT_HASPROJ
+      if (aLType[i] == LT_PROJECTED)
+        OUT.projTC = mul(LightMatrix, vPos);
+    #endif
+  }
+#endif
+
+  OUT.localFogColor = GetVolumetricFogColor( vPos );
+
+//////////////////////////////////////////////////////////////////////
+
+  return OUT;
+}
+
+v2f ParticleVS(app2vertParticleGeneral IN)
+{
+#ifdef D3D10
+  IN.Expansion.xyzw = IN.Expansion.zyxw;
+#endif
+  IN.Expansion.xy = IN.Expansion.xy * 2.0 - 1.0;
+
+  return ParticleTransform(IN);
+}
+
+#ifdef D3D10
+app2vertParticleGeneral ParticleVS_GSPassThrough(app2vertParticleGeneral IN)
+{
+  return IN;
+}
+
+v2f ParticleTransform(in app2vertParticleGeneral IN, int i)
+{
+  const float2 c_expansion[4] =
+  {
+      float2( 1,  1),
+      float2(-1,  1),
+      float2( 1, -1),
+      float2(-1, -1)
+  };
+
+  const float2 c_texcoord[4] =
+  {
+      float2(1,0),
+      float2(0,0),
+      float2(1,1),
+      float2(0,1)
+  };
+
+  IN.baseTC.xy = IN.baseTC.xy + c_texcoord[i].xy * IN.Expansion.xy;
+  IN.Expansion.xy = c_expansion[i].xy;
+
+  return ParticleTransform(IN);
+}
+
+[maxvertexcount(4)]
+void ParticleGS(point app2vertParticleGeneral In[1], inout TriangleStream<v2f> OutStream)
+{
+  v2f Out = (v2f) 0;
+  for (int v=0; v<4; v++)
+  {
+    Out = ParticleTransform(In[0], v);
+    OutStream.Append(Out);
+  }
+  OutStream.RestartStrip();
+}
+
+#endif
+
+pixout ParticlePS(v2f IN)
+{
+  pixout OUT;
+  int nQuality = GetShaderQuality();
+
+  half4 shadowOccl = tex2Dproj(shadowOccludeMapSampler, IN.screenProj.xyzw);
+  half4 baseColor =tex2D(diffuseSampler, IN.baseTC.xy);
+
+#if !%NO_MATERIAL
+  half3x3 mTangentToWS = float3x3(IN.vTangent.xyz, IN.vBinormal.xyz, float3(IN.vTangent.w,
+                                                                            IN.vBinormal.w,
+                                                                            IN.vView.w) );
+
+  #if %SCREEN_SPACE_DEFORMATION
+    if( nQuality >QUALITY_LOW )
+    {
+      half3 vBump = half3(0,0,1);
+      // apply rescale
+      PerturbationScale *= IN.screenProj.w* 0.05;
+
+      float2 tcProj = IN.screenProj.xy/IN.screenProj.w;
+      float2 tcAnim = float2(0, AnimGenParams.z * AnimSpeed);
+
+      vBump.xy = tex2D(customSampler, (tcProj-0.5) * PerturbationScale + 0.5 + tcAnim ).xy;
+      vBump.xy += tex2D(customSampler, (tcProj-0.5) * PerturbationScale * 1.5 + 0.5 + tcAnim ).xy;
+      vBump.xy = vBump.xy * 2.0  - 2.0;
+      vBump.xyz = normalize(vBump.xyz);
+      IN.baseTC.xy += vBump.xy * PerturbationStrenght * baseColor.w;
+    }
+  #endif
+
+#endif
+
+  // load the base, modulate by vertex color
+  baseColor = tex2D(diffuseSampler, IN.baseTC.xy);
+  baseColor *= IN.Color;
+
+  #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    DebugOutput(OUT.Color, float4(IN.baseTC.xy, 0, 1));
+    return OUT;
+  #endif
+
+  // load the bump normal
+  half4 refrColor = 0;
+  half3 bumpNormal = half3(0,0,1);
+  #if !%NO_MATERIAL
+    half3 vNormal = mTangentToWS[2].xyz;
+    bumpNormal = GetNormalMap(bumpMapSampler, IN.baseTC.xy);
+    // Put normal in world space - should be renormalized but its more 3 alu
+    vNormal = ( ( mul(bumpNormal, mTangentToWS) ) );  // 3 alu
+
+    #if %REFRACTION
+      half2 refrTC = (IN.screenProj.xy/IN.screenProj.w) + bumpNormal.xy * RefrBumpScale.x;
+      refrColor = tex2D(envMapSamplerRefr, refrTC );
+    #endif
+  #else
+    half3 vNormal = IN.vNormal.xyz;
+  #endif
+
+  half4 finalColor = half4(0,0,0,0);
+
+  #if %_LT_LIGHTS && !%REFRACTION
+    const int aLType[4] = {%_LT_0_TYPE, %_LT_1_TYPE, %_LT_2_TYPE, %_LT_3_TYPE};
+
+    // Only specular pass is used for light-map light sources
+ #ifdef D3D10
+  [unroll]
+ #endif
+    for (int i=0; i<%_LT_NUM; i++)
+    {
+      float nType = aLType[i];
+      half3 filterColor = 1;
+      half fFallOff = 1;
+
+      float4 WorldLightPos;
+      float3 vLight, vLightWS;
+      half4 ShadowChanMask;
+
+      if (nType == LT_DIRECTIONAL)
+      {
+        // Some optimisations for sun light (per-frame parameters and hardcoded values)
+        // also no attenuation and light normalization
+        WorldLightPos = g_PS_SunLightDir;
+        vLight = WorldLightPos.xyz;
+        ShadowChanMask = float4(1, 0, 0, 0); // default shadow mask for sun light
+      }
+      else
+      {
+        WorldLightPos = LGetPosition(i);
+
+        vLightWS = WorldLightPos.xyz - IN.vView.xyz;
+        vLight = normalize(vLightWS.xyz);                                                           // 3 alu
+        fFallOff = GetAttenuation(vLightWS.xyz, WorldLightPos.w);                                   // 2 alu
+        ShadowChanMask = LGetShadowMask(i);
+      }
+
+      // Shadow occlusion
+      half fShadow = saturate( 1-dot(shadowOccl, ShadowChanMask) );
+
+    #if %_LT_HASPROJ
+      // Get projector filter color if needed
+      if (aLType[i] == LT_PROJECTED)
+        filterColor = texCUBE(projCubeSampler, IN.projTC.xyz);
+    #endif
+
+      // Calculate diffuse contribution.
+      half3 lVec = vLight;
+      half fLdotN = dot(lVec.xyz, vNormal.xyz);
+      half fIllum = saturate(fLdotN) * (1-IN.baseTC.z) + (IN.baseTC.z);
+      half3 vDif = LGetDiffuse(i).xyz * fIllum * fFallOff * fShadow * filterColor; // fFallOff and filterColor gets optimized away by compiler when equal 1
+
+      finalColor.xyz += vDif.xyz;
+    }
+  #endif
+
+  half3 cDiffAcc = finalColor.xyz;
+
+  // Scale by diffuse component.
+  finalColor.xyz *= Ambient.w;
+
+  #if %_RT_AMBIENT
+    cDiffAcc.xyz += Ambient.xyz;
+    finalColor.xyz += Ambient.xyz;
+  #endif
+
+  // Apply material color
+  finalColor.xyz *= baseColor.xyz;
+#if !%NO_MATERIAL
+
+  #if %REFRACTION
+    finalColor.xyz = refrColor.xyz;
+  #endif
+
+  half4 cFakeSpec = 0;
+  #if %FAKE_SPECULAR
+  {
+    // ### Test for Sean ### - trying to fake specularity with reflection map (maybe just some fresnel-ish term would also be enough)
+    half3 vView = normalize(-IN.vView.xyz);
+    half fNdotE = ( dot(vView.xyz, vNormal.xyz));                                        // 1 alu
+    half3 vReflVec = (2.0 * fNdotE * vNormal.xyz) - vView.xyz;
+
+    cFakeSpec.xyz = tex2D( fakeSpecMapSampler, SpecBumpScale * vReflVec.xy);
+    finalColor.xyz += cFakeSpec * SpecMultiplier *MatSpecColor * cDiffAcc;
+  }
+  #endif
+#endif
+
+  finalColor.w = baseColor.w;
+
+  #if %_RT_SOFT_PARTICLE || %_RT_OCEAN_PARTICLE
+    #define sceneDepthTexLookup      IN.screenProj
+
+    float sceneDepth = DecodeSceneDepth( sceneDepthSampler, sceneDepthTexLookup );
+    #if %_RT_OCEAN_PARTICLE
+      half scaleBackground = saturate( ( sceneDepth - IN.screenProj.w ) * 1.0f );
+      half fadeParticle = min(scaleBackground, IN.screenProj.w);
+    #else
+      ////////////////////////////////////////////////////////////////
+      // evaluate travel length through particle volume to fade
+      // out particle when getting close to scene geometry
+      #define cameraFade              IN.particleFade.x
+      #define particleThicknessInv    IN.particleFade.y
+      #define particleRadius          IN.particleFade.z
+      #define particleDepth            IN.particleFade.w
+
+      half scaleBackground = saturate( ( sceneDepth - particleDepth ) * particleThicknessInv );
+      half fadeParticle = min( scaleBackground, cameraFade );
+    #endif
+
+    #if %_RT_ALPHABLEND
+      finalColor.a *= fadeParticle;
+    #else
+      finalColor.rgb *= fadeParticle;
+      finalColor.a = 0.0;
+    #endif
+    ////////////////////////////////////////////////////////////////
+
+  #endif
+
+  #if !%REFRACTION // Wrong! This should actually read... #if %_RT_FOG && !%REFRACTION ... but we leave for now in order not to break Crysis particle assets
+    #if %_RT_ALPHABLEND && %_RT_AMBIENT
+      finalColor.xyz = lerp( IN.localFogColor.xyz, finalColor.xyz, IN.localFogColor.w );
+      finalColor.xyz = lerp( AvgFogVolumeContrib.xyz, finalColor.xyz, AvgFogVolumeContrib.w );
+    #else
+      finalColor.xyz *= IN.localFogColor.w;
+      finalColor.xyz *= AvgFogVolumeContrib.w;
+    #endif
+  #endif
+
+  HDROutput( OUT, finalColor, 1 );
+
+  return OUT;
+}
+
+/////////////////////////////////
+// technique
+
+#ifdef D3D10
+technique Particles
+<
+  string Script = 
+    "TechniqueGlow=GlowPass;"
+    "TechniqueShadowPass=ShadowPassParticleGS;"
+>
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto ParticleVS_GSPassThrough() GeneralVS;
+    GeometryShader = compile gs_4_0 ParticleGS();
+    PixelShader = compile ps_Auto ParticlePS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = None;
+  }
+}
+#endif
+
+technique Particles
+<
+  string Script = 
+    "TechniqueGlow=GlowPass;"
+    "TechniqueShadowPass=ShadowPassParticle;"
+>
+{
+  pass p0
+  {
+
+    VertexShader = compile vs_Auto ParticleVS() GeneralVS;
+    PixelShader = compile ps_Auto ParticlePS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = None;
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////////
+//  Shadow pass
+///////////////////////////////////////////////////////////////////////////////////
+#include "ShadowCommon.cfi"
+#include "CommonShadowPass.cfi"
+
+vert2fragShadow Particle_ShadowTransform(app2vertParticleGeneral IN)
+{
+  vert2fragShadow OUT = (vert2fragShadow)0;
+
+  vert2FragParticleGeneral outParticle;
+
+  float4 vPos = IN.Position;
+
+  Particle_Setup_General( vPos, g_VS_ViewProjMatr, IN, outParticle);
+
+  OUT.HPosition = outParticle.Position;
+
+#ifdef %_RT_ALPHABLEND
+  OUT.baseTC.xy = IN.baseTC.xy;
+#endif
+
+  //TOFIX: replace by separate projected noise tex coords
+  OUT.RandDirTC.xy = mul(vPos.xyz, (float3x3) TexGen0).xy / 800;
+
+  //  compute shadow tex coords and depth
+  GenShadowTC(vPos, OUT.shadowTC);
+
+  return OUT;
+}
+
+vert2fragShadow Particle_ShadowVS(app2vertParticleGeneral IN)
+{
+#ifdef D3D10
+  IN.Expansion.xyzw = IN.Expansion.zyxw;
+#endif
+  IN.Expansion.xy = IN.Expansion.xy * 2.0 - 1.0;
+
+  return Particle_ShadowTransform(IN);
+}
+
+#ifdef D3D10
+
+app2vertParticleGeneral Particle_ShadowVS_GSPassThrough(app2vertParticleGeneral IN)
+{
+  return IN;
+}
+
+vert2fragShadow Particle_ShadowTransform(in app2vertParticleGeneral IN, int i)
+{
+  const float2 c_expansion[4] =
+  {
+      float2( 1,  1),
+      float2(-1,  1),
+      float2( 1, -1),
+      float2(-1, -1)
+  };
+
+  const float2 c_texcoord[4] =
+  {
+      float2(1,0),
+      float2(0,0),
+      float2(1,1),
+      float2(0,1)
+  };
+
+  IN.baseTC.xy = IN.baseTC.xy + c_texcoord[i].xy * IN.Expansion.xy;
+  IN.Expansion.xy = c_expansion[i].xy;
+
+  return Particle_ShadowTransform(IN);
+}
+
+[maxvertexcount(4)]
+void Particle_ShadowGS(point app2vertParticleGeneral In[1], inout TriangleStream<vert2fragShadow> OutStream)
+{
+  vert2fragShadow Out = (vert2fragShadow) 0;
+  for (int v=0; v<4; v++)
+  {
+    Out = Particle_ShadowTransform(In[0], v);
+    OutStream.Append(Out);
+  }
+  OutStream.RestartStrip();
+}
+
+#endif
+
+pixout_cl Particle_ShadowPS(vert2fragShadow IN)
+{
+  pixout_cl OUT;
+
+  float4 vCompare = (float4)0;
+
+  half baseAlpha = 1;
+#if %_RT_ALPHABLEND
+  baseAlpha = tex2D(ShadowDiffuseMapSampler, IN.baseTC.xy).w;
+  baseAlpha *= ShadowAmbient.a;
+#endif
+
+#ifndef %_RT_GSM_COMBINED
+//non-combined GSM
+
+  vCompare = ShadowDepthTest(IN.shadowTC, IN.RandDirTC.xy);
+
+#else
+//GSM ATLAS
+
+  vCompare = ShadowDepthTestAtlas(IN.shadowTC, IN.RandDirTC.xy);
+
+//GSM ATLAS
+#endif
+
+  //shadow fading - is not supported currently
+  //vCompare *= IN.RandDirTC.z;
+
+  OUT.Color = 1 - vCompare;
+#if %_RT_ALPHABLEND
+  OUT.Color.a = baseAlpha;
+#endif
+
+  OUT.Color.a = 0.1;
+
+  return OUT;
+}
+
+#ifdef D3D10
+
+technique ShadowPassParticleGS
+<
+  string Script = 
+        "NoLights;"
+>
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto Particle_ShadowVS_GSPassThrough() ShadowVS;
+    GeometryShader = compile gs_4_0 Particle_ShadowGS();
+    PixelShader = compile ps_Auto Particle_ShadowPS() ShadowPS;
+
+    AlphaBlendEnable = true;
+    SrcBlend = SrcAlpha;
+    DestBlend = InvSrcAlpha;
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = Back;
+  }
+}
+
+#endif
+
+technique ShadowPassParticle
+<
+  string Script = 
+        "NoLights;"
+>
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto Particle_ShadowVS() ShadowVS;
+    PixelShader = compile ps_Auto Particle_ShadowPS() ShadowPS;
+
+    AlphaBlendEnable = true;
+    SrcBlend = SrcAlpha;
+    DestBlend = InvSrcAlpha;
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = Back;
+  }
+}
+
+////////////////////////////////////////////////////////
+//                Glow Pass
+////////////////////////////////////////////////////////
+
+///////////////// pixel shaders //////////////////
+pixout ParticleGlowPS(v2f IN)
+{
+  pixout OUT = (pixout)0;
+  half4 baseColor = tex2D(diffuseSampler, IN.baseTC.xy);
+
+  OUT.Color = (half4)GlowParams;
+
+  OUT.Color *= baseColor * (half4) MatDifColor;
+  OUT.Color.xyz *= baseColor.w;
+  OUT.Color *= IN.Color;
+
+#ifdef %_RT_SOFT_PARTICLE
+
+  ////////////////////////////////////////////////////////////////
+  // evaluate travel length through particle volume to fade
+  // out particle when getting close to scene geometry
+#define cameraFade              IN.particleFade.x
+#define particleThicknessInv    IN.particleFade.y
+#define particleRadius          IN.particleFade.z
+#define particleDepth            IN.particleFade.w
+#define sceneDepthTexLookup      IN.screenProj
+
+  float sceneDepth = DecodeSceneDepth( sceneDepthSampler, sceneDepthTexLookup );
+  float scaleBackground = saturate( ( sceneDepth - particleDepth ) * particleThicknessInv );
+  float fadeParticle = min( scaleBackground, cameraFade );
+
+  OUT.Color.rgb *= fadeParticle;
+#endif
+
+  return OUT;
+}
+
+technique GlowPass
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto ParticleVS() GeneralVS;
+    PixelShader = compile ps_Auto ParticleGlowPS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = None;
+  }
+}

@@ -1,0 +1,587 @@
+#include "Common.cfi"
+
+#define INST_STREAM_CUSTOM                       \
+ #if %_RT_ALPHATEST || %_RT_DISSOLVE             \
+  float4 InstAlphaTest : TEXCOORDN;              \
+ #endif                                          \
+#endif                                           \
+
+// todo: add something like "ForceTranspPass"
+
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+//           "ForceTransPass;"
+           "ForceZpass;"
+           "Hair;"
+           //"DecalNoDepthOffset;"
+           //"ForceDrawLast;"
+           "NoPreview;"
+           "SupportsAttrInstancing;"
+#if %WIND_BENDING
+           "VT_WindBending;"
+#endif
+           "ShaderDrawType = Light;"
+           "ShaderType = General;"
+           "Cull = NONE;"
+           "StartTecnique = r_HairSortingQuality ? General : HiqualityGeneral;";
+>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////// Custom shading pass structure /////////////////////////////////////
+
+struct fragPassCustom
+{
+  // Custom per pass data
+  bool bOpaquePass;
+  half3 vTangent;        // perturbed tangent vector
+  half3 vTangentSec;     // perturbed tangent vector for secondary specular highlight
+
+  half fFresnel;         // fresnel term
+  half fRim;             // cheap rim term
+  half3 cHair;           // hair color
+
+  half fShiftAmount;
+};
+
+struct fragLightPassCustom
+{
+  // ... Custom per light data ...
+};
+
+#include "ShadeLib.cfi"
+
+// Un-Tweakables /////////////////
+float4 AmbientObjectCol : PI_ObjectAmbColComp;//x=Ambient.w, y=ObjColor.w, w = Obj Rend quality
+//////////////////////////////// Common vertex shader ////////////////
+
+#include "VertexLib.cfi"
+
+//////////////////////////////// Samplers ////////////////
+SUBSURFACEMAP
+DECALMAP
+OPACITYMAP
+ENVIRONMENTMAP
+ENVIRONMENTCUBEMAP
+
+// Tweakables /////////////////
+
+float4 HairColor
+<
+  psregister      = PS_REG_PM_3;
+  string UIHelp   = "Set hair color";
+  string UIName   = "Hair color";
+  string UIWidget = "color";
+> = {1.0, 1.0, 1.0, 1.0};
+
+float4 PrimarySpecColor
+<
+  psregister      = PS_REG_PM_4;
+  string UIHelp   = "Set hair primary spec color";
+  string UIName   = "Primary spec color";
+  string UIWidget = "color";
+> = {1.0, 1.0, 1.0, 1.0};
+
+float PrimarySpecPow
+<
+  psregister      = PS_REG_PM_5.x;
+  string UIHelp   = "Set primary specular glossiness ";
+  string UIName   = "Primary spec glossiness";
+  string UIWidget = "slider";
+  float UIMin     = 0.1;
+  float UIMax     = 1000;
+  float UIStep    = 0.001;
+> = 200;
+
+float PrimarySpecShift
+<
+  psregister      = PS_REG_PM_5.y;
+  string UIHelp   = "Set primary specular shift";
+  string UIName   = "Primary spec shift";
+  string UIWidget = "slider";
+  float UIMin     = -1;
+  float UIMax     = 1;
+  float UIStep    = 0.001;
+> = 0.08;
+
+float4 SecondarySpecColor
+<
+  psregister      = PS_REG_PM_6;
+  string UIHelp   = "Set hair secondary spec color";
+  string UIName   = "Secondary spec color";
+  string UIWidget = "color";
+> = {1.0, 1.0, 1.0, 1.0};
+
+float SecondarySpecPow
+<
+  psregister      = PS_REG_PM_5.z;
+  string UIHelp   = "Set secondary specular glossiness";
+  string UIName   = "Secondary spec glossiness";
+  string UIWidget = "slider";
+  float UIMin     = 0.1;
+  float UIMax     = 1000;
+  float UIStep    = 0.001;
+> = 16;
+
+float4 SecondarySpecShift
+<
+  psregister      = PS_REG_PM_5.w;
+  string UIHelp   = "Set secondary specular shift";
+  string UIName   = "Secondary spec shift";
+  string UIWidget = "slider";
+  float UIMin     = -1;
+  float UIMax     = 1;
+  float UIStep    = 0.001;
+> = 0.54;
+
+float DetailTilling
+<
+  vsregister      = VS_REG_PM_4.y;
+  string UIHelp   = "Set detail tilling scale";
+  string UIName   = "Detail tilling";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 100;
+  float UIStep    = 0.001;
+> = 1;
+
+float BumpScale
+<
+  psregister      = PS_REG_PM_7.x;
+  string UIHelp   = "Set hair bumpiness";
+  string UIName   = "Bump scale";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 4.0;
+  float UIStep    = 0.001;
+> = 0.5;
+
+float RimMultiplier
+<
+  psregister      = PS_REG_PM_7.y;
+  string UIHelp   = "Set rim strenght";
+  string UIName   = "Rim multiplier";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 4;
+  float UIStep    = 0.001;
+> = 0.2;
+
+float DiffuseWrap
+<
+  psregister      = PS_REG_PM_7.z;
+  string UIHelp   = "Set diffuse wrapping";
+  string UIName   = "Diffuse wrap";
+  string UIWidget = "slider";
+  float UIMin     = 0.5;
+  float UIMax     = 1;
+  float UIStep    = 0.001;
+> = 0.75;
+
+float ViewOpacity
+<
+  psregister      = PS_REG_PM_7.w;
+  string UIHelp   = "Set view opacity, depending on angle with camera";
+  string UIName   = "View opacity";
+  string UIWidget = "slider";
+  float UIMin     = 1.0;
+  float UIMax     = 10;
+  float UIStep    = 0.001;
+> = 10.0;
+
+float FillMultiplier
+<
+  psregister      = PS_REG_PM_8.x;
+  string UIName   = "Fill multiplier";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 4;
+  float UIStep    = 0.001;
+> = 1.0;
+
+////////////////////////////////////////////////////////
+//                GENERAL PASS
+////////////////////////////////////////////////////////
+
+// Notes:
+
+// baseTC.wz: detail texture coordinates
+// vBinormal.w: normal inversion (for double sided lighting)
+
+///////////////// vertex shader //////////////////
+vert2FragGeneral HairVS(app2vertGeneral IN)
+{
+  vert2FragGeneral OUT;
+
+#ifndef OPENGL
+  OUT = (vert2FragGeneral)0;
+#endif
+
+  vs_shared_output( IN, OUT, false );
+
+  // custom vertex shader computation
+
+  // Detail texture coordinates
+  OUT.baseTC.wz = IN.baseTC * DetailTilling;
+
+  float3 worldTangentS = OUT.vTangent.xyz;
+  float3 worldTangentT = OUT.vBinormal.xyz;
+  float3 worldTangentN = normalize(cross(worldTangentS, worldTangentT)) * OUT.vTangent.w;
+
+  // Support for double sided lighting
+  float3 vEye = normalize( -OUT.vView.xyz );
+  float eyeTangentDot = dot(vEye.xyz, worldTangentN.xyz)*0.8 + 0.2;
+  OUT.vTangent.w *= eyeTangentDot;// * OUT.vTangent.w;
+
+  //OUT.vTangent.xyz *=OUT.vTangent.w;
+  //OUT.vBinormal.xyz *=OUT.vTangent.w;
+
+ #if %_RT_INSTANCING_ATTR
+    AlphaTest = IN.InstAlphaTest;
+ #endif
+
+  OUT.vBinormal.w = 1.0 / 0.5;// AlphaTest.w;
+
+  // test: output hair center instead for shadow
+  //OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+  //// Output the screen-space texture coordinates - for shadows and general projections
+  //OUT.screenProj = HPosToScreenTC(OUT.HPosition);
+
+  return OUT;
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_unify_parameters( inout fragPass pPass )
+{
+
+  pPass.bRenormalizeNormal = false;
+  pPass.bCustomComposition = true;
+  pPass.bHemisphereLighting = true;
+  pPass.bDisableAlphaTestD3D10 = true;
+
+#if %VERTCOLORS
+  pPass.bVertexColors = true;
+#endif
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_begin(inout fragPass pPass)
+{
+
+  pPass.cGlossMap = tex2D(glossMapSampler, pPass.IN.baseTC.xy);
+  pPass.pCustom.cHair = pPass.cDiffuseMap.xyz * (half3) HairColor.xyz * 2.0;
+
+  // tangent/binormal shifting amount
+  pPass.pCustom.fShiftAmount = tex2D(glossMapSampler, pPass.IN.baseTC.wz).w*2-1;
+  float fShiftAmount = (pPass.pCustom.fShiftAmount * 2 - 1) * (half) BumpScale;
+
+  // get constant fresnel (bias = 0, pow = 4)
+  pPass.pCustom.fFresnel = GetFresnelTex(pPass.fNdotE, 0).w;
+
+  pPass.pCustom.fRim = pPass.pCustom.fFresnel * RimMultiplier;
+
+  // Use constant shifting parameters (0.08, 0.54)
+  pPass.pCustom.vTangent = ShiftVectorOpt(pPass.IN.vBinormal.xyz, pPass.vNormal.xyz*pPass.IN.vTangent.w, fShiftAmount +PrimarySpecShift); // 2 alu
+  pPass.pCustom.vTangentSec = ShiftVectorOpt(pPass.IN.vBinormal.xyz, pPass.vNormal.xyz*pPass.IN.vTangent.w, fShiftAmount +SecondarySpecShift); // 2 alu
+
+  // set opacity
+  pPass.fAlpha = pPass.cDiffuseMap.w;
+  pPass.fAlpha *= 2; //pPass.IN.vBinormal.w;// * saturate((1- pPass.pCustom.fFresnel) * ViewOpacity);
+
+  if( pPass.nQuality > QUALITY_LOW )
+  if( pPass.pCustom.bOpaquePass == false)
+  {
+    clip( 0.51 - pPass.fAlpha );  // clip when multiple light passes
+    clip( pPass.fAlpha - 0.05 );  // clip redundant stuff - also to void some sorting artefacts on transparent passes
+  }
+
+  // No view opacity for low-specs
+  if( pPass.nQuality == QUALITY_LOW )
+  {
+    // cheap fresnel for low specs, no rim
+    pPass.fFresnel = 1 - saturate( pPass.fNdotE );
+    pPass.pCustom.fRim = 0;
+    pPass.pCustom.vTangent = pPass.IN.vBinormal.xyz;
+    pPass.pCustom.vTangentSec = pPass.IN.vBinormal.xyz;
+    pPass.fAlpha = pPass.cDiffuseMap.w * pPass.IN.vBinormal.w;
+  }
+
+  pPass.fAlpha = saturate( pPass.fAlpha);
+
+  //pPass.bDisableInShadowShading = true;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_per_light(inout fragPass pPass, inout fragLightPass pLight)
+{
+
+  // opt: removed normalization
+  half3 vHalf = ( pPass.vView.xyz + pLight.vLight.xyz );                                     // 2 alu
+  if( pPass.nQuality == QUALITY_LOW )
+    vHalf *= 0.5;                                     // 1 alu
+  else
+    vHalf = normalize( vHalf ); // 3 alu
+
+  // Wrapped diffuse
+  pLight.fNdotL = saturate( pLight.fNdotL * DiffuseWrap + (1 - DiffuseWrap ));                      // 2 alu
+
+  // Diffuse term= wrapped diffuse + scheen shading
+  half3 cDiffuse = (pLight.fNdotL + pLight.fNdotL * pPass.pCustom.fRim);                           // 2 alu
+
+  // No rim on low-specs
+  if( pPass.nQuality == QUALITY_LOW )
+  {
+    cDiffuse = pLight.fNdotL;
+  }
+
+  cDiffuse *= pLight.cDiffuse.xyz;                                                                  // 1 alu
+
+  half3 cSpecular = 0;
+
+  // primary specular (brightest one)
+  cSpecular.xyz = KajiyaKayAnisotropic(pPass.pCustom.vTangent, vHalf, PrimarySpecPow) * (half3) PrimarySpecColor.xyz;
+
+  // Only 1 spec highlight for low-specs
+  if( pPass.nQuality == QUALITY_HIGH )
+  {
+    // secondary specular (glossiest one)
+    cSpecular.xyz += KajiyaKayAnisotropic(pPass.pCustom.vTangentSec.xyz, vHalf.xyz, SecondarySpecPow) * (half3) SecondarySpecColor.xyz;
+  }
+
+  // apply specular light color and specular multiplier
+  cSpecular.xyz *= pLight.cSpecular.xyz * pLight.fNdotL;
+
+  half3 cK = pLight.fOcclShadow * pLight.fFallOff * pLight.cFilter;                                // 2 alu
+
+  pPass.cDiffuseAcc.xyz += cDiffuse.xyz * cK.xyz;                                                   // 1 alu
+  pPass.cSpecularAcc.xyz += cSpecular.xyz * cK.xyz;                                                // 1 alu
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_ambient(inout fragPass pPass, inout half3 cAmbient)
+{
+  half3 cDiffuseAmbient = (1.0 + (FillMultiplier * (saturate(pPass.pCustom.fShiftAmount)*PrimarySpecColor*pPass.fNdotE*RimMultiplier)+pPass.pCustom.fRim) );                            // 1 alu
+  // No rim on low-specs
+  if( pPass.nQuality == QUALITY_LOW )
+  {
+    cDiffuseAmbient = 1.0;
+  }
+
+  pPass.cAmbientAcc.xyz += cAmbient.xyz * cDiffuseAmbient;                                          // 1 alu
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_end(inout fragPass pPass, inout half3 cFinal)
+{
+  // Final composition
+  half3 cDiffuse = (pPass.cAmbientAcc.xyz + pPass.cDiffuseAcc.xyz) *  pPass.pCustom.cHair.xyz; // 3 alu
+  half3 cSpecular = pPass.cSpecularAcc.xyz * pPass.cGlossMap.xyz;                              // 2 alu
+  if( pPass.nQuality != QUALITY_LOW )
+  {
+    cDiffuse *= MatDifColor.xyz;         // 1 alu
+    cSpecular *= MatSpecColor.xyz;       // 1 alu
+  }
+
+  cFinal.xyz =cDiffuse + cSpecular;  // 2 alu
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#include "fragLib.cfi"
+
+///////////////// pixel shader //////////////////
+
+pixout HairOpaquePS(vert2FragGeneral IN)
+{
+  pixout OUT = (pixout) 0;
+
+  // Initialize fragPass structure
+  fragPass pPass = (fragPass) 0;
+  frag_unify(pPass, IN);
+
+  pPass.pCustom.bOpaquePass = true;
+
+  half4 cFinal = frag_shared_output(pPass);
+
+  // clip redundant stuff - also to void some sorting artefacts on transparent passes
+  clip( pPass.fAlpha - 0.51 );
+
+  HDROutput(OUT, cFinal, 1);
+
+  return OUT;
+}
+
+pixout HairPS(vert2FragGeneral IN)
+{
+  pixout OUT = (pixout) 0;
+
+  // Initialize fragPass structure
+  fragPass pPass = (fragPass) 0;
+  frag_unify(pPass, IN);
+  half4 cFinal = frag_shared_output(pPass);
+
+  HDROutput(OUT, cFinal, 1);
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script = 
+        "Public"
+        "TechniqueZ=ZPass;"
+        "TechniqueMotionBlur=MotionBlurPass;"
+#ifndef %DISABLE_RAIN_PASS
+        "TechniqueRainPass=RainPass;"
+#endif
+        "TechniqueShadowGen=ShadowGen;"
+#ifdef D3D10
+        "TechniqueShadowGenDX10=ShadowGenGS;"
+#endif
+        "TechniqueShadowPass=ShadowPass;"
+>
+{
+  pass opaque_pass
+  {
+    VertexShader = compile vs_Auto HairVS() GeneralVS;
+    PixelShader = compile ps_Auto HairOpaquePS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    ZFunc = LEqual;
+    CullMode = None;
+   // IgnoreMaterialState = true;
+  }
+
+  pass front_pass
+  {
+    VertexShader = compile vs_Auto HairVS() GeneralVS;
+    PixelShader = compile ps_Auto HairPS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    ZFunc = Less;
+    CullMode = Front;
+  }
+
+  pass back_zwrite
+  {
+    VertexShader = compile vs_Auto HairVS() GeneralVS;
+    PixelShader = compile ps_Auto HairPS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = true;;
+    ZFunc = Less;
+    CullMode = Back;
+  }
+}
+
+technique HiQualityGeneral
+<
+  string Script = 
+        "TechniqueZ=ZPass;"
+        "TechniqueMotionBlur=MotionBlurPass;"
+        "TechniqueCaustics=CausticsPass;"
+#ifndef %DISABLE_RAIN_PASS
+        "TechniqueRainPass=RainPass;"
+#endif
+        "TechniqueShadowGen=ShadowGen;"
+#ifdef D3D10
+        "TechniqueShadowGenDX10=ShadowGenGS;"
+#endif
+        "TechniqueShadowPass=ShadowPass;"
+>
+{
+  pass opaque_pass
+  {
+    VertexShader = compile vs_Auto HairVS() GeneralVS;
+    PixelShader = compile ps_Auto HairOpaquePS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    ZFunc = LEqual;
+    CullMode = None;
+    IgnoreMaterialState = true;
+  }
+
+  pass front_pass
+  {
+    VertexShader = compile vs_Auto HairVS() GeneralVS;
+    PixelShader = compile ps_Auto HairPS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    ZFunc = Less;
+    CullMode = Front;
+  }
+
+  pass front_zwrite
+  {
+    VertexShader = compile vs_Auto HairVS() GeneralVS;
+    PixelShader = compile ps_Auto HairPS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    ZFunc = Less;
+    CullMode = Front;
+  }
+
+  pass back_pass
+  {
+    VertexShader = compile vs_Auto HairVS() GeneralVS;
+    PixelShader = compile ps_Auto HairPS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    ZFunc = Less;
+    CullMode = Back;
+  }
+
+  pass back_zwrite
+  {
+    VertexShader = compile vs_Auto HairVS() GeneralVS;
+    PixelShader = compile ps_Auto HairPS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    ZFunc = Less;
+    CullMode = Back;
+  }
+}
+
+//////////////////////////////// Common techniques ////////////////
+
+#define %HAIR_PASS 0x100000000
+
+#include "CommonZPass.cfi"
+#include "CommonMotionBlurPass.cfi"
+#include "CommonCausticsPass.cfi"
+#ifndef %DISABLE_RAIN_PASS
+  #include "CommonRainPass.cfi"
+#endif
+#include "ShadowCommon.cfi"
+#include "CommonShadowGenPass.cfi"
+#ifdef D3D10
+  #include "CommonShadowGenPassGS.cfi"
+#endif
+#include "CommonShadowPass.cfi"
+
+#undefine %HAIR_PASS
+
+/////////////////////// eof ///

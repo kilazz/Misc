@@ -1,0 +1,320 @@
+#include "Common.cfi"
+#include "ParticleVT.cfi"
+
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "NoPreview;"
+           "ShaderDrawType = General;"
+           "ShaderType = Particle;"
+>;
+
+/// Un-Tweakables //////////////////////
+
+DIFFUSEMAP
+GLOSSMAP
+BUMPMAP
+BUMPDIFFUSEMAP
+
+sampler3D noiseMapSampler = sampler_state
+{
+  Texture = textures/defaults/Noise3D.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+  AddressW = Wrap;
+};
+
+sampler2D sceneDepthSampler = sampler_state
+{
+ Texture = $ZTarget;
+ MinFilter = POINT;
+ MagFilter = POINT;
+ MipFilter = POINT;
+ AddressU = Clamp;
+ AddressV = Clamp;
+};
+
+// Tweakables /////////////////
+
+float VariationTileU
+<
+  vsregister      = VS_REG_PM_5.x;
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 0.25;
+
+float VariationTileV
+<
+  vsregister      = VS_REG_PM_5.y;
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 0.35;
+
+float VariationTileW
+<
+  vsregister      = VS_REG_PM_5.w;
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 0.5;
+
+float4 StartColor
+<
+  psregister      = PS_REG_PM_3;
+  string UIHelp   = "Set start color";
+  string UIName   = "Start color";
+  string UIWidget = "color";
+> = { 0.7, 0.392, 0.094, 1.0 };
+
+float4 EndColor
+<
+  psregister      = PS_REG_PM_4;
+  string UIHelp   = "Set end color";
+  string UIName   = "End color";
+  string UIWidget = "color";
+> = { 0.0, 0.0, 0.0, 1.0 };
+
+#if %CONSTANT_DIRECTION
+
+float AnimSpeedX
+<
+  vsregister      = VS_REG_PM_4.y;
+  string UIHelp   = "Set animation translation speed";
+  string UIName   = "Anim speedX";
+  string UIWidget = "slider";
+  float UIMin     = -100.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 0.0;
+
+float AnimSpeedY
+<
+  vsregister      = VS_REG_PM_4.z;
+  string UIHelp   = "Set animation translation speed";
+  string UIName   = "Anim speedY";
+  string UIWidget = "slider";
+  float UIMin     = -100.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 0.0;
+
+float AnimSpeedZ
+<
+  vsregister      = VS_REG_PM_4.w;
+  string UIHelp   = "Set animation translation speed";
+  string UIName   = "Anim speedZ";
+  string UIWidget = "slider";
+  float UIMin     = -100.0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.005;
+> = 0.0;
+
+#endif
+
+float StartBeamsSharpness
+<
+  psregister      = PS_REG_PM_5.x;
+  string UIHelp   = "Set start beams sharpness.";
+  string UIName   = "Start Beams sharpness";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 255.0;
+  float UIStep    = 0.005;
+> = 32.0;
+
+float EndBeamsSharpness
+<
+  psregister      = PS_REG_PM_5.y;
+  string UIHelp   = "Set end beams sharpness.";
+  string UIName   = "End Beams sharpness";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 255.0;
+  float UIStep    = 0.005;
+> = 4.0;
+
+/////////// Common vertex shader ////////////////
+
+struct vtxCommonOut
+{
+  float4 Position  : POSITION;
+
+  float4 tcBase : TEXCOORDN;
+  float4 tcDetail : TEXCOORDN;
+
+  float4 tcPos0 : TEXCOORDN;
+  float4 tcPos1 : TEXCOORDN;
+
+  float4 screenProj : TEXCOORDN;
+
+#ifdef %_RT_SOFT_PARTICLE
+  float4 particleFade : TEXCOORDN;
+#endif
+
+  float4 Color     : COLOR0;
+
+  float4 localFogColor : TEXCOORDN;
+};
+
+vtxCommonOut GravityBeamVS(app2vertParticleGeneral IN)
+{
+  vtxCommonOut OUT;
+#ifndef OPENGL
+  OUT = (vtxCommonOut)0;
+#endif
+
+  //////////////////////////////////////////////////////
+  // Setup particle
+
+  vert2FragParticleGeneral outParticle;
+  float4 vPos = IN.Position;
+
+  //////////////////////////////////////////////////////
+  // Anim speed encoded in IN.ScreenRot.xy
+
+#if !%CONSTANT_DIRECTION
+  float3 AnimSpeed;
+  AnimSpeed.xyz
+    = CameraRightVector.xyz * IN.ScreenRot.x * IN.ScreenRot.z
+    + CameraUpVector.xyz * IN.ScreenRot.x * IN.ScreenRot.w
+    + CameraFrontVector * IN.ScreenRot.y;
+
+  IN.ScreenRot.x = IN.ScreenRot.w;
+  IN.ScreenRot.y = -IN.ScreenRot.z;
+#endif
+
+#ifdef D3D10
+  IN.Expansion.xyzw = IN.Expansion.zyxw;
+#endif
+  IN.Expansion.xy = IN.Expansion.xy * 2.0 - 1.0;
+
+  Particle_Setup_General( vPos, g_VS_ViewProjMatr, IN, outParticle);
+
+  OUT.Position = outParticle.Position;
+
+  #ifdef %_RT_SOFT_PARTICLE
+    OUT.particleFade = outParticle.particleFade;
+  #endif
+
+  //////////////////////////////////////////////////////
+  // procedural textures generation setup
+
+  OUT.tcBase.xy = IN.baseTC.xy;
+  OUT.Color = GetInputColor(IN.Color);
+
+  const float fParticleSize = 20;
+
+  // Make sure we don't get into ATI precision isses by rescaling values.
+  // Cannot use particle radius, since it's not constant size (would look strange in movement)
+
+  // Get vertex position in "particle space". Add fractional part from world position particle mid-point for variation
+  float3 vPosRescaled = vPos.xyz; //(vPos.xyz - IN.Position.xyz) + frac(IN.Position.xyz /fParticleSize) * fParticleSize;
+  //IN.Position.xyz;//
+
+  float3 vVariationTilling = float3(VariationTileU, VariationTileV, VariationTileW);
+
+#if %CONSTANT_DIRECTION
+
+  OUT.tcPos0.xyz = vPosRescaled.xyz * vVariationTilling - frac( g_VS_AnimGenParams.z *  float3(AnimSpeedX, AnimSpeedY, AnimSpeedZ) );
+  OUT.tcPos1.xyz = vPosRescaled.xyz * vVariationTilling * 2  - frac( g_VS_AnimGenParams.z *  float3(AnimSpeedX, AnimSpeedY, AnimSpeedZ) );
+
+#else
+
+  OUT.tcPos0.xyz = vPosRescaled.xyz * vVariationTilling - frac( AnimSpeed.xyz );
+  OUT.tcPos1.xyz = vPosRescaled.xyz * vVariationTilling * 2  - frac( AnimSpeed.xyz );
+
+#endif
+
+  // Output the screen-space texture coordinates
+  OUT.screenProj = HPosToScreenTC(OUT.Position);
+
+  OUT.localFogColor = GetVolumetricFogColor( vPos );
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout GravityBeamPS(vtxCommonOut IN)
+{
+  pixout OUT;
+
+   // Debug output
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, IN.tcBase);
+   return OUT;
+ #endif
+
+  half4 cBump = half4(0,0,1,1);
+
+  float2 tcProj = (IN.screenProj.xy / IN.screenProj.w);
+
+  half4 cBase = tex2D(diffuseMapSampler, IN.tcBase.xy);
+
+  // accumulate 2 noise patterns to smooth tilling pattern
+  half fNoise = tex3D(noiseMapSampler, IN.tcPos0.xyz).w;
+
+  half fNoise2 = tex3D(noiseMapSampler, IN.tcPos1.xyz).w;
+
+  fNoise += fNoise2;
+
+  float atten = saturate(1-length(IN.tcBase.xy*2-1));
+  //atten *= atten;
+  //cFinal.xyz = IN.tcPos0.xyz/50;
+  //cFinal.w = 0;
+  half4 cFinal = 1;
+  cFinal.xyz =  IN.Color.xyz * atten * saturate( pow( 1 - abs(fNoise-1), StartBeamsSharpness) ) * StartColor;
+
+  cFinal.xyz += IN.Color.xyz * atten * pow(fNoise2, EndBeamsSharpness) * EndColor;
+
+  cFinal *= IN.localFogColor.w;
+
+  HDROutput( OUT, cFinal, 1 );
+
+#ifdef %_RT_SOFT_PARTICLE
+
+  ////////////////////////////////////////////////////////////////
+  // evaluate travel length through particle volume to fade
+  // out particle when getting close to scene geometry
+#define cameraFade              IN.particleFade.x
+#define particleThicknessInv    IN.particleFade.y
+#define particleRadius          IN.particleFade.z
+#define particleDepth            IN.particleFade.w
+#define sceneDepthTexLookup      IN.screenProj
+
+  float sceneDepth = DecodeSceneDepth( sceneDepthSampler, sceneDepthTexLookup );
+  float scaleBackground = saturate( ( sceneDepth - particleDepth ) * particleThicknessInv );
+  float fadeParticle = min( scaleBackground, cameraFade );
+
+  OUT.Color *= fadeParticle;
+#endif
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique General
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto GravityBeamVS();
+    PixelShader = compile ps_Auto GravityBeamPS();
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = None;
+    ZFunc = LEqual;
+  }
+}
+
+/////////////////////// eof ///

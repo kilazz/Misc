@@ -1,0 +1,71 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: Skin.ext
+// Created: 19/11/2004 by Tiago Sousa
+
+Version (1.00)
+
+Property
+{
+    Name            = %GLOSS_MAP
+    Mask            = 0x2
+    Property        (Gloss map)
+    Description     (Use gloss map as separate texture)
+    DependencySet   = $TEX_Gloss
+    DependencyReset = $TEX_Gloss
+    Hidden
+}
+
+Property
+{
+  Name            = %BUMP_DIFFUSE
+  Mask            = 0x4
+  Property        (BumpDiffuse)
+  Description     (Use separate bump map for diffuse lighting)
+  DependencySet   = $TEX_BumpDiffuse
+  DependencyReset = $TEX_BumpDiffuse
+  Hidden
+}
+
+Property
+{
+  Name            = %ENVIRONMENT_MAP
+  Mask            = 0x100
+  Property        (Environment map)
+  Description     (Use environment map as separate texture)
+  DependencyReset = $TEX_EnvCM
+}
+
+Property
+{
+  Name            = %WRINKLE_BLENDING
+  Mask            = 0x200
+  Property        (Wrinkle blending)
+  Description     (Use subsurface map alpha for wrinkle blending)
+  DependencyReset = $TEX_Subsurface
+}
+
+Property
+{
+  Name        = %DISABLE_RAIN_PASS
+  Mask        = 0x400
+  Property    (Disable rain layer)
+  Description (Disables rain layer)
+}
+
+Property
+{
+  Name            = %STAT_BRANCHING
+  Mask            = 0x10000000
+  DependencySet   = $HW_StaticBranching
+  DependencyReset = $HW_StaticBranching
+  Hidden
+}
+
+Property
+{
+  Name            = %DYN_BRANCHING
+  Mask            = 0x20000000
+  DependencySet   = $HW_DynamicBranching
+  DependencyReset = $HW_DynamicBranching
+  Hidden
+}

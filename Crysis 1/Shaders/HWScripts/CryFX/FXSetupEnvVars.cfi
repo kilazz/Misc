@@ -1,0 +1,87 @@
+//=== Hardware depended variables ======================================================
+
+// D3D, DIRECT3D
+// D3D8, DIRECT3D8
+// D3D9, DIRECT3D9
+// OGL, OPENGL
+// XBOX2
+// GC, GAMECUBE
+// PS2
+// PS3
+// DEPTHMAP - hardware depthmaps with PCF
+// SELFSHADOW
+// PROJECTEDENVBUMP
+// NV1X
+// NV2X
+// NV3X
+// NV4X
+// NV5X
+// R3XX
+// ATI, RADEON
+// HDR
+// PS20Only
+// PS30
+//
+
+//=== Environment variables ============================================================
+
+// Environment variables are used for proper cache of shaders for specific hardware platform
+// by separating of cache folders
+
+#register_env LIGHT_SETUP
+
+#ifdef XBOX2
+  #register_env XB2
+#endif
+
+#ifdef PS3
+  #register_env PS3
+#endif
+
+#ifdef D3D9
+  #register_env D9
+#endif
+
+#ifdef ATI
+  #register_env ATI
+#endif
+
+#ifdef NV3X || NV4X || NV5X
+  #register_env NV
+#endif
+
+#ifdef PS30
+  #register_env SM30
+#endif
+
+//=== Data types used in PS ============================================================
+
+#ifdef D3D10
+#define COLOR_SWAP 1
+#endif
+
+#if %DYN_BRANCHING
+  #define vs_Auto vs_3_0
+  #define ps_Auto ps_3_0
+#endif
+
+#ifcvar r_MeshShort
+  #define MESH_SHORT_POS 1
+#endif
+
+/*
+#ifdef PS30
+  #define vs_Auto vs_3_0
+  #define ps_Auto ps_3_0
+#endif
+*/
+
+/*
+#ifndef PS2X
+  #define vs_Auto vs_3_0
+  #define ps_Auto ps_3_0
+#else
+  #define vs_Auto vs_2_0
+  #define ps_Auto ps_2_0
+#endif
+*/

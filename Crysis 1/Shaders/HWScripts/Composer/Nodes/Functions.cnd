@@ -1,0 +1,37 @@
+//==============================================================================
+// Function blocks
+//==============================================================================
+Block 'Functions'
+{
+  Type = Function
+
+  Node 'Transform'
+  {
+    Function
+    {
+      void __Transform(in float4x4 ViewProjMatrix, in float4 Position, out float4 Result)
+      {
+        Result = mul(ViewProjMatrix, Position);
+      }
+    }
+  }
+  Node 'Multiply'
+  {
+    Function
+    {
+      void __Multiply(in float4 Operand1, in float Operand2, out float4 Result)
+      {
+        Result = Operand1 * Operand2;
+      }
+      void __Multiply(in float4 Operand1, in float2 Operand2, out float4 Result)
+      {
+        Result.xy = Operand1.xy * Operand2.xy;
+        Result.zw = 1;
+      }
+      void __Multiply(in float4 Operand1, in float4 Operand2, out float4 Result)
+      {
+        Result = Operand1 * Operand2;
+      }
+    }
+  }
+}

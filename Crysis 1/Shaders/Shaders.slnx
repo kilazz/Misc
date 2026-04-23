@@ -1,0 +1,8 @@
+<Solution>
+	<Configurations>
+		<Platform Name="Win32"/>
+		<Configuration Name="Debug"/>
+		<Configuration Name="Release"/>
+	</Configurations>
+	<Project Path="../Shaders/HWScripts/HWScripts.vcxproj" Id="8c9ae270-05bb-4f1b-bfe1-69347bf913a3"/>
+</Solution>

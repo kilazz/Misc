@@ -1,0 +1,704 @@
+#include "Common.cfi"
+#include "ModificatorVT.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "NoPreview;"
+           "LocalConstants;"
+           "ShaderDrawType = Custom;"
+           "ShaderType = PostProcess;"
+>;
+
+#if D3D10
+
+Texture2DMS<float2, 4> sceneDepthSamplerMS
+{
+ Texture = $ZTargetMS;
+};
+
+#endif
+
+sampler2D sceneDepthSampler = sampler_state
+{
+ Texture = $ZTarget;
+ MinFilter = POINT;
+ MagFilter = POINT;
+ MipFilter = POINT;
+ AddressU = Clamp;
+ AddressV = Clamp;
+};
+
+sampler2D cloudShadowMap = sampler_state
+{
+ Texture = $CloudsShadowTex;
+ MinFilter = LINEAR;
+ MagFilter = LINEAR;
+ MipFilter = POINT;
+ AddressU = Wrap;
+ AddressV = Wrap;
+};
+
+sampler2D globalScatterSampler = sampler_state
+{
+ Texture = textures/lights/beam_glow.dds;
+ MinFilter = LINEAR;
+ MagFilter = LINEAR;
+ MipFilter = NONE;
+ AddressU = Wrap;
+ AddressV = Wrap;
+};
+
+PROJECTIONMAP
+
+sampler2D depthTargetSampler   : register(s0);
+sampler2D TerrainInfoSampler0  : register(s1);
+sampler2D TerrainInfoSampler1  : register(s2);
+
+//force using hw_pcf_compare sampler's states
+//#define HW_PCF_COMPARE 1
+
+#include "ShadowCommon.cfi"
+
+//===========================================================================
+// Basic shadow maps support
+
+float4x4 CompMatrix        : PI_Composite;    // View*Projection
+
+float4 vProjRatios    : PB_TempData[0];
+
+//rotation to light space
+float4x4 RotMatrix        : PB_TempMatr0[1];
+
+//FIX: reserve params for common shaders
+float4 vWBasisX    : PB_TempData[10];
+float4 vWBasisY    : PB_TempData[11];
+float4 vWBasisZ    : PB_TempData[12];
+float4 vBasisMagnitudes  : PB_TempData[14];
+
+//clouds shadows
+float4 InvTerrainSize    : PB_TempData[9];
+
+/////////////////////////////
+// structs
+
+struct pixout_cl
+{
+  float4 Color  : COLOR0;
+};
+
+struct pixout_cl_depth
+{
+  float4 Color  : COLOR0;
+  float Depth    : DEPTH;
+};
+
+struct app2vertShadow
+{
+  IN_P
+  IN_TBASE
+  float3 viewDir : TEXCOORD1;
+};
+
+struct app2vertStencilCull
+{
+  IN_P
+  IN_TBASE
+};
+
+struct vert2fragStencilCull
+{
+  float4 HPosition  :  POSITION;
+};
+
+struct vert2fragShadowNew
+{
+  float4 HPosition  :  POSITION;
+  float4 ViewPos    :  TEXCOORD0;
+  float4 ViewVect    :  TEXCOORD1;
+  float4 ViewPosLS_ViewVectLS  :  TEXCOORD2;
+  float4 ScreenTC    :  TEXCOORD3;
+  float3 WS_ViewVect  :  TEXCOORD4;
+#if !%USE_SM30
+  float4 WPos : TEXCOORD5;
+#endif
+};
+
+struct fragInShadowDeferred
+{
+//order should be the  same as ouyput from vert2frag for dx10
+#if %USE_SM30
+  #ifdef D3D10
+  float4 WPos  :  SV_POSITION;
+  #else
+  float4 WPos : VPOS;
+  #endif
+#endif
+  float4 ViewPos    :  TEXCOORD0;
+  float4 ViewVect    :  TEXCOORD1;
+  float4 ViewPosLS_ViewVectLS  :  TEXCOORD2;
+  float4 ScreenTC    :  TEXCOORD3;
+  float3 WS_ViewVect  :  TEXCOORD4;
+#if !%USE_SM30
+  float4 WPos : TEXCOORD5;
+#endif
+};
+
+struct vert2fragDeferred
+{
+  float4 HPosition    :  POSITION;
+  float2 ScreenTC      :  TEXCOORD0;
+  float3 WS_ViewVect  :  TEXCOORD1;
+};
+
+//float4 ViewVectLS  :  TEXCOORD3;
+
+struct v2fShadowSimple
+{
+  float4 Position : POSITION;
+  float4 vScrPos    : TEXCOORDN;
+};
+
+v2fShadowSimple TexturedQuadVS(app2vertStencilCull IN)
+{
+  v2fShadowSimple OUT;
+#ifndef OPENGL
+  OUT = (v2fShadowSimple)0;
+#endif
+
+  // Position in screen space.
+  float4 vPos = IN.Position;
+  OUT.Position = float4(2.0f * (vPos.xy + 0.5f) / g_VS_ScreenSize.xy - 1.0f, vPos.zw);
+
+  // output texture coordinates
+  OUT.vScrPos.xy = IN.baseTC.xy; // + PixelOffset.xy * 0.5
+  return OUT;
+}
+
+vert2fragStencilCull SimpleQuadVS(app2vertStencilCull IN)
+{
+  vert2fragStencilCull OUT;
+#ifndef OPENGL
+  OUT = (vert2fragStencilCull)0;
+#endif
+
+  // Position in screen space.
+  float4 vPos = IN.Position;
+  OUT.HPosition = float4(2.0f * (vPos.xy + 0.5f) / g_VS_ScreenSize.xy - 1.0f, vPos.zw);
+
+  // output texture coordinates
+  //OUT.baseTC.xy = IN.baseTC.xy + PixelOffset.xy * 0.5;
+
+  return OUT;
+}
+
+vert2fragStencilCull StencilCullVS(app2vertStencilCull IN)
+{
+  vert2fragStencilCull OUT;
+#ifndef OPENGL
+  OUT = (vert2fragStencilCull)0;
+#endif
+
+  float4 vPos = IN.Position;
+  OUT.HPosition = mul(CompMatrix, vPos);
+
+  return OUT;
+}
+
+vert2fragStencilCull FrustumCullVS(app2vertStencilCull IN)
+{
+  vert2fragStencilCull OUT;
+#ifndef OPENGL
+  OUT = (vert2fragStencilCull)0;
+#endif
+
+  float4 vPos = IN.Position;
+  //unprojection
+  vPos = mul(TexGen0, vPos);
+
+  //normalization
+  vPos /= vPos.w;
+  vPos.w = 1.0f;
+
+  //sphere adjusting
+  float3 vLightDir = normalize(vPos.xyz - LSPos.xyz);
+  vLightDir *= LSPos.w; //radius multiplication;
+
+  //select proper vector
+  vPos.xyz = lerp( vPos.xyz, (LSPos.xyz + vLightDir), IN.baseTC.x );
+
+  //final ViewProj transformation
+  OUT.HPosition = mul(CompMatrix, vPos);
+
+  return OUT;
+}
+
+pixout_cl StencilCullPS(vert2fragStencilCull IN)
+{
+  pixout_cl OUT;
+
+  OUT.Color = float4(1,1,1,1);
+
+  return OUT;
+}
+
+//TD: make optimized pass for cubemap projectors
+pixout_cl LightProjPS(vert2fragShadowNew IN)
+{
+  pixout_cl OUT;
+
+  float SceneDepth = tex2D( sceneDepthSampler, IN.ScreenTC.xy ).r;
+
+  float4 P0 = IN.ViewPos + IN.ViewVect * SceneDepth;
+
+   half3 vFilterColor = tex2Dproj(projMapSampler, P0).xyz;
+
+  //TOFIX: remove
+  half fProjectorColor = dot(vFilterColor,  half3(0.2, 0.7, 0.1));
+  OUT.Color.xyzw = 1.0f - fProjectorColor;
+  return OUT;
+}
+
+vert2fragShadowNew DeferredShadowVS(app2vertShadow IN)
+{
+  vert2fragShadowNew OUT;
+#ifndef OPENGL
+  OUT = (vert2fragShadowNew)0;
+#endif
+
+  float4 vPos = IN.Position;
+
+  //FIX - non-necessary multiplication; can be just passed through
+  OUT.HPosition = mul(CompMatrix, vPos);
+
+#if !%USE_SM30
+  OUT.WPos = OUT.HPosition;
+#endif
+
+#if %_RT_HW_PCF_COMPARE && %_RT_POINT_LIGHT
+float fInvFar = 1.0f;
+#else
+float fInvFar = fOneDivFarDist.x;
+#endif
+
+#if !%_RT_CUBEMAP0 || %_RT_POINT_LIGHT
+  //ViewPos and ViewVect in projective space
+  ShadowTexSpace(float4(vfViewPos.xyz, 1), TexGen0, fInvFar, OUT.ViewPos);
+  ShadowTexSpace(float4(vfViewPos.xyz + IN.viewDir.xyz, 1), TexGen0, fInvFar, OUT.ViewVect);
+#else
+  CubemapTexSpace(float4(vfViewPos.xyz, 1), fOneDivFarDist.x, OUT.ViewPos);
+  CubemapTexSpace(float4(vfViewPos.xyz + IN.viewDir.xyz, 1), fOneDivFarDist.x, OUT.ViewVect);
+#endif
+
+  OUT.ViewVect -= OUT.ViewPos;
+
+  OUT.WS_ViewVect = IN.viewDir.xyz;
+
+#if %_RT_HW_PCF_COMPARE && %_RT_POINT_LIGHT
+  //insert per-pixel offset
+#else
+  //TOFIX: should it be before   OUT.ViewVect -= OUT.ViewPos; view vector calculation
+  OUT.ViewPos.z = OUT.ViewPos.z - fDepthTestBias.x;
+#endif
+
+  //OUT.ViewPos.z = OUT.ViewPos.z - 1.8f;
+
+  OUT.ScreenTC.xy = IN.baseTC.xy;
+  OUT.ScreenTC.zw = IN.baseTC.xy*g_VS_ScreenSize.xy/4;
+
+  //noise projection
+  float3 ViewPosLS = mul(vfViewPos.xyz, (float3x3)RotMatrix);
+  OUT.ViewPosLS_ViewVectLS.xy = ViewPosLS.xy;
+  OUT.ViewPosLS_ViewVectLS.zw = ( mul((vfViewPos.xyz + IN.viewDir.xyz), (float3x3)RotMatrix) - ViewPosLS.xyz ).xy;
+
+  return OUT;
+}
+
+pixout_cl FrustCullPS(vert2fragShadowNew IN)
+{
+  pixout_cl OUT;
+
+  OUT.Color = half4(0,0,0,0);
+
+  float SceneDepth = tex2D( sceneDepthSampler, IN.ScreenTC.xy ).r;
+
+  //simplified shadow tex space reconstruction
+  float4 P0 = IN.ViewPos + IN.ViewVect * SceneDepth;
+  P0.xy /= P0.w;
+
+  float4 clipFrustum;
+  clipFrustum.xy = P0.xy;
+  clipFrustum.zw = 1.0-P0.xy;
+
+  clip( clipFrustum );
+  OUT.Color = clipFrustum;
+
+  return OUT;
+}
+
+pixout_cl_depth CopyDepthTarget(v2fShadowSimple IN)
+{
+  pixout_cl_depth OUT;
+  OUT.Color = half4(1,1,1,1);
+
+  float SceneDepth = tex2D( sceneDepthSampler, IN.vScrPos.xy ).r;
+
+  float fDevDepth = vProjRatios.x + vProjRatios.y/SceneDepth;
+  //debug depth
+  //OUT.Color *= fDevDepth;
+  OUT.Depth = fDevDepth;
+
+  return OUT;
+}
+
+float4 CalcHomogeneousPos(float SceneDepth, float2 WPos)
+{
+  //separate scale to make sure we don't lost the precision during "mad"'s of WBasis vectors
+  float4 vWBasisScale = vBasisMagnitudes * SceneDepth;
+  vWBasisScale.xy *= WPos.xy;
+
+  float4 HPos = vWBasisZ.xyzw*vWBasisScale.z+(vWBasisX.xyzw*vWBasisScale.x)+(vWBasisY.xyzw*vWBasisScale.y);
+  HPos = vCamPos.xyzw + HPos.xyzw;
+
+  return HPos;
+}
+
+float4 CalcShadowSpace(float4 HPos)
+{
+  float4 P0 = HPos;
+//RT_HW_PCF_COMPARE
+#if %_RT_POINT_LIGHT
+  //make depth shift before going to non-linear space
+  //TD: calculate depth bias in meters in camera space
+  //hw depth map
+  //P0.z -= fDepthTestBias.x;
+  //P0.xyz /= P0.w;
+  #if D3D10
+  P0.xyz /= P0.w;
+  #else
+  P0.xy /= P0.w;
+  P0.z = P0.z * fOneDivFarDist.x;
+  #endif
+  //P0.z -= 0.007f;
+  //TFIX: activate
+  //P0.z -= fDepthTestBias.x;
+#else
+  P0.xy /= P0.w;
+
+  //TOFIX: concatenate this operations to the projection matrix
+  P0.z *= fOneDivFarDist.x;
+  //we do slope scale bias during shadowgen only
+  //make constant bias for sun
+  P0.z -= fDepthTestBias.x;
+#endif
+  return P0;
+}
+
+half CalcShadow(float4 vShPos, float2 vNoisePos, int nChunk)
+{
+  float4 P0 = vShPos;
+
+//clamp depth in shadows space for all FP shadowmaps
+//comparison sampler doesn't do clamping internally for FP formats
+#if D3D10 || %_RT_SHADOW_MIXED_MAP_G16R16
+  P0.z = clamp(P0.z, 0.0f, 0.999999f);
+#endif
+  //can't be done is VS because depth reconstruction is in projective space
+  //P0.z = (P0.z *  fOneDivFarDist.x)- fDepthTestBias.x;
+
+//scale for noise projecton should be computed based on the size of shadow frustums(increase if it's bigger)
+//and distance to viewer((decrease if it's father))
+#if %_RT_POINT_LIGHT
+  //TOFIX: compute proper scale range for point LS noise
+  float2 NoiseP = P0.xy*20;
+#else
+  //reconstruct noise projection
+  float2 NoiseP = vNoisePos.xy;
+#endif
+
+  half fInShadow = 1;
+
+#if %_RT_VARIANCE_SM
+  //terrain shadows
+  fInShadow = GetVarianceShadow(varianceMapSampler0, P0.xyz);
+#elif %_RT_SHADOW_JITTERING
+  if (GetShadowQuality()!=QUALITY_LOW)
+  {
+    irregular_filter(depthMapSampler0, P0, NoiseP.xy, GetKernelSize(), fInShadow, nChunk);
+  }
+  else
+  {
+    //one-tap sampling
+    //shadow_sample(depthMapSampler0, P0, fInShadow);
+    #if !D3D10 && !%_RT_HW_PCF_COMPARE
+      fInShadow += fDepthShift.x;
+      fInShadow = (fInShadow > P0.z);
+    #endif
+  }
+#else
+  //debug one-tap sampling
+  shadow_sample(depthMapSampler0, P0, fInShadow);
+  #if !D3D10 && !%_RT_HW_PCF_COMPARE
+    fInShadow += fDepthShift.x;
+    fInShadow = (fInShadow > P0.z);
+  #endif
+#endif
+
+#ifdef %_RT_LIGHT_TEX_PROJ
+   half3 vFilterColor = tex2D(projMapSampler, P0.xy).xyz;
+  half fProjectorColor = dot(vFilterColor,  half3(0.2, 0.7, 0.1));
+  //fInShadow *= fProjectorColor;
+#endif
+
+  return fInShadow;
+}
+
+///////////////// shadows pixel shader //////////////////
+pixout_cl DeferredShadowPS(fragInShadowDeferred IN)
+{
+  pixout_cl OUT;
+
+  float4 P0 = 0.0f;
+
+  //should be in full precision for R32F and D24
+  #if %_RT_FSAA && D3D10
+    #define MSAA_SAMPLES 4
+
+    float3 iScreenCoord;
+    iScreenCoord.xy = (float2) IN.WPos.xy;
+    iScreenCoord.z = 0;
+
+    float SceneDepthMin = 1.0f;
+    float SceneDepthMax = 0.0f;
+
+    [unroll]
+    for (int iSample = 0; iSample < MSAA_SAMPLES; iSample++)
+    {
+      float CurDepth = sceneDepthSamplerMS.Load(iScreenCoord, iSample).x;
+      SceneDepthMin = min(SceneDepthMin, CurDepth);
+      SceneDepthMax = max(SceneDepthMax, CurDepth);
+    }
+
+    float2 NoisePMin = IN.ViewPosLS_ViewVectLS.xy + IN.ViewPosLS_ViewVectLS.zw * SceneDepthMin;
+    float4 Pmin = CalcHomogeneousPos(SceneDepthMin, IN.WPos.xy);
+    Pmin = CalcShadowSpace(Pmin);
+
+    float2 NoisePMax = IN.ViewPosLS_ViewVectLS.xy + IN.ViewPosLS_ViewVectLS.zw * SceneDepthMax;
+    float4 Pmax = CalcHomogeneousPos(SceneDepthMax, IN.WPos.xy);
+    Pmax = CalcShadowSpace(Pmax);
+
+    half fInShadow = (CalcShadow(Pmin, NoisePMin, 0) + CalcShadow(Pmax, NoisePMax, 1));
+
+    //non-msaa techniques
+    P0 = Pmax;
+    float SceneDepth = SceneDepthMax;
+  #else
+    float SceneDepth = tex2D( sceneDepthSampler, IN.ScreenTC.xy ).r;
+    P0 = CalcHomogeneousPos(SceneDepth, IN.WPos.xy);
+    P0 = CalcShadowSpace(P0);
+
+    float2 NoiseP = IN.ViewPosLS_ViewVectLS.xy + IN.ViewPosLS_ViewVectLS.zw * SceneDepth;
+    half fInShadow = CalcShadow(P0, NoiseP, 0);
+  #endif
+
+//cloud shadows pass
+#if %_RT_VARIANCE_SM && %_RT_SAMPLE2
+  //TOFIX: only two component interpolator is needed for clouds shadow projection
+  float3 WorldP = vfViewPos.xyz + IN.WS_ViewVect * SceneDepth;
+  //TOFIX: half tex offset for clouds texture should be different from shadow tex offset
+  half3 vCloudsShadow = tex2D(cloudShadowMap, WorldP.yx * InvTerrainSize.xy-InvTerrainSize.wz).xyz;
+  half CloudsShadow = vCloudsShadow.r; //dot(vCloudsShadow, half3(0.2, 0.7, 0.1));
+  //modulate terrain shadow by cloudsshadow
+  //fInShadow *= CloudsShadow;
+#endif
+
+  //gsm fading
+  half2 fDist = 2.0*abs(P0.xy-half2(0.5,0.5));
+  half fFadeF = 1.0 - (fShadowFadingDist.x * pow(max(fDist.x,fDist.y),8));
+
+#if %_RT_CUBEMAP0 || %_RT_POINT_LIGHT
+  OUT.Color = (1-fInShadow);
+#else
+  fInShadow = (1-fInShadow) * saturate(fFadeF); //TODO: remove saturate
+  #if %_RT_VARIANCE_SM && %_RT_SAMPLE2
+    fInShadow = max(1-CloudsShadow, fInShadow);
+  #endif
+  OUT.Color = fInShadow;
+#endif
+
+  return OUT;
+}
+
+//----------------------------------------------------------
+samplerCUBE DebugCM  : register(s0);
+sampler2D DebugSM  : register(s0);
+
+struct app2vertDebug
+{
+  IN_P
+  float3 vIdxCoord  : TEXCOORDN;
+};
+
+struct v2fDebug
+{
+  float4 Position   : POSITION;
+  float3 vIdxCoord  : TEXCOORDN;
+};
+
+v2fDebug DebugCMVS(app2vertDebug IN)
+{
+  v2fDebug OUT;
+  OUT.Position = mul(vpMatrix, IN.Position);
+  OUT.vIdxCoord = IN.vIdxCoord;
+  return OUT;
+}
+
+pixout_cl DebugCMPS(v2fDebug IN)
+{
+  pixout_cl OUT;
+
+  OUT.Color.xyz = texCUBE(DebugCM, IN.vIdxCoord).x;
+  OUT.Color.w = 1.0f;
+
+  return OUT;
+}
+
+pixout_cl DebugSMPS(v2fDebug IN)
+{
+  pixout_cl OUT;
+
+  OUT.Color.xyz = 1.0f - tex2D(DebugSM, IN.vIdxCoord.xy).x;
+  OUT.Color.w = 1.0f;
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique DebugCubeMap
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto DebugCMVS();
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = None;
+
+    PixelShader = compile ps_Auto DebugCMPS();
+  }
+}
+
+technique DebugShadowMap
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto DebugCMVS();
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = None;
+
+    PixelShader = compile ps_Auto DebugSMPS();
+  }
+}
+
+technique DeferredLightProj
+{
+  pass p0
+  {
+    VertexShader = compile vs_2_0 DeferredShadowVS();
+    PixelShader = compile ps_2_x LightProjPS();
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = None;
+  }
+}
+
+technique DeferredShadowPass
+{
+  //Stencil Pre-pass
+  pass p0
+  {
+    VertexShader = compile vs_2_0 DeferredShadowVS();
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = None;
+
+    PixelShader = compile ps_2_x FrustCullPS();
+  }
+
+  //Shadow pass
+  pass p1
+  {
+  #if %USE_SM30
+    VertexShader = compile vs_3_0 DeferredShadowVS();
+    PixelShader = compile ps_3_0 DeferredShadowPS();
+  #else
+    VertexShader = compile vs_2_0 DeferredShadowVS();
+    PixelShader = compile ps_2_x DeferredShadowPS();
+  #endif
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = None;
+  }
+
+  //StencilCull pass for point light sources
+  pass p2
+  {
+    VertexShader = compile vs_2_0 StencilCullVS();
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = Back;
+
+    PixelShader = compile ps_2_x StencilCullPS();
+  }
+
+  //StencilCull pass for point light sources
+  pass p3
+  {
+    VertexShader = compile vs_2_0 FrustumCullVS();
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = Back;
+
+    PixelShader = compile ps_2_x StencilCullPS();
+  }
+
+}
+
+technique DeferredSimpleQuad
+{
+  //Stencil Pre-pass
+  pass p0
+  {
+    VertexShader = compile vs_Auto SimpleQuadVS();
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = None;
+
+    PixelShader = compile ps_Auto StencilCullPS();
+  }
+}
+
+technique ResolveDepthTarget
+{
+  //Stencil Pre-pass
+  pass p0
+  {
+    VertexShader = compile vs_Auto TexturedQuadVS();
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = None;
+
+    PixelShader = compile ps_Auto CopyDepthTarget();
+  }
+}

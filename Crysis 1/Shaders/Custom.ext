@@ -1,0 +1,139 @@
+// Copyright (C) Crytek Studios 2001-2004
+// Created: 28/06/2006 by Tiago Sousa
+
+Version (1.00)
+
+Property
+{
+  Name            = %BUMP_MAP
+  Mask            = 0x1
+  Property        (Bump map)
+  Description     (Use bump-map texture)
+  DependencySet   = $TEX_Bump
+  DependencyReset = $TEX_Bump
+  Hidden
+}
+
+Property
+{
+  Name            = %GLOSS_MAP
+  Mask            = 0x2
+  Property        (Gloss map)
+  Description     (Use gloss map as separate texture)
+  DependencySet   = $TEX_Gloss
+  DependencyReset = $TEX_Gloss
+  Hidden
+}
+
+Property
+{
+  Name            = %BUMP_DIFFUSE
+  Mask            = 0x4
+  Property        (BumpDiffuse)
+  Description     (Use separate bump map for diffuse lighting)
+  DependencySet   = $TEX_BumpDiffuse
+  DependencyReset = $TEX_BumpDiffuse
+  Hidden
+}
+
+Property
+{
+  Name            = %ENVIRONMENT_MAP
+  Mask            = 0x8
+  Property        (Environment map)
+  Description     (Use environment map as separate texture)
+  DependencyReset = $TEX_EnvCM
+}
+
+Property
+{
+  Name            = %DECAL_MAP
+  Mask            = 0x10
+  Property        (Decal map)
+  Description     (Use decal map for giving texture variation while keeping same diffuse map)
+  DependencySet   = $TEX_Decal
+  DependencyReset = $TEX_Decal
+  Hidden
+}
+
+Property
+{
+  Name            = %CUSTOM_DIFFUSE
+  Mask            = 0x20
+  Property        (Custom diffuse shading)
+  Description     (Use custom slot for custom diffuse shading map)
+  DependencySet   = $TEX_Custom
+  DependencyReset = $TEX_Custom
+  Hidden
+}
+
+Property
+{
+  Name            = %CUSTOM_SPECULAR
+  Mask            = 0x40
+  Property        (Custom specular shading)
+  Description     (Use custom secondary slot for custom specular shading map)
+  DependencySet   = $TEX_CustomSecondary
+  DependencyReset = $TEX_CustomSecondary
+  Hidden
+}
+
+Property
+{
+  Name        = %GLOSS_DIFFUSEALPHA
+  Mask        = 0x80
+  Property    (Gloss map in diffuse alpha)
+  Description (Assumes gloss map comes from diffuse map alpha channel)
+}
+
+Property
+{
+  Name            = %SPECULARPOW_GLOSSALPHA
+  Mask            = 0x100
+  Property        (Shininess map in specular alpha)
+  Description     (Assumes specular glossiness comes from specular map alpha channel)
+  DependencyReset = $TEX_Gloss
+  Hidden
+}
+
+Property
+{
+  Name        = %RIM_LIGHTING
+  Mask        = 0x200
+  Property    (Rim lighting)
+  Description (Use adding rim lighting)
+}
+
+Property
+{
+  Name        = %VERTCOLORS
+  Mask        = 0x400
+  Property    (Vertex Colors)
+  Description (Multiply vertex colors with final shader result)
+}
+
+Property
+{
+  Name        = %WIND_BENDING
+  Mask        = 0x800
+  Property    (Wind bending)
+  Description (Gets affected by wind entities. Use extra shader parameters to tweak look.)
+}
+
+Property
+{
+  Name            = %STAT_BRANCHING
+  Mask            = 0x10000000
+  DependencySet   = $HW_StaticBranching
+  DependencyReset = $HW_StaticBranching
+  Hidden
+}
+
+Property
+{
+  Name            = %DYN_BRANCHING
+  Mask            = 0x20000000
+  DependencySet   = $HW_DynamicBranching
+  DependencyReset = $HW_DynamicBranching
+  Hidden
+}

@@ -1,0 +1,28 @@
+TBumpSpec          TemplBumpSpec
+TBumpSpec_NOCM     TemplBumpSpec_NOCM
+TBumpDiffuse_NOCM  TemplBumpDiffuse_NOCM
+TBD                TemplBumpDiffuse
+tbs_HP             templbumpspec_HP
+tbd_NOCM           TemplBumpDiffuse_NOCM
+no_draw            nodraw
+tbs_GA_CM          TemplBumpSpec_GlossAlpha_EnvCMAmb
+
+TemplLightDiffuse                     Illum       4101
+TemplBumpDiffuse                      Illum       5101
+TemplModelCommon                      Illum       5101
+TemplBumpSpec                         Illum       5303
+TemplBumpSpec_HP                      Illum       5303
+TemplBumpSpec_GlossAlpha              Illum       1323
+TemplBumpSpec_HP_GlossAlpha           Illum       1323
+TemplBumpSpec_Gloss                   Illum       1313
+TemplBumpSpec_HP_Gloss                Illum       1313
+TemplModelBumpSpec_HP_GlossAlpha      Illum       1313
+TemplBumpSpec_Offset_PS20             Illum       25303
+TemplBumpSpec_GlossAlpha_Offset_PS20  Illum       21323
+TemplBumpSpec_Gloss_Offset_PS20       Illum       21313
+TemplPlants                           Vegetation  6
+TemplPlants1                          Vegetation  2
+TemplPlantsBark                       Vegetation  0
+TerrainWater                          Water       0
+TerrainWater_OnlySky                  Water       0
+TemplGlassCM                          GlassCM     3

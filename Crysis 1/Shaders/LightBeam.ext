@@ -1,0 +1,13 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: LightBeam.ext
+// Created: 16/2/2004 by Andrey Honich.
+
+Version (1.00)
+
+Property
+{
+  Name        = %NOISE
+  Mask        = 0x1
+  Property    (Noise map)
+  Description (Use animated 3D noise)
+}

@@ -1,0 +1,70 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: SpecialEffects.ext
+// Created: 20/01/2005 by Tiago Sousa
+
+Version (1.00)
+
+Property
+{
+  Name            = %BUMP_MAP
+  Mask            = 0x1
+  Property        (Bump map)
+  Description     (Use bump-map texture)
+  DependencySet   = $TEX_Bump
+  DependencyReset = $TEX_Bump
+  Hidden
+}
+
+Property
+{
+  Name            = %GLOSS_MAP
+  Mask            = 0x2
+  Property        (Gloss map)
+  Description     (Use gloss map as separate texture)
+  DependencySet   = $TEX_Gloss
+  DependencyReset = $TEX_Gloss
+  Hidden
+}
+
+Property
+{
+  Name            = %ENVIRONMENT_MAP
+  Mask            = 0x4
+  Property        (Environment map)
+  Description     (Use environment map as separate texture)
+  DependencySet   = $TEX_EnvCM
+  DependencyReset = $TEX_EnvCM
+  Hidden
+}
+
+Property
+{
+  Name        = %OUTER_SPHERE
+  Mask        = 0x100
+  Property    (Outer sphere effect)
+  Description (Activate outer sphere settings)
+}
+
+Property
+{
+  Name        = %REFRACTIVE_SCOPE
+  Mask        = 0x200
+  Property    (Refractive scope effect)
+  Description (Activate refractive scope settings)
+}
+
+Property
+{
+  Name        = %REFRACTIVE_EXPLOSION
+  Mask        = 0x400
+  Property    (Refractive explosion effect)
+  Description (Activate refractive explosion settings)
+}
+
+Property
+{
+  Name        = %SCOPE_SIGHT
+  Mask        = 0x1000
+  Property    (Scope sight effect)
+  Description (Activate scope sight settings)
+}

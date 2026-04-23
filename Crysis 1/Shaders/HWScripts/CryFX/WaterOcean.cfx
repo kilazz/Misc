@@ -1,0 +1,708 @@
+#include "Common.cfi"
+#include "ModificatorVT.cfi"
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//TODO:
+// - SunShine on water shall be improved, looks terrible.
+// - Clean up and optimize
+// - Make sure to map properly texels->pixels
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "NoPreview;"
+           "ShaderDrawType = Custom;"
+           "ShaderType = Water;"
+           "StartTecnique = r_WaterRefractions ? General : Refraction;"
+>;
+
+/// Un-Tweakables //////////////////////
+float4x4 ReflectMatrix : PI_TexMatrix
+<
+  string 'Sampler' (envMapSamplerRefl)
+>;
+
+// water waves parameters
+float4 PosScale = {256, 256, 6, 1};
+float4 PosOffset = {0, 0, 0, 0};
+float4 Constants = {0, 8, -1, 8};
+float4 WaterLevel : PB_WaterLevel;
+float4 WaterParams = { 0, 0, 0.066, 0.5};
+float4 PI_AmbientOpacity : PI_AmbientOpacity;
+
+/// Tweakables //////////////////////
+
+float BumpScale
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Scales bump map \nMin value = 0, Max value = 1.0 \nCorrect name - BumpScale";
+  string UIName   = "Bump map scale";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.005;
+> = 0.5;
+
+float RippleScale
+<
+  vsregister      = VS_REG_PM_4.y;
+  string UIHelp   = "Scales ripple texture \nMin value = 0.1, Max value = 512.0 \nCorrect name - RippleScale";
+  string UIName   = "Ripple texture scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.1;
+  float UIMax     = 512.0;
+  float UIStep    = 1.0;
+> = 128;
+
+float FresnelBias
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Make specular and reflection more visible  \nMin value = 0 (only visible at sharp angles) \nMax value = 1 (always visible) \nCorrect name - FresnelBias";
+  string UIName   = "Specular/Reflection visibility";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.05;
+> = 0.15;
+
+float FresnelPow
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIHelp   = "Changes reflection strenght/sharpness \nMin value= 0, Max value = 30 \nCorrect name - FresnelPow";
+  string UIName   = "Reflection intensity";
+  string UIWidget = "slider";
+  float UIMin     = 1.0;
+  float UIMax     = 30.0;
+  float UIStep    = 0.05;
+> = 8.0;
+
+float SunShinePow
+<
+  psregister      = PS_REG_PM_3.w;
+  string UIHelp   = "Changes sun shine strenght/sharpness \nMin value= 0, Max value = 10 \nCorrect name - SunShinePow";
+  string UIName   = "Sun shine intensity";
+  string UIWidget = "slider";
+  float UIMin     = 1.0;
+  float UIMax     = 256.0;
+  float UIStep    = 0.05;
+> = 32.0;
+
+//==============================================================================
+
+float4 FresnelMinColor
+<
+  psregister      = PS_REG_PM_4;
+  string UIHelp   = "Set Fresnel minimum environment color";
+  string UIName   = "Fresnel Min. Env. Color";
+  string UIWidget = "color";
+> = {0.1, 0.1, 0.05, 1};
+
+float4 FresnelMaxColor
+<
+  psregister      = PS_REG_PM_5;
+  string UIHelp   = "Set Fresnel maximum environment color";
+  string UIName   = "Fresnel Max. Env. Color";
+  string UIWidget = "color";
+> = {1.0, 1.0, 0.91, 1};
+
+float4 WaterMinColor
+<
+  psregister      = PS_REG_PM_6;
+  string UIHelp   = "Set Water minimum color";
+  string UIName   = "Water Min. Color";
+  string UIWidget = "color";
+> = {0.04, 0.148, 0.26, 1};
+
+float4 WaterMaxColor
+<
+  psregister      = PS_REG_PM_7;
+  string UIHelp   = "Set Water maximum color";
+  string UIName   = "Water Max. Color";
+  string UIWidget = "color";
+> = {0.16, 0.38, 0.45, 1};
+
+//=========================================================================
+
+float ParamDepth
+<
+  Allways;
+  string UIHelp   = "Ocean Depth \nMin value = 0, Max value = 10.0";
+  string UIName   = "Ocean Depth";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.005;
+> = 1.0;
+
+float ParamGravity
+<
+  Allways;
+  string UIHelp   = "Ocean Gravity \nMin value = 0.1, Max value = 20.0";
+  string UIName   = "Ocean Gravity";
+  string UIWidget = "slider";
+  float UIMin     = 0.1;
+  float UIMax     = 20.0;
+  float UIStep    = 0.05;
+> = 9.81;
+
+float ParamSpeed
+<
+  Allways;
+  string UIHelp   = "Ocean animation speed \nMin value = 0.01, Max value = 10.0";
+  string UIName   = "Ocean animation speed";
+  string UIWidget = "slider";
+  float UIMin     = 0.01;
+  float UIMax     = 10.0;
+  float UIStep    = 0.05;
+> = 0.2;
+
+float ParamWindDirection
+<
+  Allways;
+  string UIHelp   = "Ocean wind direction \nMin value = 0, Max value = 180.0";
+  string UIName   = "Ocean wind direction";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 180.0;
+  float UIStep    = 1;
+> = 0;
+
+float ParamWindSpeed
+<
+  Allways;
+  string UIHelp   = "Ocean wind speed \nMin value = 0, Max value = 300.0";
+  string UIName   = "Ocean wind speed";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 300.0;
+  float UIStep    = 1;
+> = 45;
+
+float ParamWaveHeight
+<
+  Allways;
+  string UIHelp   = "Ocean wave height \nMin value = 5, Max value = 1000.0";
+  string UIName   = "Ocean wave height";
+  string UIWidget = "slider";
+  float UIMin     = 5;
+  float UIMax     = 1000.0;
+  float UIStep    = 1;
+> = 128;
+
+float ParamDirectionalDependence
+<
+  Allways;
+  string UIHelp   = "Ocean Directional Dependence \nMin value = 0, Max value = 100.0";
+  string UIName   = "Ocean Directional Dependence";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 100.0;
+  float UIStep    = 0.1;
+> = 4;
+
+float ParamChoppyWaveFactor
+<
+  Allways;
+  string UIHelp   = "Ocean Choppy Wave Factor \nMin value = 0, Max value = 2.0";
+  string UIName   = "Ocean Choppy Wave Factor";
+  string UIWidget = "slider";
+  float UIMin     = 0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.001;
+> = 0.05;
+
+float ParamSuppressSmallWavesFactor
+<
+  Allways;
+  string UIHelp   = "Ocean Suppress Small Waves Factor \nMin value = 0.0000001, Max value = 1.0";
+  string UIName   = "Ocean Suppress Small Waves Factor";
+  string UIWidget = "slider";
+  float UIMin     = 0.0000001;
+  float UIMax     = 1.0;
+  float UIStep    = 0.000000001;
+> = 0.00001;
+
+//========================================================================================
+
+sampler2D envMapSamplerRefl
+<
+  string Script = 
+      "RenderOrder=PreProcess;"
+      "ProcessOrder=WaterReflection;"
+      "RenderCamera=WaterPlaneReflected;"
+      "RenderTarget_IDPool = _RT2D_WATER_ID;"
+      "RenderTarget_Width=512;"                      // used later to filter in PS
+      "RenderTarget_Height=512;"                    //
+      "RenderTarget_UpdateType=WaterReflect;"
+      "RenderDepthStencilTarget=DepthBuffer;"
+      "ClearSetColor=FogColor;"
+      "ClearSetDepth=1;"
+      "ClearTarget=Color;"
+      "ClearTarget=Depth;";
+>
+{
+  Texture = $RT_2D;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler2D envMapSamplerRefr
+<
+  string Script = 
+      "RenderOrder=PreDraw;"
+      "RenderCamera=Current;"
+      "RenderType=CurScene;"
+      "RenderTarget_IDPool = _RT2D_SCREEN_ID;"
+      "RenderTarget_Width=$ScreenSize;"
+      "RenderTarget_Height=$ScreenSize;"
+      "RenderTarget_UpdateType=Allways;"
+      "RenderDepthStencilTarget=DepthBuffer;";
+>
+{
+  Texture = $RT_2D;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler2D bumpMapSampler = sampler_state
+{ Texture = $FromRE0; };
+
+struct a2v
+{
+  float4 Position : POSITION;   // in object space
+
+  float4 Color    : COLOR0;
+};
+
+struct v2fReflect
+{
+  float4 HPosition : POSITION;  // in projection space
+  float2 baseTC    : TEXCOORDN;
+  float4 envTC     : TEXCOORDN;
+  float4 viewVec   : TEXCOORDN;
+  float4 Color     : COLOR0;
+
+#if %_RT_FOG
+  float4 localFogColor : TEXCOORDN;
+#endif
+
+};
+
+struct v2fRefract
+{
+  float4 HPosition : POSITION;  // in projection space
+  float2 baseTC    : TEXCOORDN;
+  float4 envTC     : TEXCOORDN;
+  float3 refrTC    : TEXCOORDN;
+  float4 viewVec   : TEXCOORDN;
+  float4 Color     : COLOR0;
+
+#if %_RT_FOG
+  float4 localFogColor : TEXCOORDN;
+#endif
+};
+
+half Fresnel(half NdotI, half bias, half power)
+{
+  half facing = (1.0 - NdotI);
+  return bias + pow(facing, power);  // opt: removed (1-bias) mul
+}
+
+///////////////// vertex shader //////////////////
+v2fReflect WaterOceanVS(a2v IN)
+{
+  v2fReflect OUT = (v2fReflect)0;
+
+  float4 vPos = IN.Position * PosScale + PosOffset;
+
+  // Apply curvature
+  float3 vCam = vPos.xyz - ViewPos.xyz;
+  vCam.z = 0;
+  float fSqCamDist = dot(vCam, vCam);
+  vPos.z = vPos.z + Constants.x * -fSqCamDist;
+
+#if %_RT_SAMPLE0
+  // Scale height of the wave and normal depending on the water deep
+  float fHeightDelta = WaterLevel.x - IN.HeightMap.x;
+  OUT.viewVec.w = fHeightDelta * WaterParams.w;
+  float fHeightScale = clamp(fHeightDelta * WaterParams.z, 0, 1);
+  vPos.z = vPos.z * fHeightScale;
+#else
+  OUT.viewVec.w = 1;
+#endif
+
+  // Calculate fog
+  float4 vPosReal = vPos;
+  vPosReal.z = vPosReal.z + WaterLevel.x;
+  vCam = vPosReal.xyz - ViewPos.xyz;
+  float fiDist = rsqrt(dot(vCam, vCam));
+  float fDist = 1 / fiDist;
+  //OUT.FogC = fDist.x;
+
+  // Don't deform near to camera
+  //float fScale = step(8, fDist);
+  vPos.z = vPos.z + WaterLevel.x;
+
+  // Normalize camera vector
+  vCam.xyz = vCam.xyz * fiDist;
+
+  OUT.viewVec.xyz = vCam.xyz;
+
+  OUT.HPosition = mul(vpMatrix, vPos);
+
+  float4 RippleTexGen = float4(1/RippleScale, 0, 0, g_VS_WorldViewPos[0]/RippleScale);
+  OUT.baseTC.x = dot(vPos, RippleTexGen);
+  RippleTexGen = float4(0, 1/RippleScale, 0, g_VS_WorldViewPos[1]/RippleScale);
+  OUT.baseTC.y = dot(vPos, RippleTexGen);
+
+  float4 vTexRefl = mul(ReflectMatrix, vPos);
+  OUT.envTC = vTexRefl;
+
+#if %_RT_FOG
+  OUT.localFogColor = GetVolumetricFogColor(vPos);
+#endif
+
+  return OUT;
+}
+
+pixout WaterOceanPS(v2fReflect IN)
+{
+  pixout OUT;
+
+  float3 vCam = IN.viewVec.xyz;
+  float3 normal = tex2D(bumpMapSampler, IN.baseTC.xy).xyz;
+  normal = normal * 2 - 1;
+  normal.xyz = normalize(normal.xyz);
+
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, float4(IN.baseTC.xy, 0, 0));
+   return OUT;
+ #endif
+
+  // Two sided lighting
+  float fDotNorm = dot(vCam.xyz, normal.xyz);
+  fDotNorm = fDotNorm * sign(fDotNorm);
+
+  // calculate approximated fresnel term F
+  //                  1
+  // F = ---------------------------
+  //     ( 1 + E.N ) ^ Fresnel_Power_Factor
+  float fLerp = fDotNorm;
+  float fFresnel = 1 / pow((fDotNorm + 1), FresnelPow);
+  float3 Fresnel = lerp(FresnelMinColor, FresnelMaxColor, fFresnel);
+
+  // load the decal
+  float2 newst = IN.envTC.xy / IN.envTC.w;
+  float4 TexPSMatrix = { BumpScale, 0, 0, BumpScale };
+  newst = newst + TexPSMatrix.xy * normal.xx + TexPSMatrix.zw * normal.yy;
+  float4 env = tex2D(envMapSamplerRefl, newst);
+
+  float4 color = WaterMaxColor - WaterMinColor;
+  color.xyz = WaterMinColor.xyz + color.xyz * fLerp + env.xyz * Fresnel.xyz;
+  color.a = (WaterMaxColor.a + fLerp) * IN.viewVec.w;
+
+  float4 final = color;
+
+#if %_RT_FOG
+  HDRFogOutput(OUT, half4(final.xyz, saturate(final.a)), 1, IN.localFogColor.xyz, IN.localFogColor.w);
+#else
+  HDROutput(OUT, half4(final.xyz, saturate(final.a)), 1);
+#endif
+
+  return OUT;
+}
+
+//======================================================================================
+
+///////////////// vertex shader //////////////////
+v2fRefract WaterOceanRefractVS(a2v IN)
+{
+  v2fRefract OUT = (v2fRefract)0;
+
+  float4 vPos = IN.Position * PosScale + PosOffset;
+
+  // Apply curvature
+  float3 vCam = ViewPos.xyz - vPos.xyz;
+  vCam.z = 0;
+  float fSqCamDist = dot(vCam, vCam);
+  vPos.z = vPos.z + Constants.x * -fSqCamDist;
+
+#if %_RT_SAMPLE0
+  // Scale height of the wave and normal depending on the water deep
+  float fHeightDelta = WaterLevel.x - IN.HeightMap.x;
+  OUT.viewVec.w = fHeightDelta * WaterParams.w;
+  float fHeightScale = clamp(fHeightDelta * WaterParams.z, 0, 1);
+  vPos.z = vPos.z * fHeightScale;
+#else
+  OUT.viewVec.w = 1;
+#endif
+
+  // Calculate fog
+  float4 vPosReal = vPos;
+  vPosReal.z = vPosReal.z + WaterLevel.x;
+  vCam = vPosReal.xyz - ViewPos.xyz;
+  float fiDist = rsqrt(dot(vCam, vCam));
+  float fDist = 1 / fiDist;
+  //OUT.FogC = fDist.x;
+
+  // Don't deform near to camera
+  //float fScale = step(8, fDist);
+  vPos.z = vPos.z + WaterLevel.x;
+
+  // Normalize camera vector
+
+  OUT.viewVec.xyz = ViewPos.xyz - vPos.xyz;;
+
+  OUT.HPosition = mul(vpMatrix, vPos);
+
+  float4 RippleTexGen = float4(1/RippleScale, 0, 0, g_VS_WorldViewPos[0]/RippleScale);
+  OUT.baseTC.x = dot(vPos, RippleTexGen);
+  RippleTexGen = float4(0, 1/RippleScale, 0, g_VS_WorldViewPos[1]/RippleScale);
+  OUT.baseTC.y = dot(vPos, RippleTexGen);
+
+  float4 vTexRefl = mul(ReflectMatrix, vPos);
+  OUT.envTC = vTexRefl;
+
+  // Output projected refraction texture
+  OUT.refrTC.x = (OUT.HPosition.x  + OUT.HPosition.w)*0.5;
+  OUT.refrTC.y = (-OUT.HPosition.y  + OUT.HPosition.w)*0.5;
+  OUT.refrTC.z = OUT.HPosition.w;
+
+  OUT.Color.w = PI_AmbientOpacity.w;
+
+  // Pass attenuation
+  OUT.Color.xyz = OUT.Color.w;
+  OUT.Color.w *= (1-saturate(1.0/(OUT.HPosition.w)));
+
+#if %_RT_FOG
+  OUT.localFogColor = GetVolumetricFogColor(vPos);
+#endif
+
+  return OUT;
+}
+
+half4 tex2DBilinear( sampler2D MapSampler, float2 texTC, float4 MapParams )
+{
+  // MapParams.xy = texture size
+  // MapParams.zw = texture texel size
+
+  half2 f = frac( texTC.xy * MapParams.xy );
+
+  half4 t00 = tex2D( MapSampler, texTC );
+  half4 t10 = tex2D( MapSampler, texTC + MapParams.zw * float2( 1.0, 0.0 ) );
+  half4 tA = lerp( t00, t10, f.x );
+
+  half4 t01 = tex2D( MapSampler, texTC + MapParams.zw * float2( 0.0, 1.0 ) );
+  half4 t11 = tex2D( MapSampler, texTC + MapParams.zw * float2( 1.0, 1.0 ) );
+  half4 tB = lerp( t01, t11, f.x );
+
+  return lerp( tA, tB, f.y );
+}
+
+pixout WaterOceanRefractPS(v2fRefract IN)
+{
+  pixout OUT;
+
+  half3 vCam = normalize(IN.viewVec.xyz);
+  half3 normal = tex2D(bumpMapSampler, IN.baseTC.xy);
+  normal = normal * 2 - 1;
+  normal.xyz = normalize(normal.xyz);
+
+  // Two sided lighting
+  half NdotI = abs(dot(vCam.xyz, normal.xyz));
+
+  half facingK = (1-NdotI);
+  half fresnelK = Fresnel(NdotI, FresnelBias, FresnelPow);
+  half3 Fresnel = lerp(FresnelMinColor, FresnelMaxColor, fresnelK);
+  half fLerp = IN.Color.w;
+  half2 refrNewst = (IN.refrTC.xy / IN.refrTC.z) + normal.xy*min(0.125*IN.Color.z, 0.1); // reduce refraction near beaches
+#ifdef OPENGL
+  refrNewst.y = 1.0 - refrNewst.y;
+#endif
+  half3 refractColor = tex2D(envMapSamplerRefr, refrNewst).xyz;
+
+  // load the decal
+  half2 newst = IN.envTC.xy / IN.envTC.w;
+  half4 TexPSMatrix = { BumpScale, 0, 0, BumpScale };
+  newst = newst + TexPSMatrix.xy * normal.xx + TexPSMatrix.zw * normal.yy;
+ #if %BILINEAR_FP16
+     half4 reflectColor = tex2D(envMapSamplerRefl, newst);
+ #else
+     // RenderTarget_Width,RenderTarget_Height of envMapSamplerRefl
+     half4 reflectColor = tex2DBilinear( envMapSamplerRefl, newst, float4(512.0,512.0,1.0/512.0,1.0/512.0) );
+ #endif
+
+  half4 color = WaterMaxColor - WaterMinColor;
+  half4 final;
+  half3 waterShading = WaterMinColor.xyz + color.xyz * fLerp + reflectColor.xyz * Fresnel.xyz;
+  final.xyz = lerp(refractColor.xyz, waterShading.xyz, saturate(fLerp*(pow(IN.Color.z, 2)))); //-> To minimize water intersection at beaches
+  final.w = 1;
+
+#if %SUN_SHINE
+  // Add sun specular term
+
+  //////////////////////////////////////////////////////////////
+  // Sun glow/shine
+  half selfshadowK=(vCam.z<0) ? 0:1;
+  half3 sunNormal = normal.xyz;
+  sunNormal.xy *= 0.5;
+  sunNormal = normalize(sunNormal);
+
+  half3 mirrorEye = 2*dot(vCam,sunNormal)*sunNormal - vCam;
+  half dotSpec = saturate(dot(mirrorEye.xyz,g_PS_SunLightDir)*1.0015);  // sun is disc
+
+  half sunSpecular = pow(dotSpec, SunShinePow);
+  half3 vSunGlow = sunSpecular*g_PS_SunColor.xyz*(1-NdotI);//*fLerp; //*selfshadowK;
+
+  final.xyz += vSunGlow.xyz;
+#endif
+
+#if %_RT_FOG
+  HDRFogOutput(OUT, half4(final.xyz, saturate(final.a)), 1, IN.localFogColor.xyz, IN.localFogColor.w);
+#else
+  HDROutput(OUT, half4(final.xyz, saturate(final.a)), 1);
+#endif
+
+  return OUT;
+}
+
+//======================================================================================
+
+struct app2vertZ
+{
+  IN_P
+};
+
+struct vert2fragZ
+{
+  OUT_P
+  float4 ZInfo      : TEXCOORD1;
+};
+
+vert2fragZ ZPassVS(app2vertZ IN)
+{
+  vert2fragZ OUT = (vert2fragZ)0;
+
+  float4 vPos = IN.Position * PosScale + PosOffset;
+
+  // Apply curvature
+  float3 vCam = ViewPos.xyz - vPos.xyz;
+  vCam.z = 0;
+  float fSqCamDist = dot(vCam, vCam);
+  vPos.z = vPos.z + Constants.x * -fSqCamDist;
+
+#if %_RT_SAMPLE0
+  // Scale height of the wave and normal depending on the water deep
+  float fHeightDelta = WaterLevel.x - IN.HeightMap.x;
+  OUT.viewVec.w = fHeightDelta * WaterParams.w;
+  float fHeightScale = clamp(fHeightDelta * WaterParams.z, 0, 1);
+  vPos.z = vPos.z * fHeightScale;
+#endif
+
+  vPos.z = vPos.z + WaterLevel.x;
+
+  OUT.HPosition = mul(vpMatrix, vPos);
+
+#if %_RT_FSAA
+  OUT.ZInfo.xyz = vPos.xyz;
+#endif
+
+  OUT.ZInfo.w = OUT.HPosition.w * g_VS_NearFarClipDist.w;
+
+  return OUT;
+}
+
+pixout ZPassPS(vert2fragZ IN)
+{
+  pixout OUT = (pixout)0;
+  OUT.Color = EncodeSceneDepthNoAlpha(IN.ZInfo.w, 1.0, IN.ZInfo.xyz);
+
+  return OUT;
+}
+
+//======================================================================================
+
+technique Refraction
+<
+  string Script = 
+        "TechniqueZ=ZPass;"
+>
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto WaterOceanRefractVS();
+    PixelShader = compile ps_Auto WaterOceanRefractPS();
+
+    ZEnable = true;
+    ZFunc = LEqual;
+    ZWriteEnable = true;
+    CullMode = None;
+  }
+  CustomRE Ocean
+  {
+    Depth = ParamDepth
+    Gravity = ParamGravity
+    Speed = ParamSpeed
+    WindDirection = ParamWindDirection
+    WindSpeed = ParamWindSpeed
+    WaveHeight = ParamWaveHeight
+    DirectionalDependence = ParamDirectionalDependence
+    ChoppyWaveFactor = ParamChoppyWaveFactor
+    SuppressSmallWavesFactor = ParamSuppressSmallWavesFactor
+  }
+}
+
+technique General
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto WaterOceanVS();
+    PixelShader = compile ps_Auto WaterOceanPS();
+
+    ZEnable = true;
+    ZFunc = LEqual;
+    ZWriteEnable = true;
+    CullMode = None;
+
+    SrcBlend = SRC_ALPHA;
+    DestBlend = ONE_MINUS_SRC_ALPHA;
+    AlphaBlendEnable = true;
+  }
+  CustomRE Ocean
+  {
+    Depth = ParamDepth
+    Gravity = ParamGravity
+    Speed = ParamSpeed
+    WindDirection = ParamWindDirection
+    WindSpeed = ParamWindSpeed
+    WaveHeight = ParamWaveHeight
+    DirectionalDependence = ParamDirectionalDependence
+    ChoppyWaveFactor = ParamChoppyWaveFactor
+    SuppressSmallWavesFactor = ParamSuppressSmallWavesFactor
+  }
+}
+
+technique ZPass
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto ZPassVS();
+    PixelShader = compile ps_Auto ZPassPS();
+
+    ZEnable = true;
+    ZFunc = LEqual;
+    ZWriteEnable = true;
+    CullMode = None;
+  }
+}
+
+/////////////////////// eof ///

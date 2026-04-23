@@ -1,0 +1,128 @@
+// Copyright (C) Crytek Studios 2001-2005
+// File: Ice.ext
+// Created: 29/07/2005 by Nick Kasyan
+
+Version (1.00)
+
+Property
+{
+  Name            = %USE_SM30
+  Mask            = 0x1
+  DependencySet   = $HW_SM30
+  DependencyReset = $HW_SM30
+  Hidden
+}
+
+Property
+{
+  Name            = %GLOSS_MAP
+  Mask            = 0x10
+  Property        (Gloss map)
+  Description     (Use gloss map as separate texture)
+  DependencySet   = $TEX_Gloss
+  DependencyReset = $TEX_Gloss
+  Hidden
+}
+
+Property
+{
+  Name        = %GLOSS_DIFFUSEALPHA
+  Mask        = 0x20
+  Property    (Gloss map DifAlpha)
+  Description (Use gloss map as alpha channel in diffuse texture)
+}
+
+Property
+{
+  Name        = %GLOBALSCATTERMAP
+  Mask        = 0x40
+  Property    (Global scattering map)
+  Description (Use Global static scattering map instead of real-time)
+}
+
+Property
+{
+  Name            = %ENVCMSPEC
+  Mask            = 0x80
+  Property        (Specular EnvCM)
+  Description     (Use per-pixel Env. CM reflections with fresnel)
+  DependencyReset = $TEX_EnvCM
+}
+
+Property
+{
+  Name        = %DIFFUSE_SCATTERING
+  Mask        = 0x100
+  Property    (Diffuse scattering component)
+  Description (Use additional diffuse scattering component)
+}
+
+Property
+{
+  Name        = %LAYERSALPHABLEND
+  Mask        = 0x400
+  Property    (Enable layers' blending)
+  Description (Enable diffuse/scattering layers blending for ice)
+}
+
+Property
+{
+  Name            = %SPECULARPOW_GLOSSALPHA
+  Mask            = 0x800
+  Property        (PerPixel Spec. Shinines)
+  Description     (Use specular shininess coef. as alpha channel of gloss texture)
+  DependencyReset = $TEX_Gloss
+}
+
+Property
+{
+  Name        = %RAMP_SCATTER_MODEL
+  Mask        = 0x4000
+  Property    (Use ramp based scattering)
+  Description (Use ramp to modulate scattering depth)
+}
+
+Property
+{
+  Name        = %PARALLAX_AIR_BUBBLES
+  Mask        = 0x20000
+  Property    (Air bubble effects)
+  Description (Precence of bubble into the iced objects)
+}
+
+Property
+{
+  Name            = %BUMP_DIFFUSE
+  Mask            = 0x100000
+  Property        (BumpDiffuse)
+  Description     (Use separate bump map for diffuse lighting)
+  DependencySet   = $TEX_BumpDiffuse
+  DependencyReset = $TEX_BumpDiffuse
+  Hidden
+}
+
+Property
+{
+  Name        = %VERTCOLORS
+  Mask        = 0x400000
+  Property    (Vertex Colors)
+  Description (Use vertex colors)
+}
+
+Property
+{
+  Name            = %STAT_BRANCHING
+  Mask            = 0x10000000
+  DependencySet   = $HW_StaticBranching
+  DependencyReset = $HW_StaticBranching
+  Hidden
+}
+
+Property
+{
+  Name            = %DYN_BRANCHING
+  Mask            = 0x20000000
+  DependencySet   = $HW_DynamicBranching
+  DependencyReset = $HW_DynamicBranching
+  Hidden
+}

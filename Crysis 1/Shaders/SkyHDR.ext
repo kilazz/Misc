@@ -1,0 +1,10 @@
+Version (1.00)
+
+Property
+{
+  Name            = %BILINEAR_FP16
+  Mask            = 0x1
+  DependencySet   = $HW_BilinearFP16
+  DependencyReset = $HW_BilinearFP16
+  Hidden
+}

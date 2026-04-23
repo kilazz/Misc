@@ -1,0 +1,102 @@
+#include "Common.cfi"
+#include "ParticleVT.cfi"
+#include "ShadeLib.cfi"
+
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "NoPreview;"
+           "ShaderType = Particle;";
+>;
+
+sampler2D diffuseSampler = sampler_state
+{
+  Texture = $Diffuse;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+};
+
+////////////////////////////////////////////////
+// structs
+
+struct v2f
+{
+  float4 Position  : POSITION;    // in projection space
+  float3 baseTC    : TEXCOORDN;    // z value used for backlighting coeff
+  float4 Color     : COLOR0;
+};
+
+/////////////////////////////////////////////////
+// shader code
+
+v2f ParticleTransform(in app2vertParticleGeneral IN)
+{
+  v2f OUT;
+#ifndef OPENGL
+  OUT = (v2f)0;
+#endif
+
+  //////////////////////////////////////////////////////
+  // Setup particle
+
+  vert2FragParticleGeneral outParticle;
+  float4 vPos = IN.Position;
+
+  Particle_Setup_General( vPos, g_VS_ViewProjMatr, IN, outParticle);
+
+  OUT.Position = outParticle.Position;
+
+  OUT.baseTC.xy = IN.baseTC.xy;
+  OUT.Color = GetInputColor(IN.Color);
+
+  //////////////////////////////////////////////////////////////////////
+
+  return OUT;
+}
+
+v2f ParticleVS(app2vertParticleGeneral IN)
+{
+#ifdef D3D10
+  IN.Expansion.xyzw = IN.Expansion.zyxw;
+#endif
+  IN.Expansion.xy = IN.Expansion.xy * 2.0 - 1.0;
+
+  return ParticleTransform(IN);
+}
+
+pixout ParticlePS(v2f IN)
+{
+  pixout OUT;
+  int nQuality = GetShaderQuality();
+
+  half4 baseColor =tex2D(diffuseSampler, IN.baseTC.xy);
+  baseColor *= IN.Color;
+
+  #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    DebugOutput(OUT.Color, float4(IN.baseTC.xy, 0, 1));
+    return OUT;
+  #endif
+
+  OUT.Color = baseColor;
+
+  return OUT;
+}
+
+/////////////////////////////////
+// technique
+
+technique SketchParticles
+{
+  pass p0
+  {
+
+    VertexShader = compile vs_Auto ParticleVS() GeneralVS;
+    PixelShader = compile ps_Auto ParticlePS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = None;
+  }
+}

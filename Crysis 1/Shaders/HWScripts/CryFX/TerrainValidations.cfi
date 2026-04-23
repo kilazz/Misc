@@ -1,0 +1,25 @@
+//===========================================================================
+// Validations
+// Removing of redundant and mutually exclusive flags to prevent generating
+// of the vertex/pixel shaders
+// TODO: make special validations for PS.1.1 only support
+
+#if !%GLOSS_MAP
+  #if %SPECULARPOW_GLOSSALPHA
+    #undefine %SPECULARPOW_GLOSSALPHA
+  #endif
+#endif
+
+#if %SPECULARPOW_GLOSSALPHA
+  #if %GLOSS_DIFFUSEALPHA
+    #undefine %GLOSS_DIFFUSEALPHA
+  #endif
+#endif
+
+#if %PARALLAX_OCCLUSION_MAPPING
+  #define %EXPOSE_POM_MAT_PARAMS
+  #if !%ALLOW_POM
+    #undefine %PARALLAX_OCCLUSION_MAPPING
+    //#warning Parameter _PARALLAX_OCCLUSION_MAPPING was ignored
+  #endif
+#endif

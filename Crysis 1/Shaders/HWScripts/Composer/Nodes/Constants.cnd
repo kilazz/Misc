@@ -1,0 +1,29 @@
+//==============================================================================
+// Constant blocks with semantics
+//==============================================================================
+Block 'Constants'
+{
+  Type = Constant
+
+  Node 'ViewProj'
+  {
+    Type       = In
+    Format     = Matrix
+    Editable   = false
+    IOSemantic = PI_ViewProjection
+  }
+  Node 'Time'
+  {
+    Type       = In
+    Format     = Float
+    Editable   = false
+    IOSemantic = Time
+  }
+  Node 'Constant1f'
+  {
+    Type     = In
+    Format   = Float
+    Editable = true
+    Properties { float Default = 0.5; float Min = 0; float Max = 1; float Step = 0.01; }
+  }
+}

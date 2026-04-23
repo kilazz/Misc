@@ -1,0 +1,30 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: VolumeObject.ext
+// Created: 23/7/2007 by Carsten Wenzel.
+
+Version (1.00)
+
+Property
+{
+  Name        = %SOFT_OBJECT_INTERSECTION
+  Mask        = 0x1
+  Property    (Soft Intersections)
+  Description (Enabled soft intersections with opaque scene geometry)
+}
+
+Property
+{
+  Name        = %BACK_LIGHTING
+  Mask        = 0x2
+  Property    (Back Lighting)
+  Description (Adds back lighting to volume silhouette when view against sun)
+}
+
+Property
+{
+  Name            = %USE_SM30
+  Mask            = 0x4
+  DependencySet   = $HW_SM30
+  DependencyReset = $HW_SM30
+  Hidden
+}

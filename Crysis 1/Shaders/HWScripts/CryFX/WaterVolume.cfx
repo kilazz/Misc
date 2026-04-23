@@ -1,0 +1,406 @@
+#include "Common.cfi"
+#include "ModificatorVT.cfi"
+
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+       "ShaderDrawType = General;"
+           "ShaderType = Water;"
+>;
+
+float4x4 compMatrix        : PI_Composite;
+float4x4 oceanMatrix        : PI_OceanMat;
+float3 cameraFrontVector  : PB_CameraFront;
+float3 cameraPos          : PB_CameraPos;
+
+float4 cFogColorDensity;
+float4 cFogPlane;
+float  cPerpDist;
+float  cViewerColorToWaterPlane;
+
+float4 cFogColorShallowWaterLevel;
+float cUnderWaterInScatterConst;
+
+sampler2D sceneDepthSampler = sampler_state
+{
+  Texture = $ZTarget;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+struct a2v
+{
+  float4 Position : POSITION;
+  float2 baseTC   : TEXCOORDN;
+};
+
+struct a2v3
+{
+  float4 Position : POSITION;
+  float3 baseTC   : TEXCOORDN;
+};
+
+struct v2f
+{
+  float4 hPos          : POSITION;
+  float4 hPosTexProj  : TEXCOORD0;
+  float3 viewDir      : TEXCOORD1_centroid;
+};
+
+float GetSceneDepthInto(in float4 screenProj)
+{
+#ifdef %_RT_FSAA
+  float2 lookup = screenProj.xy / screenProj.w;
+  float depth = tex2D(sceneDepthSampler, lookup).r;
+  depth = max(tex2D(sceneDepthSampler, lookup + 2 * PS_ScreenSize.zw).r, depth);
+  depth = max(tex2D(sceneDepthSampler, lookup - 2 * PS_ScreenSize.zw).r, depth);
+  depth = max(tex2D(sceneDepthSampler, lookup + 2 * float2(PS_ScreenSize.z, -PS_ScreenSize.w)).r, depth);
+  depth = max(tex2D(sceneDepthSampler, lookup - 2 * float2(PS_ScreenSize.z, -PS_ScreenSize.w)).r, depth);
+  return depth * PS_NearFarClipDist.y;
+#else
+  float depth = DecodeSceneDepth(sceneDepthSampler, screenProj);
+  return depth;
+#endif
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Case: Looking into water volume
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+v2f WaterVolumeIntoVS( a2v IN )
+{
+#ifndef OPENGL
+  v2f OUT = (v2f) 0;
+#endif
+
+  float4 vPos = IN.Position;
+  float4 hPos = mul( vpMatrix, vPos );
+
+  OUT.hPos = hPos;
+  OUT.hPos.z *= cViewerColorToWaterPlane; // effectively prevent any clipping and depth test rejection by muliplying homogeneous z by zero (if close enough to water surface)
+
+  OUT.hPosTexProj = hPos;
+  OUT.hPosTexProj.x = (  OUT.hPosTexProj.x + OUT.hPosTexProj.w ) * 0.5;
+  OUT.hPosTexProj.y = ( -OUT.hPosTexProj.y + OUT.hPosTexProj.w ) * 0.5;
+#if !D3D10
+  OUT.hPosTexProj.xy += g_VS_ScreenSize.zw * OUT.hPosTexProj.w;
+#endif
+
+  OUT.viewDir = vPos - g_VS_WorldViewPos;
+
+  return OUT;
+}
+
+pixout WaterVolumeIntoPS( v2f IN )
+{
+  pixout OUT = (pixout) 0;
+
+  float sceneDepth = GetSceneDepthInto(IN.hPosTexProj);
+  float volumeDepth = max( sceneDepth - dot( IN.viewDir, -cameraFrontVector ), 0 );
+  float waterVolumeFog = exp2( -cFogColorDensity.w * volumeDepth / dot( normalize( IN.viewDir ), -cameraFrontVector ) );
+
+  OUT.Color = half4( cFogColorDensity.xyz, waterVolumeFog );
+
+  return OUT;
+}
+
+technique Into
+{
+  pass p0
+  {
+#if PS30   // enfore PS 3.0 for FSSA (centroid modifier was ignored for PS 2.0 in NVIDIA driver)
+    VertexShader = compile vs_3_0 WaterVolumeIntoVS();
+    PixelShader = compile ps_3_0 WaterVolumeIntoPS();
+#else
+    VertexShader = compile vs_Auto WaterVolumeIntoVS();
+    PixelShader = compile ps_Auto WaterVolumeIntoPS();
+#endif
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = Back;
+
+    SrcBlend = InvSrcAlpha;
+    DestBlend = SrcAlpha;
+    AlphaBlendEnable = true;
+    ColorWriteEnable = RED|GREEN|BLUE;
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Case: Looking out of water volume
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+v2f WaterVolumeOutofVS( a2v3 IN )
+{
+#ifndef OPENGL
+  v2f OUT = (v2f) 0;
+#endif
+
+  float4 vPos = IN.Position;
+  float4 hPos = mul( compMatrix, vPos );
+
+  OUT.hPos = hPos;
+  OUT.hPos.z = 0; // always prevent any clipping and depth test rejection as we draw full screen quad
+
+  OUT.hPosTexProj = hPos;
+  OUT.hPosTexProj.x = (  OUT.hPosTexProj.x + OUT.hPosTexProj.w ) * 0.5;
+  OUT.hPosTexProj.y = ( -OUT.hPosTexProj.y + OUT.hPosTexProj.w ) * 0.5;
+#if !D3D10
+  OUT.hPosTexProj.xy += g_VS_ScreenSize.zw * OUT.hPosTexProj.w;
+#endif
+
+  OUT.viewDir = IN.baseTC.xyz;
+
+  return OUT;
+}
+
+pixout WaterVolumeOutofPS( v2f IN )
+{
+  pixout OUT = (pixout) 0;
+
+  float3 viewDir = IN.viewDir;
+  // float perpdist = dot( cameraPos, cFogPlane.xyz ) + cFogPlane.w;
+  #define perpdist cPerpDist
+  float cosine = dot( viewDir, cFogPlane.xyz );
+  float pd_c = -perpdist / cosine;
+  //float t = dot( d + cameraPos, cFogPlane.xyz ) + cFogPlane.w;
+  float t = perpdist + dot( viewDir , cFogPlane.xyz );
+  if( t > 0 )
+    viewDir *= pd_c;
+
+  float sceneDepth = DecodeSceneDepth( sceneDepthSampler, IN.hPosTexProj );
+  float volumeDepth = min( dot( viewDir, -cameraFrontVector ), sceneDepth );
+  float waterVolumeFog = exp2( -cFogColorDensity.w * volumeDepth / dot( normalize( viewDir ), -cameraFrontVector ) );
+
+  OUT.Color = half4( cFogColorDensity.xyz, waterVolumeFog );
+
+  return OUT;
+}
+
+technique Outof
+{
+  pass p0
+  {
+#if PS30   // enfore PS 3.0 for FSSA (centroid modifier was ignored for PS 2.0 in NVIDIA driver)
+    VertexShader = compile vs_3_0 WaterVolumeOutofVS();
+    PixelShader = compile ps_3_0 WaterVolumeOutofPS();
+#else
+    VertexShader = compile vs_Auto WaterVolumeOutofVS();
+    PixelShader = compile ps_Auto WaterVolumeOutofPS();
+#endif
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = Front;
+
+    SrcBlend = InvSrcAlpha;
+    DestBlend = SrcAlpha;
+    AlphaBlendEnable = true;
+    ColorWriteEnable = RED|GREEN|BLUE;
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// OceanInto
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+v2f OceanIntoVS( a2v IN )
+{
+#ifndef OPENGL
+  v2f OUT = (v2f) 0;
+#endif
+
+  float4 vPos = IN.Position;
+  float4 hPos = mul( oceanMatrix, vPos );
+
+  OUT.hPos = hPos;
+  OUT.hPos.z += 0.001; // should match offset of terrain base layer to reduce z fighting in distance as much as possible!
+  OUT.hPos.z *= cViewerColorToWaterPlane; // effectively prevent any clipping and depth test rejection by muliplying homogeneous z by zero (if close enough to water surface)
+
+  OUT.hPosTexProj = hPos;
+  OUT.hPosTexProj.x = (  OUT.hPosTexProj.x + OUT.hPosTexProj.w ) * 0.5;
+  OUT.hPosTexProj.y = ( -OUT.hPosTexProj.y + OUT.hPosTexProj.w ) * 0.5;
+#if !D3D10
+  OUT.hPosTexProj.xy += g_VS_ScreenSize.zw * OUT.hPosTexProj.w;
+#endif
+
+  OUT.viewDir = vPos;
+  return OUT;
+}
+
+pixout OceanIntoPS( v2f IN )
+{
+  pixout OUT = (pixout) 0;
+
+  float3 viewDirNorm = normalize( IN.viewDir );
+  float viewDirCorrection = 1.0 / dot( viewDirNorm, -cameraFrontVector );
+
+  float sceneDepth = GetSceneDepthInto(IN.hPosTexProj);
+  float volumeDepth = max( sceneDepth - dot( IN.viewDir, -cameraFrontVector ), 0 );
+  volumeDepth *= viewDirCorrection;
+
+  #define fogColor          cFogColorDensity.xyz
+  #define fogDensity        cFogColorDensity.w
+  #define fogColorShallow  cFogColorShallowWaterLevel.xyz
+  #define waterLevel        cFogColorShallowWaterLevel.w
+
+  float3 planePos = cameraPos.xyz + IN.viewDir.xyz;
+  float3 pixelWorldPos = cameraPos.xyz + sceneDepth * viewDirNorm * viewDirCorrection;
+
+  float inScatter = exp2( -fogDensity * ( waterLevel - planePos.z ) );
+  float t = fogDensity * ( viewDirNorm.z - 1.0 );
+  inScatter *= ( exp2( t * volumeDepth ) - 1.0 ) / t;
+
+  float3 col = fogColor * inScatter;
+  float a = exp2( -fogDensity * ( volumeDepth + max(0, waterLevel - pixelWorldPos.z ) ) );
+
+  col += fogColorShallow * a * saturate( 0.1 * volumeDepth );
+
+  OUT.Color = float4( col, a );
+
+  return OUT;
+}
+
+technique OceanInto
+{
+  pass p0
+  {
+#if PS30   // enfore PS 3.0 for FSSA (centroid modifier was ignored for PS 2.0 in NVIDIA driver)
+    VertexShader = compile vs_3_0 OceanIntoVS();
+    PixelShader = compile ps_3_0 OceanIntoPS();
+#else
+    VertexShader = compile vs_Auto OceanIntoVS();
+    PixelShader = compile ps_Auto OceanIntoPS();
+#endif
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = Back;
+
+    SrcBlend = ONE;
+    DestBlend = SrcAlpha;
+    AlphaBlendEnable = true;
+    ColorWriteEnable = RED|GREEN|BLUE;
+  }
+}
+
+technique OceanIntoLowSpec
+{
+  pass p0
+  {
+#if PS30   // enfore PS 3.0 for FSSA (centroid modifier was ignored for PS 2.0 in NVIDIA driver)
+    VertexShader = compile vs_3_0 OceanIntoVS();
+    PixelShader = compile ps_3_0 WaterVolumeIntoPS();
+#else
+    VertexShader = compile vs_Auto OceanIntoVS();
+    PixelShader = compile ps_Auto WaterVolumeIntoPS();
+#endif
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = Back;
+
+    SrcBlend = InvSrcAlpha;
+    DestBlend = SrcAlpha;
+    AlphaBlendEnable = true;
+    ColorWriteEnable = RED|GREEN|BLUE;
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// OceanOutof
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pixout OceanOutofPS( v2f IN )
+{
+  pixout OUT = (pixout) 0;
+
+  float3 viewDirNorm = normalize( IN.viewDir );
+  float viewDirCorrection = 1.0 / dot( viewDirNorm, -cameraFrontVector );
+
+  float3 viewDir = IN.viewDir;
+  // float perpdist = dot( cameraPos, cFogPlane.xyz ) + cFogPlane.w;
+  #define perpdist cPerpDist
+  float cosine = dot( viewDir, cFogPlane.xyz );
+  float pd_c = -perpdist / cosine;
+  //float t = dot( d + cameraPos, cFogPlane.xyz ) + cFogPlane.w;
+  float t1 = perpdist + dot( viewDir , cFogPlane.xyz );
+  if( t1 > 0 )
+    viewDir *= pd_c;
+
+  float sceneDepth = DecodeSceneDepth( sceneDepthSampler, IN.hPosTexProj );
+  float volumeDepth = min( dot( viewDir, -cameraFrontVector ), sceneDepth );
+  volumeDepth *= viewDirCorrection;
+
+  volumeDepth = max( volumeDepth, 0 );
+
+  #define fogColor          cFogColorDensity.xyz
+  #define fogDensity        cFogColorDensity.w
+  #define fogColorShallow   cFogColorShallowWaterLevel.xyz
+  #define waterLevel        cFogColorShallowWaterLevel.w
+
+  float3 pixelWorldPos = cameraPos.xyz + sceneDepth * viewDirNorm * viewDirCorrection;
+
+  float inScatter = cUnderWaterInScatterConst; // = exp2( -fogDensity * ( waterLevel - cameraPos.z ) )
+  float t = fogDensity * ( viewDirNorm.z - 1.0 );
+  inScatter *= ( exp2( t * volumeDepth ) - 1.0 ) / t;
+
+  float3 col = fogColor * inScatter;
+  float a = exp2( -fogDensity * ( volumeDepth + max( waterLevel - pixelWorldPos.z, 0.0 ) ) );
+
+  col += fogColorShallow * a * saturate( 0.1 * volumeDepth );
+
+  OUT.Color = float4( col, a );
+
+  return OUT;
+}
+
+technique OceanOutof
+{
+  pass p0
+  {
+#if PS30   // enfore PS 3.0 for FSSA (centroid modifier was ignored for PS 2.0 in NVIDIA driver)
+    VertexShader = compile vs_3_0 WaterVolumeOutofVS();
+    PixelShader = compile ps_3_0 OceanOutofPS();
+#else
+    VertexShader = compile vs_Auto WaterVolumeOutofVS();
+    PixelShader = compile ps_Auto OceanOutofPS();
+#endif
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = Front;
+
+    SrcBlend = ONE;
+    DestBlend = SrcAlpha;
+    AlphaBlendEnable = true;
+    ColorWriteEnable = RED|GREEN|BLUE;
+  }
+}
+
+technique OceanOutofLowSpec
+{
+  pass p0
+  {
+#if PS30   // enfore PS 3.0 for FSSA (centroid modifier was ignored for PS 2.0 in NVIDIA driver)
+    VertexShader = compile vs_3_0 WaterVolumeOutofVS();
+    PixelShader = compile ps_3_0 WaterVolumeOutofPS();
+#else
+    VertexShader = compile vs_Auto WaterVolumeOutofVS();
+    PixelShader = compile ps_Auto WaterVolumeOutofPS();
+#endif
+
+    ZEnable = false;
+    ZWriteEnable = false;
+    CullMode = Front;
+
+    SrcBlend = InvSrcAlpha;
+    DestBlend = SrcAlpha;
+    AlphaBlendEnable = true;
+    ColorWriteEnable = RED|GREEN|BLUE;
+  }
+}

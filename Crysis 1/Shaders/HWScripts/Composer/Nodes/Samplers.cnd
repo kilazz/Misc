@@ -1,0 +1,29 @@
+//==============================================================================
+// Constant blocks with semantics
+//==============================================================================
+Block 'Samplers'
+{
+  Type = Sampler
+
+  Node 'Sampler2D'
+  {
+    Function
+    {
+      void __Sampler2D(in float2 TexCoord, in sampler2D Texture, out float4 Result)
+      {
+        Result = tex2D(Texture, TexCoord);
+      }
+    }
+  }
+
+  Node 'SamplerCUBE'
+  {
+    Function
+    {
+      void __SamplerCUBE(in float3 TexCoord, in samplerCUBE Texture, out float4 Result)
+      {
+        Result = texCUBE(Texture, TexCoord);
+      }
+    }
+  }
+}

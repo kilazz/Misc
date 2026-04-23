@@ -1,0 +1,1617 @@
+//===========================================================================
+// Vertex modificator types (%_VT_TYPE):
+// 1 (VTM_SINWAVE): Sinus wave deformations
+// 3 (VTM_BULGE)  : Bulge wave deformations (depends on texture coordinates)
+// 4 (VTM_SQUEEZE)  : Sinus squeeze wave deformations
+// 5 (VTM_PERLIN2D) : Surface 2D perlin-noise deformations
+// 6 (VTM_PERLIN3D) : Volume 3D perlin-noise deformations
+// 7 (VTM_FROMCENTER) : Expanding from center
+// 12 (VTM_FIXED_OFFSET) : Fixed 3D offset along vertex normal
+
+// Vertex modificator flags (in order of applying):
+// %_VT_WIND          : Wind deformations (uses for Cloth and Hair shaders)
+// %_VT_DEPTH_OFFSET  : Depth offset (uses for decals)
+// %_VT_DET_BEND      : Detail bending (uses for Vegetations and requires Color stream with specific weight info)
+// %_VT_DET_BENDING_GRASS : Detail bending used for grass
+// %_VT_BEND          : General bending (engine depend)
+// %_VT_TERRAIN_ADAPT : Position adapted to terrain surface (uses for Vegetations)
+
+// %_VT_TYPE_MODIF    : Specified if one or more of vertex modif. flags is existing
+
+//===========================================================================
+
+#if MESH_SHORT_POS
+  float4 MeshScale    :  PB_MeshScale;
+#endif
+
+//===========================================================================
+// Vertex routines
+// Handle vertices positions generating/modification
+
+#define INST_STREAM_POS                                  \
+#if %_RT_INSTANCING_ATTR                                 \
+ #if %_RT_INSTANCING_ROT                                 \
+  float3x4 InstMatrix   : TEXCOORDN;                     \
+ #else                                                   \
+  float4 InstMatrix   : TEXCOORDN;                       \
+ #endif                                                  \
+ //#if %_RT_CUBEMAP0                                       \
+ // float4 InstLPos     : TEXCOORDN;                       \
+ //#endif                                                  \
+#endif                                                   \
+
+struct streamPos
+{
+  float4 Position;
+  float4 WorldPos;
+  float4 Color;
+#if !%TEMP_TERRAIN
+  float4 baseTC;
+  float4 Tangent;
+  float4 Binormal;
+#else
+  float3 Normal;
+#endif
+  float3x3 ObjToTangentSpace;
+  float4x4 InstMatrix;
+
+#if %_RT_INSTANCING_ATTR
+ #if %_RT_INSTANCING_ROT
+  float3x4 InInstMatrix;
+ #else
+  float4 InInstMatrix;
+ #endif
+
+ #if D3D10
+  #if %_RT_NOZPASS && %_RT_ALPHATEST
+   float4 InstAlphaTest;
+  #endif
+ #endif
+
+ float3x4 InstMotionBlurData;
+ float4 InstVisionParams;
+ float4 InstMaterialLayersParams;
+
+ #if %_VT_BEND && %_RT_VEGETATION
+  float4 InstBendInfo;
+ #endif
+  #if %_VT_WIND
+    float4 InstWindParams;
+  #endif
+  #if %_VT_TERRAIN_ADAPT
+     float4 InstHMAGradients;
+  #endif
+#endif
+
+#if %_RT_SKELETON_SSD
+  float4 BlendWeights;
+  float4 BlendIndices;
+  float4 BoneSpace;
+#endif
+#if %_RT_SHAPEDEFORM
+  float4 ShapeDeformInfo;
+  float4 Thin;
+  float4 Fat;
+#endif
+#if %_RT_MORPHTARGET
+  float3 MorphTargetDelta;
+#endif
+
+};
+
+struct app2vertGeneral
+{
+  IN_P
+#if !%TEMP_TERRAIN
+  float4 baseTC   : TEXCOORDN;
+#endif
+
+  IN_C0
+
+#if !%TEMP_TERRAIN
+  IN_TANG_STREAM
+#else
+  float4 Normal   : NORMAL;
+#endif
+
+#if %_LT_HASSHADOW || %_RT_RAE_GEOMTERM
+  float2 lmTC     : TEXCOORDN;
+#endif
+
+  INST_STREAM_POS
+  INST_STREAM_CUSTOM
+
+#if %_RT_INSTANCING_ATTR
+ #if %_VT_WIND
+  float4 InstWindParams : TEXCOORDN;
+ #endif
+ #if %_VT_TERRAIN_ADAPT
+   float4 InstHMAGradients : TEXCOORDN;
+ #endif
+
+ #if D3D10
+  #if %_RT_NOZPASS && %_RT_ALPHATEST
+   float4 InstAlphaTest   : TEXCOORDN;
+  #endif
+ #endif
+#endif
+
+#if %_RT_SKELETON_SSD
+  IN_SKIN_STREAM
+#endif
+#if %_RT_SHAPEDEFORM
+  IN_SHAPEDEFORM_STREAM
+#endif
+#if %_RT_MORPHTARGET
+  IN_MORPHTARGET_STREAM
+#endif
+};
+
+struct app2vertZGeneral
+{
+  IN_P
+
+#if !%TEMP_TERRAIN
+  float4 baseTC   : TEXCOORDN;
+#endif
+
+  IN_C0
+
+#if !%TEMP_TERRAIN
+  IN_TANG_STREAM
+#else
+  float4 Normal   : NORMAL;
+#endif
+
+  INST_STREAM_POS
+#if %_RT_INSTANCING_ATTR
+ #if %_VT_BEND && %_RT_VEGETATION
+  float4 InstBendInfo : TEXCOORDN;
+ #endif
+ #if %_RT_ALPHATEST || %_RT_DISSOLVE
+  float4 InstAlphaTest : TEXCOORDN;
+ #endif
+ #if %_VT_WIND
+    float4 InstWindParams : TEXCOORDN;
+ #endif
+ #if %_VT_TERRAIN_ADAPT
+     float4 InstHMAGradients : TEXCOORDN;
+ #endif
+#endif
+
+#if %_RT_SKELETON_SSD
+  IN_SKIN_STREAM
+#endif
+#if %_RT_SHAPEDEFORM
+  IN_SHAPEDEFORM_STREAM
+#endif
+#if %_RT_MORPHTARGET
+  IN_MORPHTARGET_STREAM
+#endif
+
+};
+
+struct app2vertSGGeneral
+{
+  IN_P
+
+#if !%TEMP_TERRAIN
+  float4 baseTC   : TEXCOORDN;
+#endif
+
+  IN_C0
+
+#if !%TEMP_TERRAIN
+  IN_TANG_STREAM
+#else
+  float4 Normal   : NORMAL;
+#endif
+
+  INST_STREAM_POS
+#if %_RT_INSTANCING_ATTR
+ #if %_VT_BEND && %_RT_VEGETATION
+  float4 InstBendInfo : TEXCOORDN;
+ #endif
+ #if %_VT_WIND
+  float4 InstWindParams : TEXCOORDN;
+ #endif
+ #if %_VT_TERRAIN_ADAPT
+   float4 InstHMAGradients : TEXCOORDN;
+ #endif
+#endif
+
+#if %_RT_SKELETON_SSD
+  IN_SKIN_STREAM
+#endif
+#if %_RT_SHAPEDEFORM
+  IN_SHAPEDEFORM_STREAM
+#endif
+#if %_RT_MORPHTARGET
+  IN_MORPHTARGET_STREAM
+#endif
+
+};
+
+struct app2vertMotionBlur
+{
+  IN_P
+
+  float4 baseTC   : TEXCOORDN;
+
+  IN_C0
+
+  IN_TANG_STREAM
+
+  INST_STREAM_POS
+#if %_RT_INSTANCING_ATTR
+
+  float3x4 InstMotionBlurData   : TEXCOORDN;
+
+ #if %_VT_BEND && %_RT_VEGETATION
+  float4 InstBendInfo : TEXCOORDN;
+ #endif
+ //if %_RT_ALPHATEST
+  //float4 InstAlphaTest : TEXCOORDN;
+ //endif
+#endif
+
+#if %_RT_SKELETON_SSD
+  IN_SKIN_STREAM
+#endif
+#if %_RT_SHAPEDEFORM
+  IN_SHAPEDEFORM_STREAM
+#endif
+#if %_RT_MORPHTARGET
+  IN_MORPHTARGET_STREAM
+#endif
+
+};
+
+struct app2vertCustomViews
+{
+  IN_P
+  float4 baseTC   : TEXCOORDN;
+  IN_C0
+
+  IN_TANG_STREAM
+
+  INST_STREAM_POS
+
+  #if %_RT_INSTANCING_ATTR
+   #if %_VT_WIND
+    float4 InstWindParams : TEXCOORDN;
+   #endif
+    float4 InstVisionParams : TEXCOORDN;
+  #endif
+
+#if %_RT_SKELETON_SSD
+  IN_SKIN_STREAM
+#endif
+#if %_RT_SHAPEDEFORM
+  IN_SHAPEDEFORM_STREAM
+#endif
+#if %_RT_MORPHTARGET
+  IN_MORPHTARGET_STREAM
+#endif
+};
+
+struct app2vertRainPass
+{
+  IN_P
+
+#if !%TEMP_TERRAIN
+  float4 baseTC   : TEXCOORDN;
+#endif
+
+  IN_C0
+
+#if !%TEMP_TERRAIN
+  IN_TANG_STREAM
+#else
+  float4 Normal   : NORMAL;
+#endif
+
+  INST_STREAM_POS
+#if %_RT_INSTANCING_ATTR
+  float4 InstMaterialLayersParams : TEXCOORDN;
+ #if %_VT_BEND && %_RT_VEGETATION
+  float4 InstBendInfo : TEXCOORDN;
+ #endif
+ #if %_RT_ALPHATEST || %_RT_DISSOLVE
+  float4 InstAlphaTest : TEXCOORDN;
+ #endif
+ #if %_VT_WIND
+    float4 InstWindParams : TEXCOORDN;
+ #endif
+ #if %_VT_TERRAIN_ADAPT
+     float4 InstHMAGradients : TEXCOORDN;
+ #endif
+#endif
+
+#if %_RT_SKELETON_SSD
+  IN_SKIN_STREAM
+#endif
+#if %_RT_SHAPEDEFORM
+  IN_SHAPEDEFORM_STREAM
+#endif
+#if %_RT_MORPHTARGET
+  IN_MORPHTARGET_STREAM
+#endif
+
+};
+
+struct app2vertGlow
+{
+  IN_P
+
+  float4 baseTC   : TEXCOORDN;
+
+  IN_C0
+
+  IN_TANG_STREAM
+
+  INST_STREAM_POS
+  #if %_RT_INSTANCING_ATTR
+   float4 InstAmbientOp  : TEXCOORDN;
+   #if %_RT_ALPHATEST || %_RT_DISSOLVE
+    float4 InstAlphaTest : TEXCOORDN;
+   #endif
+   #if %_VT_WIND
+    float4 InstWindParams : TEXCOORDN;
+   #endif
+  #endif
+
+#if %_RT_SKELETON_SSD
+  IN_SKIN_STREAM
+#endif
+#if %_RT_SHAPEDEFORM
+  IN_SHAPEDEFORM_STREAM
+#endif
+#if %_RT_MORPHTARGET
+  IN_MORPHTARGET_STREAM
+#endif
+
+};
+
+void streamPos_FromGeneral(in app2vertGeneral IN, inout streamPos OUT)
+{
+  OUT.Position = IN.Position;
+  OUT.Color = GetInputColor(IN.Color);
+
+#if !%TEMP_TERRAIN
+  OUT.baseTC = IN.baseTC;
+  OUT.Tangent = IN.Tangent;
+  OUT.Binormal = IN.Binormal;
+
+  OUT.ObjToTangentSpace[0] = IN.Tangent.xyz;
+  OUT.ObjToTangentSpace[1] = IN.Binormal.xyz;
+  OUT.ObjToTangentSpace[2] = normalize(cross(OUT.Tangent, OUT.Binormal)) * IN.Tangent.w;
+#else
+  OUT.Normal = IN.Normal;
+#endif
+
+#if %_RT_INSTANCING_ATTR
+  OUT.InInstMatrix = IN.InstMatrix;
+ #if %_VT_BEND && %_RT_VEGETATION
+  OUT.InstBendInfo = IN.InstBendInfo;
+ #endif
+  #if %_VT_WIND
+    OUT.InstWindParams = 0; //IN.InstWindParams;
+  #endif
+  #if %_VT_TERRAIN_ADAPT
+    OUT.InstHMAGradients = IN.InstHMAGradients;
+  #endif
+
+ #if D3D10
+  #if %_RT_NOZPASS && %_RT_ALPHATEST
+   OUT.InstAlphaTest = IN.InstAlphaTest;
+  #endif
+ #endif
+
+#endif
+
+#if %_RT_SKELETON_SSD
+  OUT.BlendWeights = IN.BlendWeights;
+  OUT.BlendIndices = IN.BlendIndices;
+  OUT.BoneSpace = IN.BoneSpace;
+#endif
+#if %_RT_SHAPEDEFORM
+  OUT.ShapeDeformInfo = IN.ShapeDeformInfo;
+  OUT.Thin = IN.Thin;
+  OUT.Fat = IN.Fat;
+#endif
+#if %_RT_MORPHTARGET
+  OUT.MorphTargetDelta = IN.MorphTargetDelta;
+#endif
+
+}
+
+void streamPos_FromZ(in app2vertZGeneral IN, inout streamPos OUT)
+{
+  OUT.Position = IN.Position;
+  OUT.Color = GetInputColor(IN.Color);
+
+#if !%TEMP_TERRAIN
+  OUT.baseTC = IN.baseTC;
+  OUT.Tangent = IN.Tangent;
+  OUT.Binormal = IN.Binormal;
+
+  OUT.ObjToTangentSpace[0] = IN.Tangent.xyz;
+  OUT.ObjToTangentSpace[1] = IN.Binormal.xyz;
+  OUT.ObjToTangentSpace[2] = normalize(cross(OUT.Tangent, OUT.Binormal)) * IN.Tangent.w;
+#else
+  OUT.Normal = IN.Normal;
+#endif
+
+#if %_RT_INSTANCING_ATTR
+  OUT.InInstMatrix = IN.InstMatrix;
+ #if %_VT_BEND && %_RT_VEGETATION
+  OUT.InstBendInfo = IN.InstBendInfo;
+ #endif
+  #if %_VT_WIND
+    OUT.InstWindParams = 0; //IN.InstWindParams;
+  #endif
+  #if %_VT_TERRAIN_ADAPT
+    OUT.InstHMAGradients = IN.InstHMAGradients;
+  #endif
+#endif
+
+#if %_RT_SKELETON_SSD
+  OUT.BlendWeights = IN.BlendWeights;
+  OUT.BlendIndices = IN.BlendIndices;
+  OUT.BoneSpace = IN.BoneSpace;
+#endif
+#if %_RT_SHAPEDEFORM
+  OUT.ShapeDeformInfo = IN.ShapeDeformInfo;
+  OUT.Thin = IN.Thin;
+  OUT.Fat = IN.Fat;
+#endif
+#if %_RT_MORPHTARGET
+  OUT.MorphTargetDelta = IN.MorphTargetDelta;
+#endif
+
+}
+
+void streamPos_FromSG(in app2vertSGGeneral IN, inout streamPos OUT)
+{
+  OUT.Position = IN.Position;
+  OUT.Color = GetInputColor(IN.Color);
+
+#if !%TEMP_TERRAIN
+  OUT.baseTC = IN.baseTC;
+  OUT.Tangent = IN.Tangent;
+  OUT.Binormal = IN.Binormal;
+
+  OUT.ObjToTangentSpace[0] = IN.Tangent.xyz;
+  OUT.ObjToTangentSpace[1] = IN.Binormal.xyz;
+  OUT.ObjToTangentSpace[2] = normalize(cross(OUT.Tangent, OUT.Binormal)) * IN.Tangent.w;
+#else
+  OUT.Normal = IN.Normal;
+#endif
+
+#if %_RT_INSTANCING_ATTR
+  OUT.InInstMatrix = IN.InstMatrix;
+ #if %_VT_BEND && %_RT_VEGETATION
+  OUT.InstBendInfo = IN.InstBendInfo;
+ #endif
+  #if %_VT_WIND
+    OUT.InstWindParams = 0; //IN.InstWindParams;
+  #endif
+  #if %_VT_TERRAIN_ADAPT
+    OUT.InstHMAGradients = IN.InstHMAGradients;
+  #endif
+#endif
+
+#if %_RT_SKELETON_SSD
+  OUT.BlendWeights = IN.BlendWeights;
+  OUT.BlendIndices = IN.BlendIndices;
+  OUT.BoneSpace = IN.BoneSpace;
+#endif
+#if %_RT_SHAPEDEFORM
+  OUT.ShapeDeformInfo = IN.ShapeDeformInfo;
+  OUT.Thin = IN.Thin;
+  OUT.Fat = IN.Fat;
+#endif
+#if %_RT_MORPHTARGET
+  OUT.MorphTargetDelta = IN.MorphTargetDelta;
+#endif
+
+}
+
+void streamPos_FromMotionBlur(in app2vertMotionBlur IN, inout streamPos OUT)
+{
+  OUT.Position = IN.Position;
+  OUT.Color = GetInputColor(IN.Color);
+
+  OUT.baseTC = IN.baseTC;
+  OUT.Tangent = IN.Tangent;
+  OUT.Binormal = IN.Binormal;
+
+  OUT.ObjToTangentSpace[0] = IN.Tangent.xyz;
+  OUT.ObjToTangentSpace[1] = IN.Binormal.xyz;
+  OUT.ObjToTangentSpace[2] = normalize(cross(OUT.Tangent, OUT.Binormal)) * IN.Tangent.w;
+
+#if %_RT_INSTANCING_ATTR
+  OUT.InInstMatrix = IN.InstMatrix;
+  OUT.InstMotionBlurData = IN.InstMotionBlurData;
+ #if %_VT_BEND && %_RT_VEGETATION
+  OUT.InstBendInfo = IN.InstBendInfo;
+ #endif
+  #if %_VT_WIND
+    OUT.InstWindParams = 0; //IN.InstWindParams;
+  #endif
+#endif
+
+#if %_RT_SKELETON_SSD
+  OUT.BlendWeights = IN.BlendWeights;
+  OUT.BlendIndices = IN.BlendIndices;
+  OUT.BoneSpace = IN.BoneSpace;
+#endif
+#if %_RT_SHAPEDEFORM
+  OUT.ShapeDeformInfo = IN.ShapeDeformInfo;
+  OUT.Thin = IN.Thin;
+  OUT.Fat = IN.Fat;
+#endif
+#if %_RT_MORPHTARGET
+  OUT.MorphTargetDelta = IN.MorphTargetDelta;
+#endif
+
+}
+
+void streamPos_FromCustomViews(in app2vertCustomViews IN, inout streamPos OUT)
+{
+  OUT.Position = IN.Position;
+
+  OUT.baseTC = IN.baseTC;
+
+#if %_RT_INSTANCING_ATTR
+  OUT.InInstMatrix = IN.InstMatrix;
+  OUT.InstVisionParams = IN.InstVisionParams;
+#endif
+
+#if %_RT_SKELETON_SSD
+  OUT.BlendWeights = IN.BlendWeights;
+  OUT.BlendIndices = IN.BlendIndices;
+  OUT.BoneSpace = IN.BoneSpace;
+#endif
+#if %_RT_SHAPEDEFORM
+  OUT.ShapeDeformInfo = IN.ShapeDeformInfo;
+  OUT.Thin = IN.Thin;
+  OUT.Fat = IN.Fat;
+#endif
+#if %_RT_MORPHTARGET
+  OUT.MorphTargetDelta = IN.MorphTargetDelta;
+#endif
+
+}
+
+void streamPos_FromRainPass(in app2vertRainPass IN, inout streamPos OUT)
+{
+  OUT.Position = IN.Position;
+  OUT.Color = GetInputColor(IN.Color);
+
+#if !%TEMP_TERRAIN
+  OUT.baseTC = IN.baseTC;
+  OUT.Tangent = IN.Tangent;
+  OUT.Binormal = IN.Binormal;
+
+  OUT.ObjToTangentSpace[0] = IN.Tangent.xyz;
+  OUT.ObjToTangentSpace[1] = IN.Binormal.xyz;
+  OUT.ObjToTangentSpace[2] = normalize(cross(OUT.Tangent, OUT.Binormal)) * IN.Tangent.w;
+#else
+  OUT.Normal = IN.Normal;
+#endif
+
+#if %_RT_INSTANCING_ATTR
+  OUT.InInstMatrix = IN.InstMatrix;
+  OUT.InstMaterialLayersParams = IN.InstMaterialLayersParams;
+
+ #if %_VT_BEND && %_RT_VEGETATION
+  OUT.InstBendInfo = IN.InstBendInfo;
+ #endif
+  #if %_VT_WIND
+    OUT.InstWindParams = 0; //IN.InstWindParams;
+  #endif
+  #if %_VT_TERRAIN_ADAPT
+    OUT.InstHMAGradients = IN.InstHMAGradients;
+  #endif
+#endif
+
+#if %_RT_SKELETON_SSD
+  OUT.BlendWeights = IN.BlendWeights;
+  OUT.BlendIndices = IN.BlendIndices;
+  OUT.BoneSpace = IN.BoneSpace;
+#endif
+#if %_RT_SHAPEDEFORM
+  OUT.ShapeDeformInfo = IN.ShapeDeformInfo;
+  OUT.Thin = IN.Thin;
+  OUT.Fat = IN.Fat;
+#endif
+#if %_RT_MORPHTARGET
+  OUT.MorphTargetDelta = IN.MorphTargetDelta;
+#endif
+
+}
+
+void streamPos_FromGlow(in app2vertGlow IN, inout streamPos OUT)
+{
+  OUT.Position = IN.Position;
+  OUT.Color = GetInputColor(IN.Color);
+
+  OUT.baseTC = IN.baseTC;
+  OUT.Tangent = IN.Tangent;
+  OUT.Binormal = IN.Binormal;
+
+  OUT.ObjToTangentSpace[0] = IN.Tangent.xyz;
+  OUT.ObjToTangentSpace[1] = IN.Binormal.xyz;
+  OUT.ObjToTangentSpace[2] = normalize(cross(OUT.Tangent, OUT.Binormal)) * IN.Tangent.w;
+
+#if %_RT_INSTANCING_ATTR
+  OUT.InInstMatrix = IN.InstMatrix;
+  #if %_VT_WIND
+    OUT.InstWindParams = 0; //IN.InstWindParams;
+  #endif
+#endif
+
+#if %_RT_SKELETON_SSD
+  OUT.BlendWeights = IN.BlendWeights;
+  OUT.BlendIndices = IN.BlendIndices;
+  OUT.BoneSpace = IN.BoneSpace;
+#endif
+#if %_RT_SHAPEDEFORM
+  OUT.ShapeDeformInfo = IN.ShapeDeformInfo;
+  OUT.Thin = IN.Thin;
+  OUT.Fat = IN.Fat;
+#endif
+#if %_RT_MORPHTARGET
+  OUT.MorphTargetDelta = IN.MorphTargetDelta;
+#endif
+
+}
+
+//======================================================================================================
+// Vertex modificators
+
+float4 _g_VSNoiseTable[66] < register = VS_REG_NOISE_TABLE; >;
+
+// Vertex modificator types
+#define VTM_SINWAVE  1
+#define VTM_BULGE    3
+#define VTM_SQUEEZE  4
+#define VTM_PERLIN2D 5
+#define VTM_PERLIN3D 6
+#define VTM_FROMCENTER 7
+#define VTM_BENDING  8
+#define VTM_FIXED_OFFSET  12
+
+  // .x=time*Freq+Phase; .y=Amp; .z=Level; .w=VertDivider
+  float4 _WaveInfoX   : PB_DeformWaveX;
+  float4 _WaveInfoY   : PB_DeformWaveY;
+  float4 _BendInfo    : PB_DeformBend;
+  float4 _NoiseInfo   : PB_DeformNoiseInfo;
+
+float4 DecalZFightingRemedy : PB_DecalZFightingRemedy;
+
+//===========================================================================
+
+#define _NOISEFRAC 0.03125
+#define _BSIZE     32
+
+// this is the smoothstep function f(t) = 3t^2 - 2t^3, without the normalization
+float3 _s_curve(float3 t) { return t*t*(float3(3,3,3) - float3(2,2,2)*t); }
+float2 _s_curve(float2 t) { return t*t*(float2(3,3) - float2(2,2)*t); }
+float  _s_curve(float  t) { return t*t*(3.0-2.0*t); }
+
+/*
+float4 _ApproxSine4(float4 arg)
+{
+  #define PI 3.14159265
+  float4 x = frac(arg/(2.0*PI)+0.5)*2.0*PI-PI;//brings into -pi..pi, same instr. generated as for sincos
+  float4 x3 = x * x * x;  //cubic component
+  float a = -8.0/(3*PI*PI*PI);  //constant
+  float c = 8.0/(3*PI);      //constant
+  return (a*x3 + c*x); //4 at once, how fast can it get...
+}
+*/
+
+float4 SmoothCurve( float4 x )
+{
+  return x * x *( 3.0 - 2.0 * x );                                                          // 3 alu
+}
+
+float4 SinCurve( float4 x )
+{
+  return x * ( 1.0 - x * x / 3.0 );                                                         // 3 alu
+}
+
+float4 TriangleWave( float4 x )
+{
+  return abs( frac( x + 0.5 ) * 2.0 - 1.0 );                                                    // 4 alu
+}
+
+float4 SignedTriangleWave( float4 x )
+{
+  return abs( frac( x + 0.5 ) * 2.0 - 1.0 )*2-1;                                                    // 4 alu
+}
+
+float4 SmoothTriangleWave( float4 x )
+{
+  return SmoothCurve( TriangleWave( x ) ) ;                                                     // 7 alu
+}
+
+float4 SmoothSignedTriangleWave( float4 x )
+{
+  return SmoothCurve( TriangleWave( x ) ) *2-1;                                                     // 7 alu
+}
+
+void _VTPerlin3D(inout float4 inPos, float3 vNorm, float4 vNoiseInfo)
+{
+#ifdef %_VT_TYPE
+  float3 v = inPos.xyz + vNoiseInfo.xyz + float3(10000.0f, 10000.0f, 10000.0f); // hack to avoid negative numbers;
+
+  // 3D version of perlin noise
+  float3 i = frac(v * _NOISEFRAC) * _BSIZE;   // index between 0 and BSIZE-1
+  i = floor(i);
+  float3 f = frac(v);                         // fractional position
+
+  // lookup in permutation table
+  float2 p;
+  p.x = _g_VSNoiseTable[i[0]].w;
+  p.y = _g_VSNoiseTable[i[0]+1].w;
+  p = p + i[1];
+
+  float4 b;
+  b.x = _g_VSNoiseTable[p[0]].w;
+  b.y = _g_VSNoiseTable[p[1]].w;
+  b.z = _g_VSNoiseTable[p[0]+1].w;
+  b.w = _g_VSNoiseTable[p[1]+1].w;
+  b = b + i[2];
+
+  // compute dot products between gradients and vectors
+  float4 r;
+  r[0] = dot(_g_VSNoiseTable[b[0]].xyz, f);
+  r[1] = dot(_g_VSNoiseTable[b[1]].xyz, f-float3(1.0f, 0.0f, 0.0f));
+  r[2] = dot(_g_VSNoiseTable[b[2]].xyz, f-float3(0.0f, 1.0f, 0.0f));
+  r[3] = dot(_g_VSNoiseTable[b[3]].xyz, f-float3(1.0f, 1.0f, 0.0f));
+
+  float4 r1;
+  r1[0] = dot(_g_VSNoiseTable[b[0]+1].xyz, f-float3(0.0f, 0.0f, 1.0f));
+  r1[1] = dot(_g_VSNoiseTable[b[1]+1].xyz, f-float3(1.0f, 0.0f, 1.0f));
+  r1[2] = dot(_g_VSNoiseTable[b[2]+1].xyz, f-float3(0.0f, 1.0f, 1.0f));
+  r1[3] = dot(_g_VSNoiseTable[b[3]+1].xyz, f-float3(1.0f, 1.0f, 1.0f));
+
+  // interpolate
+  f = _s_curve(f);
+  r = lerp(r, r1, f[2]);
+  r = lerp(r.xyyy, r.zwww, f[1]);
+  float fNoise = lerp( r.x, r.y, f[0]);
+
+  inPos.xyz = inPos.xyz + fNoise * vNoiseInfo.w * vNorm.xyz;
+#endif
+}
+
+void _VTPerlin2D(inout float4 inPos, float3 vNorm, float4 vNoiseInfo)
+{
+#ifdef %_VT_TYPE
+  float2 v = inPos.xy + vNoiseInfo.xy + float2(10000.0f, 10000.0f); // hack to avoid negative numbers
+
+  // 2D version of perlin noise
+  float2 i = frac(v * _NOISEFRAC) * _BSIZE;   // index between 0 and BSIZE-1
+  i = floor(i);
+  float2 f = frac(v);                         // fractional position
+
+  // lookup in permutation table
+  float2 p;
+  p[0] = _g_VSNoiseTable[i[0]].w;
+  p[1] = _g_VSNoiseTable[i[0]+1].w;
+  p = p + i;
+
+  // compute dot products between gradients and vectors
+  float4 r;
+  r[0] = dot(_g_VSNoiseTable[p[0]].xy,   f);
+  r[1] = dot(_g_VSNoiseTable[p[1]].xy,   f-float2(1.0f, 0.0f));
+  r[2] = dot(_g_VSNoiseTable[p[0]+1].xy, f-float2(0.0f, 1.0f));
+  r[3] = dot(_g_VSNoiseTable[p[1]+1].xy, f-float2(1.0f, 1.0f));
+
+  // interpolate
+  f = _s_curve(f);
+  r = lerp(r.xyyy, r.zwww, f[1]);
+  float fNoise = lerp(r.x, r.y, f[0]);
+
+  inPos.xyz = inPos.xyz + fNoise * vNoiseInfo.w * vNorm.xyz;
+#endif
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Vertex modificators bending support
+
+  // Constants used in leaves procedural animation //////////////////
+  float bendDetailFrequency
+  <
+    vsregister      = VS_REG_PM_2.x;
+    string UIHelp   = "Sets frequency/speed of leaves detail bending";
+    string UIName   = "Detail bending frequency";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 10.0;
+    float UIStep    = 0.001;
+    string Filter   = "Vegetation";
+  > = 5.0;
+
+  float bendDetailLeafAmplitude
+  <
+    vsregister      = VS_REG_PM_2.y;
+    string UIHelp   = "Sets amplitude of leaves edges bending";
+    string UIName   = "Bending edges amplitude";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 1.0;
+    float UIStep    = 0.001;
+    string Filter   = "Vegetation";
+  > = 0.08;
+
+  float bendDetailBranchAmplitude
+  <
+    vsregister      = VS_REG_PM_2.z;
+    string UIHelp   = "Sets amplitude of branches bending";
+    string UIName   = "Bending branch amplitude";
+    string UIWidget = "slider";
+    float UIMin     = -10.0;
+    float UIMax     = 1.0;
+    float UIStep    = 0.001;
+    string Filter   = "Vegetation";
+  > = 0.2;
+
+  float bendDetailPhase
+  <
+    vsregister      = VS_REG_PM_2.w;
+    string UIHelp   = "Sets detail bending phase";
+    string UIName   = "Detail bending phase";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 100.0;
+    float UIStep    = 0.001;
+    string Filter   = "Vegetation";
+  > = 100;
+
+// vBendParams.x = windir x
+// vBendParams.y = windir y
+// vBendParams.z = bend info Z
+// vBendParams.w = wind param w (strenght)
+
+// vBendDetailParams.x = time
+// vBendDetailParams.y = detail bend frequency
+// vBendDetailParams.z = detail bend leaf amplitude
+// vBendDetailParams.w = bend detail phase
+
+// vVertexInfo.x = vertex color R ( edge info )
+// vVertexInfo.y = vertex color G ( brach phase )
+// vVertexInfo.z = 1 - vertex color B ( brach bend amount ), would save 1 alu with no inversion, but too late now for changing all assets
+// vVertexInfo.w = bend detail branch amplitude
+
+float _DetailBending(float3 worldPos, inout float4 vPos, float3 vNormal, float4 vVertexInfo, float4 vBendParams, float4 vBendDetailParams)
+{
+#if %_VT_TYPE_MODIF || %_VT_TYPE
+  float3 vecDisplace=0;
+
+  float fTime = g_VS_AnimGenParams.z;
+  float2 vWind = float2( vBendParams.xy );
+  float fBendZ = vBendParams.z;
+  float fSpeed = vBendParams.w;
+
+  //fSpeed += vBendDetailParams.y;                                                                    // 1 alu
+
+ #if %_VT_GRASS
+    fSpeed *= (vPos.z);                                                                             // 1 alu
+ #endif
+
+  float fDetailFreq = vBendDetailParams.y;
+  float fDetailAmp = vBendDetailParams.z;
+  float fDetailPhase = vBendDetailParams.w;
+
+  float fEdgeAtten = vVertexInfo.x;
+  float fBranchPhase = vVertexInfo.y;
+  float fBranchAtten = vVertexInfo.z;
+  float fBranchAmp = vVertexInfo.w;
+
+  // Phases (object, vertex, branch)
+  float fObjPhase = ( dot(worldPos.xyz, 2) );                                                       // 1 alu
+
+  fBranchPhase += fObjPhase;                                                                        // 1 alu
+  float fVtxPhase = ( dot(vPos.xyz, fDetailPhase + fBranchPhase) );                                 // 2 alu
+
+// Detail bending for leaves/grass
+ #if %_VT_DET_BEND
+  if( GetShaderQuality() > QUALITY_LOW )
+  {
+    // x: is used for edges, y is used for branch
+    float2 vWavesIn = fTime;
+    vWavesIn += float2(fVtxPhase, fBranchPhase );                                                 // 1 alu
+
+    float4 vWaves = (frac( vWavesIn.xxyy * float4(1.975, 0.793, 0.375,  0.193) ) * 2.0 - 1.0 ) * fSpeed * fDetailFreq;  //  5 alu
+    vWaves = TriangleWave( vWaves );                                                              // 4 alu
+
+    // x: is used for edges, y is used for branches
+    float2 vWavesSum = ( (vWaves.xz + vWaves.yw)) ;                                                  // 1 alu
+
+    // Edge and branch bending (xy is used for edges, z for branches)
+    vPos.xyz += vWavesSum.xxy * float3(fEdgeAtten * fDetailAmp * vNormal.xy, fBranchAtten * fBranchAmp); // 4 alu
+
+    // 14 alu
+  }
+ #endif
+
+  // Main vegetation bending animation (applied on entire vegetation)
+ #if %_VT_BEND
+  float3 vBend = vBendParams.xyz;
+
+  // Get main bending
+  if( GetShaderQuality() > QUALITY_LOW )
+  {
+    // Todo: we need nice wind areas variation. howto ?
+
+    float fObjPhase = length(worldPos.xyz);                                                       // 1 alu
+    float2 vWavesIn = fTime;
+    vWavesIn += fObjPhase*2.0;                          // 1 alu
+    float4 vWaves = (frac( (vWavesIn.x+vWavesIn.y) * float4(0.95, 0.45793, 0.913,  0.5793)*0.1) * 2.0 - 1.0 ) * 0.7 * fSpeed;  //  4 alu
+    vWaves = SmoothTriangleWave( vWaves );    // 8 alu
+    float2 vWavesSum = (vWaves.xz + vWaves.yw);   // 1 alu
+    vBend.xy += 0.3333 * saturate(vBend.x + vBend.y) * vWavesSum.xy;
+  }
+
+  vBend.xy *= 0.015;
+
+  // Bend factor
+  float fBF = vPos.z * vBend.z + 1.0;                                                               // 1 alu
+
+  // Smooth out value
+  fBF *= fBF;                                                                                       // 1 alu
+  fBF = fBF * fBF - fBF;                                                                            // 1 alu
+
+  float fLength = length(vPos.xyz);                                                                 // 2 alu
+
+  float3 vNewPos = vPos;
+  vNewPos.xy += vBend.xy * fBF;                                                                     // 1 alu
+
+  vPos.xyz = normalize(vNewPos.xyz)* fLength;                                                      // 4 alu
+ #endif
+  // 30 alu (hlsl generates 35)
+
+#endif
+
+  return 1.0;
+}
+
+float _VTBending(inout float4 vPos, float4 BendInfo, inout float3 vNormal, inout float4 Color, float3 worldPos, float4 vBendDetailParams, float bendDetailBranchAmplitudeVal)
+{
+  float colorVariation = 1;
+#ifdef %_VT_TYPE_MODIF
+  float4 vBendParams = BendInfo;
+
+  float4 vVertexInfo = Color;
+  vVertexInfo.z = 1-vVertexInfo.z;
+  vVertexInfo.w = bendDetailBranchAmplitudeVal;
+
+  // Rescale to match wind strenght
+  //vVertexInfo *= min( abs(vBendParams.w), 1.0);
+
+  colorVariation = _DetailBending(worldPos, vPos, vNormal.xyz, vVertexInfo, vBendParams, vBendDetailParams);
+#endif
+
+  // scalar user for vegetation color variation
+  return colorVariation;
+}
+
+//========================================================================================================================
+// General procedural wind support
+
+  float4 WindParams : PI_Wind;
+
+  float AnimFrequency
+  <
+    vsregister      = VS_REG_PM_3.x;
+    string UIName   = "Wind frequency";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 10.0;
+    float UIStep    = 0.001;
+    string Filter   = "Cloth, Hair";
+  > = 0.0;
+
+  float AnimAmplitudeWav0
+  <
+    vsregister      = VS_REG_PM_3.y;
+    string UIName   = "Wind wave0 amp";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 10.0;
+    float UIStep    = 0.001;
+    string Filter   = "Cloth, Hair";
+  > = 0.0;
+
+/*
+  float AnimAmplitudeWav1
+  <
+    vsregister      = VS_REG_PM_3.z;
+    string UIName   = "Wind wave1 amp";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 10.0;
+    float UIStep    = 0.001;
+    string Filter   = "Cloth, Hair";
+  > = 0.0;
+*/
+  float AnimAmplitudeWav2
+  <
+    vsregister      = VS_REG_PM_3.w;
+    string UIName   = "Wind wave2 amp";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 10.0;
+    float UIStep    = 0.001;
+    string Filter   = "Cloth, Hair";
+  > = 0.0;
+
+  float AnimPhase
+  <
+    vsregister      = VS_REG_PM_3.z;
+    string UIHelp   = "Set cloth animation phase";
+    string UIName   = "Wind phase";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 10.0;
+    float UIStep    = 0.001;
+    string Filter   = "Cloth, Hair";
+  > = 1.0;
+
+  void pos_wind_General(inout float4 InPos, float3 vNorm, float4 cVtxColors, streamPos IN)
+  {
+#if %_VT_WIND
+    #if %_RT_INSTANCING_ATTR
+      WindParams = IN.InstWindParams;
+    #endif
+
+    float fAnimAmplitudeWav1 = (AnimAmplitudeWav0 + AnimAmplitudeWav2)*0.5;
+    float4 vWavesAmp = float4( AnimAmplitudeWav0*0.573, AnimAmplitudeWav0, fAnimAmplitudeWav1, AnimAmplitudeWav2 ) * 0.01;
+    const float4 vWavesPhases = float4(0.5 + 0.3799, 0.5 + 0.575, 0.5 + 0.795, 0.5 + 1.099);
+
+    float fAnimPhase = dot( InPos.xyz, AnimPhase )+WindParams.z;                                    // 2 alu
+    float fSpeed = WindParams.w + AnimFrequency;                                                    // 1 alu
+
+    float4 vWaves = ( frac( (g_VS_AnimGenParams.z + fAnimPhase) * vWavesPhases ) * 2.0 - 1.0 ) *fSpeed; // 4 alu
+    vWaves = TriangleWave( vWaves );                                                                    // 4 alu
+    //vWaves = SmoothTriangleWave( vWaves );                                                              // 7 alu
+
+    float fWaveSum = dot( vWavesAmp.xyzw, vWaves.xyzw ) ;                                           // 1 alu
+
+    InPos.xyz +=  fWaveSum * cVtxColors.w * vNorm.xyz ;                                         // 2 alu
+
+    // aprox 18 alu
+#endif
+  }
+
+//==========================================================================================================================
+
+void _VTModify(inout float4 inPos, float3 vNorm, float4x4 InstMatrix, streamPos IN, bool bRelativeToCam, int nType)
+{
+  float4 vTC = 0;
+ #if !%TEMP_TERRAIN
+  vTC = IN.baseTC;
+ #endif
+
+#ifdef %_VT_TYPE
+  if (nType == VTM_SINWAVE)
+  {
+    float f = (inPos.x + inPos.y + inPos.z) * _WaveInfoX.w;
+    f = (f + _WaveInfoX.x) * 3.1415926;
+    float fWave = sin(f) * _WaveInfoX.y + _WaveInfoX.z;
+    inPos.xyz += vNorm.xyz * fWave;
+  }
+  else
+  if (nType == VTM_SQUEEZE)
+  {
+    float f = _WaveInfoX.x * 3.1415926;
+    float fWave = sin(f) * _WaveInfoX.y + _WaveInfoX.z;
+    inPos.xyz += vNorm.xyz * fWave;
+  }
+  else
+  if (nType == VTM_BULGE)
+  {
+    float f = (vTC.x + vTC.y + inPos.x + inPos.y + inPos.z) * _WaveInfoX.w;
+    f = (f + _WaveInfoX.x) * 3.1415926;
+    float fWave = sin(f) * _WaveInfoX.y + _WaveInfoX.z;
+    inPos.xyz += vNorm.xyz * fWave;
+  }
+  else
+  if (nType == VTM_PERLIN2D)
+  {
+    float4 vNoise = _NoiseInfo;
+    vNoise.w = _WaveInfoX.y;
+    _VTPerlin2D(inPos, vNorm, vNoise);
+  }
+  else
+  if (nType == VTM_PERLIN3D)
+  {
+    float4 vNoise = _NoiseInfo;
+    vNoise.w = _WaveInfoX.y;
+    _VTPerlin3D(inPos, vNorm, vNoise);
+  }
+  else
+  if (nType == VTM_FIXED_OFFSET)
+  {
+    float fOffset = _WaveInfoX.z;
+    inPos.xyz += vNorm.xyz * fOffset;
+  }
+#endif
+
+#ifdef %_VT_TYPE_MODIF || %_VT_TYPE
+
+#if %_VT_WIND
+  pos_wind_General(inPos, vNorm, IN.Color, IN);
+#endif
+
+ #if %_VT_DEPTH_OFFSET
+   inPos.xyz += vNorm.xyz * DecalZFightingRemedy.z;
+ #endif
+
+ #if %_VT_DET_BEND
+  nType = VTM_BENDING;
+ #endif
+
+  if (nType == VTM_BENDING)
+  {
+    float4 vBendingInfo = 0;
+ #if %_VT_BEND
+  #if %_RT_INSTANCING_ATTR && %_RT_VEGETATION
+    vBendingInfo = IN.InstBendInfo;
+  #else
+    vBendingInfo  = BendInfo;
+  #endif
+ #endif
+    float3 worldPos = float3(InstMatrix[0].w, InstMatrix[1].w, InstMatrix[2].w);
+    if (bRelativeToCam)
+      worldPos.xyz += g_VS_WorldViewPos.xyz;
+
+    float4 vColor = 0;
+
+    float4 vBendDetailParams = float4(0,0,0,0);
+    float bendDetailBranchAmplitudeVal = 0;
+
+ #if %_VT_DET_BEND
+    if( GetShaderQuality() > QUALITY_LOW )
+    {
+      vBendDetailParams = float4( 1, bendDetailFrequency, bendDetailLeafAmplitude, bendDetailPhase);
+      bendDetailBranchAmplitudeVal = bendDetailBranchAmplitude;
+      vColor = IN.Color;
+    }
+ #endif
+
+     vBendingInfo.xy = mul(vBendingInfo.xyz, (float3x3)InstMatrix).xy;
+    _VTBending(inPos, vBendingInfo, vNorm.xyz, vColor, worldPos, vBendDetailParams, bendDetailBranchAmplitudeVal);
+  }
+#endif
+}
+
+//==========================================================================================================================
+// Skinning support
+
+float4 _pos_ApplyShapeDeformation( in float4 shapeDeformInfo, in float4 posThin, in float4 posNormal, in float4 posFat )
+{
+#if %_RT_SHAPEDEFORM
+  int4 shapeDeformIndex = D3DCOLORtoUBYTE4( shapeDeformInfo.wwww );
+  int Index = clamp(shapeDeformIndex.w, 0, 8);
+  return( posThin * _g_ShapeDeformationData[ Index ].x +
+          posNormal * _g_ShapeDeformationData[ Index ].y +
+          posFat * _g_ShapeDeformationData[ Index ].z );
+#else
+  return posNormal;
+#endif
+}
+
+//Ivo: use a quaternion to rotate a vector
+//the HLSL-compiler can translate this into 6 instructions
+float3 _Quat_x_Vec3(const float4 quat, const float3 vec)
+{
+  float3 r2,r3;
+  r2  = cross(quat.xyz,vec);  //mul+mad
+  r2  = quat.w*vec+r2;    //mad
+  r3  = cross(quat.xyz,r2);  //mul+mad
+  r3  = r3*2+vec;        //mad
+  return r3;
+}
+
+//Ivo: use a quternion to rotate a vector and then translate it
+//the HLSL-compiler can translate this into 7 instructions
+float3 _QuatT_x_Vec3(const float2x4 quat, const float3 vec)
+{
+  float3 r2,r3;
+  r2  = cross(quat[0].xyz,vec);  //mul+mad
+  r2  = quat[0].w*vec+r2;      //mad
+  r3  = cross(quat[0].xyz,r2);  //mul+mad
+  r3  = r3*2+vec;          //mad
+  return r3+quat[1].xyz;          //add
+}
+
+//Ivo: scaling + rotation + translation
+//the HLSL-compiler can translate this into 7 instructions
+float3 _QuatTS_x_Vec3(const float2x4 quat, const float3 vec)
+{
+  float3 r2,r3;
+  r2  = cross(quat[0].xyz,vec);    //mul+mad
+  r2  = quat[0].w*vec+r2;        //mad
+  r3  = cross(quat[0].xyz,r2);    //mul+mad
+  r3  = r3*2+vec;            //mad
+
+  // temporary workaround for ATI driver funkyness
+  // (quat[1].w + 0.000001) *r3+quat[1].xyz;    //mad
+
+  return (quat[1].w + 0.000001) *r3+quat[1].xyz;    //mad
+}
+
+//Ivo: Quaternion-to-Matrix33 conversion
+//the HLSL-compiler can translate this into 8 instructions
+float3x3 _Quat2Mat33(const float4 quat)
+{
+  float3 r0,r1,r2;  float4 q2;
+  float3 c0 = float3(-1,0,1);
+
+  q2    = quat+quat;        //add
+  r2    = q2.w*c0.xyz;        //mul
+  r0    = quat.wzy*r2.zxz+c0.xyy;  //mad ->tangent
+  r0    = quat.x*q2.xyz+r0;      //mad
+  r1    = quat.zwx*r2.zzx+c0.yxy;  //mad ->binormal
+  r1    = quat.y*q2.xyz+r1;          //mad
+  r2  = cross(r0,r1);        //mul+mad ->binormal
+
+  return float3x3(r0,r1,r2);
+}
+
+// TODO: Optimise it, don't transpose matrix
+void Quat2Mat44Scale(out float4x4 mat, float4 quat, float scale, float3 trans)
+{
+  /*
+  float4 r1,r2,r3;  float3 vx,vy;
+  r1    = quat+quat;          //add
+  r2.xy = r1.zx*quat.wz;        //mul
+  r2.zw =-r1.wz*quat.xw;        //mul
+  r3.z  = r1.z*quat.z-1;        //mad
+  vx.x  =-r1.y*quat.y-r3.z;        //mad
+  vx.yz = r1.xw*quat.yy+r2.wy;      //mad
+  vy.y  =-r1.x*quat.x-r3.z;        //mad
+  vy.xz = r1.xy*quat.yz+r2.xz;      //mad
+  float4x4 matInst = float4x4(float4(vx*scale,0), float4(vy*scale,0), float4(cross(vx,vy)*scale,0), float4(trans.xyz, 1));
+  mat = transpose(matInst);
+  */
+   const float4x4 mIdentity = float4x4( float4(1, 0, 0, 0),
+                                        float4(0, 1, 0, 0),
+                                        float4(0, 0, 1, 0),
+                                        float4(0, 0, 0, 1) );
+  float4 r1,r2,r3;  float3 vx,vy;
+  r1    = quat+quat;          //add
+  r2.xy = r1.zx*quat.wz;        //mul
+  r2.zw =-r1.wz*quat.xw;        //mul
+  r3.z  = r1.z*quat.z-1;        //mad
+
+  vx.x  =-r1.y*quat.y-r3.z;        //mad
+  vx.yz = r1.xw*quat.yy+r2.wy;      //mad
+
+  vy.y  =-r1.x*quat.x-r3.z;        //mad
+  vy.xz = r1.xy*quat.yz+r2.xz;      //mad
+
+  // output transposed
+  mat._m00_m10_m20_m30 = float4(vx.xyz, 0) * scale;
+  mat._m01_m11_m21_m31 = float4(vy.xyz, 0) * scale;
+  mat._m02_m12_m22_m32 = float4(cross(vx, vy).xyz, 0) * scale;
+  mat._m03_m13_m23_m33 = float4(trans.xyz, 1);
+}
+
+// Skin position and tangent space
+float4 _SkinningPositionTangent(float2x4 SkinQuatL[MAX_NUM_BONES_PER_GROUP], float4 BoneIndices, float4 Weights, inout float4 InPos, float4 Tangent, float4 Binormal, inout float3x3 objToTangentSpace)
+{
+#if %_RT_SKELETON_SSD
+  int4 Indices = D3DCOLORtoUBYTE4( BoneIndices ).zyxw;
+
+  InPos.xyz = _QuatTS_x_Vec3(_g_SkinQuat[Indices.x],InPos)*Weights.x +   // 8 alu
+              _QuatTS_x_Vec3(_g_SkinQuat[Indices.y],InPos)*Weights.y +    // 8 alu
+              _QuatTS_x_Vec3(_g_SkinQuat[Indices.z],InPos)*Weights.z +   // 8 alu
+              _QuatTS_x_Vec3(_g_SkinQuat[Indices.w],InPos)*Weights.w;    // 8 alu +  3 alu
+
+  objToTangentSpace[0] = _Quat_x_Vec3(_g_SkinQuat[Indices.x][0], float4(Tangent.xyz, 0))*Weights.x +  // 6 alu
+                         _Quat_x_Vec3(_g_SkinQuat[Indices.y][0], float4(Tangent.xyz, 0))*Weights.y +  // 6 alu
+                         _Quat_x_Vec3(_g_SkinQuat[Indices.z][0], float4(Tangent.xyz, 0))*Weights.z +  // 6 alu
+                         _Quat_x_Vec3(_g_SkinQuat[Indices.w][0], float4(Tangent.xyz, 0))*Weights.w;   // 6 alu +  3 alu
+
+  objToTangentSpace[1] = _Quat_x_Vec3(_g_SkinQuat[Indices.x][0], float4(Binormal.xyz, 0))*Weights.x + // 6 alu
+        _Quat_x_Vec3(_g_SkinQuat[Indices.y][0], float4(Binormal.xyz, 0))*Weights.y +                  // 6 alu
+        _Quat_x_Vec3(_g_SkinQuat[Indices.z][0], float4(Binormal.xyz, 0))*Weights.z +                  // 6 alu
+        _Quat_x_Vec3(_g_SkinQuat[Indices.w][0], float4(Binormal.xyz, 0))*Weights.w;                   // 6 alu + 3 alu
+
+  objToTangentSpace[2] = normalize(cross(objToTangentSpace[0], objToTangentSpace[1])) * Tangent.w;  // 6 alu
+
+#endif
+  return InPos;
+}
+
+// Skin position and tangent space
+float4 _SkinningPositionTangent(float2x4 SkinQuatS[MAX_NUM_BONES_PER_GROUP], float4 BoneIndices, float4 Weights, float4 BoneSpace, inout float4 InPos, float4 Tangent, float4 Binormal, inout float3x3 objToTangentSpace)
+{
+#if %_RT_SKELETON_SSD
+#ifdef D3D10
+  int4 Indices = D3DCOLORtoUBYTE4( BoneIndices ).xyzw;
+  Weights.xz = Weights.zx;
+#else
+  int4 Indices = D3DCOLORtoUBYTE4( BoneIndices ).zyxw;
+#endif
+
+  float4 quat = _g_SkinQuat[Indices.x][0].xyzw*Weights.x +
+                _g_SkinQuat[Indices.y][0].xyzw*Weights.y +
+                _g_SkinQuat[Indices.z][0].xyzw*Weights.z +
+                _g_SkinQuat[Indices.w][0].xyzw*Weights.w;  // 7 alu
+
+  quat = normalize( quat ); // 3 alu
+
+  float scale = _g_SkinQuat[Indices.x][1].w*Weights.x + _g_SkinQuat[Indices.y][1].w*Weights.y + _g_SkinQuat[Indices.z][1].w*Weights.z;
+  InPos.xyz = _Quat_x_Vec3( quat, (InPos.xyz-BoneSpace.xyz)*scale ) + _g_SkinQuat[Indices.z][1].xyz;  // 7 alu
+  objToTangentSpace[0] = _Quat_x_Vec3( quat,Tangent.xyz );    // 6 alu
+  objToTangentSpace[1] = _Quat_x_Vec3( quat,Binormal.xyz );   // 6 alu
+  objToTangentSpace[2] = normalize(cross(objToTangentSpace[0], objToTangentSpace[1])) * Tangent.w;  // 6 alu
+
+#endif
+
+  return InPos;
+}
+
+// Skin previous frame position (used for motion blur) (Regular skinning)
+float4 _SkinningPrevPosition(float2x4 SkinQuatL[MAX_NUM_BONES_PER_GROUP], float4 BoneIndices, float4 Weights, inout float4 InPos)
+{
+#if %_RT_SKELETON_SSD
+  int4 Indices = D3DCOLORtoUBYTE4( BoneIndices ).zyxw;
+
+  Indices = clamp( Indices + MAX_NUM_BONES_PER_GROUP_WITH_MB, 0, MAX_NUM_BONES_PER_GROUP-1 );
+
+  InPos.xyz =  _QuatTS_x_Vec3(_g_SkinQuat[Indices.x],InPos)*Weights.x + _QuatTS_x_Vec3(_g_SkinQuat[Indices.y],InPos)*Weights.y + _QuatTS_x_Vec3(_g_SkinQuat[Indices.z],InPos)*Weights.z + _QuatTS_x_Vec3(_g_SkinQuat[Indices.w],InPos)*Weights.w;
+#endif
+  return InPos;
+}
+
+// Skin previous frame position (used for motion blur) (Spherical skinning)
+float4 _SkinningPrevPosition(float2x4 SkinQuatS[MAX_NUM_BONES_PER_GROUP], float4 BoneIndices, float4 Weights, float4 BoneSpace, inout float4 InPos)
+{
+#if %_RT_SKELETON_SSD
+  int4 Indices = D3DCOLORtoUBYTE4( BoneIndices ).zyxw;
+
+  Indices = clamp( Indices + MAX_NUM_BONES_PER_GROUP_WITH_MB, 0, MAX_NUM_BONES_PER_GROUP-1 );
+
+  float4 quat = _g_SkinQuat[Indices.x][0].xyzw*Weights.x + _g_SkinQuat[Indices.y][0].xyzw*Weights.y + _g_SkinQuat[Indices.z][0].xyzw*Weights.z + _g_SkinQuat[Indices.w][0].xyzw*Weights.w;
+  quat = normalize( quat );
+  float scale = _g_SkinQuat[Indices.x][1].w*Weights.x + _g_SkinQuat[Indices.y][1].w*Weights.y + _g_SkinQuat[Indices.z][1].w*Weights.z;
+  InPos.xyz = _Quat_x_Vec3( quat, (InPos.xyz-BoneSpace.xyz)*scale ) + _g_SkinQuat[Indices.z][1].xyz;
+#endif
+
+  return InPos;
+}
+
+//============================================================================================
+
+float4x4 HMAViewProjMat  :  PB_HMAViewProjMat;
+float4  HMAGradients    :  PI_HMAGradients;
+
+float4 Vegetation_TerrainAdaption(float3 vPos, float4x4 InstMatrix, streamPos IN, bool bRelativeToCam=true)
+{
+#if %_VT_TERRAIN_ADAPT
+  //unfortunatelly scaling is needed, it's slow tho
+  vPos  *=  abs(InstMatrix[0].x)+abs(InstMatrix[0].y)+abs(InstMatrix[0].z);
+  float3 vMatPos;
+
+  vMatPos.xyz = float3(InstMatrix[0].w, InstMatrix[1].w, InstMatrix[2].w);
+
+  float3 vWorldPos  =  vPos.xyz+vMatPos;
+  float4 InstHMAGradients = HMAGradients;
+  #if %_RT_INSTANCING_ATTR
+   InstHMAGradients = IN.InstHMAGradients;
+  #endif
+
+  vWorldPos.z  += dot(float4(vPos.xy, vPos.xy*vPos.xy), InstHMAGradients);
+  if( bRelativeToCam )
+    return  mul(g_VS_ViewProjZeroMatr, float4(vWorldPos,1.f));
+  else
+    return  mul(g_VS_ViewProjMatr, float4(vWorldPos,1.f));
+#endif
+  return 0;
+}
+
+//==========================================================================================================================
+
+// Vertex shaders for position
+float4x4 GetInstanceMatrix()
+{
+  float4x4 Matrix = float4x4( float4(1, 0, 0, 0),
+                              float4(0, 1, 0, 0),
+                              float4(0, 0, 1, 0),
+                              float4(0, 0, 0, 1));
+
+#if !%_RT_OBJ_IDENTITY
+  Matrix[0] = ObjWorldMatrix[0];
+  Matrix[1] = ObjWorldMatrix[1];
+  Matrix[2] = ObjWorldMatrix[2];
+#endif
+
+  return Matrix;
+}
+
+void Matrix_Inst_General(inout streamPos IN)
+{
+  // Instancing support
+  IN.InstMatrix = GetInstanceMatrix();
+  float4 instMatrix = float4(1,0,0,0);
+
+  const float4x4 mIdentity = float4x4( float4(1, 0, 0, 0),
+                                       float4(0, 1, 0, 0),
+                                       float4(0, 0, 1, 0),
+                                       float4(0, 0, 0, 1) );
+
+#if %_RT_INSTANCING_ROT
+  // Rotated instances use a 3x4 matrix input
+  IN.InstMatrix[0] = IN.InInstMatrix[0];
+  IN.InstMatrix[1] = IN.InInstMatrix[1];
+  IN.InstMatrix[2] = IN.InInstMatrix[2];
+  IN.InstMatrix[3] = mIdentity[3];
+#else
+ // Non-rotated instances
+ #if %_RT_INSTANCING_ATTR
+  instMatrix = IN.InInstMatrix;
+
+  // Some compiler bug can't initialize before ifdefs !?
+  IN.InstMatrix = mIdentity;
+
+  IN.InstMatrix[0] = float4(instMatrix.w, 0, 0, instMatrix.x);
+  IN.InstMatrix[1] = float4(0, instMatrix.w, 0, instMatrix.y);
+  IN.InstMatrix[2] = float4(0, 0, instMatrix.w, instMatrix.z);
+ #elif %_RT_OBJ_IDENTITY
+  // Some compiler bug can't initialize before ifdefs !?
+  IN.InstMatrix = mIdentity;
+ #endif
+#endif
+}
+
+//==========================================================================================================================
+float4 _pos_HPos(float4x4 VPMatrix, float4x4 InstMatrix, float4 InPos)
+{
+  // save about 10 alu on zpass/shadow gen by skipping redundant computations float4x4 -> float3x4
+  float4 vWorldPos = float4( mul( (const float3x4) InstMatrix, InPos ), 1.0) ;
+
+  return mul(VPMatrix, vWorldPos);
+}
+
+float4 _pos_Common(float4 InPos)
+{
+  float4x4 InstMatrix = GetInstanceMatrix();
+  return _pos_HPos(g_VS_ViewProjZeroMatr, InstMatrix, InPos);
+}
+
+float4 _pos_WaterLevel(float4x4 Matrix, inout float4 InPos, float _Level)
+{
+  InPos.z = _Level;
+  return mul(Matrix, InPos);
+}
+
+//===========================================================================================================================
+
+float4 _pos_Modificators(float4x4 VPMatrix, float4x4 InstMatrix, inout streamPos IN, bool bRelativeToCam=true, bool bPrevFrame=false)
+{
+  int nType = 0;
+  float3 vNorm = IN.ObjToTangentSpace[2];
+  float4 InPos = IN.Position;
+
+#if %_VT_TYPE
+  nType = %_VT_TYPE;
+#endif
+#if %_VT_TYPE || %_VT_TYPE_MODIF
+   _VTModify(InPos, vNorm, InstMatrix, IN, bRelativeToCam, nType);
+#endif
+
+#if %_RT_SKELETON_SSD && !OPENGL
+  #if %_RT_SHAPEDEFORM
+    InPos = _pos_ApplyShapeDeformation(IN.ShapeDeformInfo, IN.Thin, InPos, IN.Fat);
+  #endif
+
+  #if %_RT_MORPHTARGET
+    InPos.xyz += IN.MorphTargetDelta;
+  #endif
+
+ #if !%TEMP_TERRAIN
+  #if %_RT_VEGETATION
+
+    //if( bPrevFrame == false )
+      _SkinningPositionTangent(_g_SkinQuat, IN.BlendIndices, IN.BlendWeights, IN.BoneSpace, InPos, IN.Tangent, IN.Binormal, IN.ObjToTangentSpace);
+    //else
+     // _SkinningPrevPosition(_g_SkinQuat, IN.BlendIndices, IN.BlendWeights, IN.BoneSpace, InPos);
+
+  #else
+
+    if( bPrevFrame == false )
+      _SkinningPositionTangent(_g_SkinQuat, IN.BlendIndices, IN.BlendWeights, InPos, IN.Tangent, IN.Binormal, IN.ObjToTangentSpace);
+    else
+      _SkinningPrevPosition(_g_SkinQuat, IN.BlendIndices, IN.BlendWeights, InPos);
+
+  #endif
+ #endif
+#endif
+
+  float4 HPosition;
+
+#if %_VT_TERRAIN_ADAPT
+  HPosition  =  Vegetation_TerrainAdaption(InPos.xyz, InstMatrix, IN, bRelativeToCam);
+#else
+  HPosition = _pos_HPos(VPMatrix, InstMatrix, InPos);
+#endif
+
+#if %_VT_DEPTH_OFFSET
+  HPosition = HPosition * DecalZFightingRemedy.x + DecalZFightingRemedy.wwyw;  // 1 alu
+#endif
+
+  IN.Position.xyz = InPos.xyz;
+  IN.WorldPos = mul(IN.InstMatrix, IN.Position);
+
+  return HPosition;
+}
+
+float _CheckMinConeDist(float3 Pos, float3 viewPos, float coneRadius)
+{
+  float ret = coneRadius;
+  float3 coneOrigin = viewPos;
+  coneOrigin.z -= 2.5;
+  if(Pos.z < coneOrigin.z)
+    ret = 0;
+  else
+  if(Pos.z > viewPos.z)//return linearly to normal some dist above head
+  {
+    float normalDistHead = 0.4;//at this height, the veg should be back to normal
+    ret = coneRadius * max(0, (normalDistHead-(Pos.z-viewPos.z))/normalDistHead);
+  }
+//  else
+//  if(Pos.z < viewPos.z)  //compute exact radius at this particular height
+//    ret = coneRadius * (2.0 - (viewPos.z - Pos.z)) / 2.0;//2.0 is head height
+  return ret;
+}
+
+// Output view space position (If skinning used, position and tangent space is skinned)
+float4 Pos_VS_General(float4x4 VPMatrix, inout streamPos IN, bool bRelativeToCam=true)
+{
+  float4 HPosition;
+
+#if %_RT_OBJ_IDENTITY
+  VPMatrix = g_VS_ViewProjMatr;
+#endif
+
+#if %_RT_SKELETON_SSD
+  #if MESH_SHORT_POS
+    IN.Position.xyz *= MeshScale.xyz;
+  #endif
+#endif
+
+  // Get instanced matrix
+  Matrix_Inst_General(IN);
+  HPosition = _pos_Modificators(VPMatrix, IN.InstMatrix, IN, bRelativeToCam);
+
+  return HPosition;
+}
+
+float4 Pos_VS_Terrain(float fOffsetZ, float4x4 VPMatrix, inout streamPos IN, bool bSG=false)
+{
+  float4 InPos = IN.Position;
+#if %_RT_OBJ_IDENTITY
+  if (!bSG)
+    InPos.xyz -= g_VS_WorldViewPos.xyz;
+#endif
+
+  IN.InstMatrix = GetInstanceMatrix();
+  float4 HPosition = _pos_HPos(VPMatrix, IN.InstMatrix, InPos);
+  HPosition.z += fOffsetZ;
+
+  IN.WorldPos = mul(IN.InstMatrix, IN.Position);
+
+  return HPosition;
+}
+
+//========================================================================

@@ -1,0 +1,145 @@
+float4 vfViewPos        : PB_CameraPos;
+float4 vfParams          : PB_VolumetricFogParams;
+float3 vfFogColor        : PB_VolumetricFogColor;
+
+float3 slHazeColPartialRayleighInScatter : PB_SkyLightHazeColorPartialRayleighInScatter;
+float3 slHazeColPartialMieInScatter       : PB_SkyLightHazeColorPartialMieInScatter;
+float3 slSunDirection                     : PB_SkyLightSunDirection;
+float3 slPhaseFunctionConstants           : PB_SkyLightPhaseFunctionConstants;
+
+float4 miscCamFront          : PB_CameraFront;
+
+float
+ComputeVolumetricFog( in float3 cameraToWorldPos )
+{
+  #define atmosphereScale                vfParams.x
+  #define volFogHeightDensityAtViewer   vfParams.y
+  #define fogDensity                    vfParams.z
+  #define artistTweakDensityOffset      vfParams.w
+
+  float fogInt = 1;
+
+  const float c_slopeThreshold = 0.01;
+  if( abs( cameraToWorldPos.z ) > c_slopeThreshold )
+  {
+    float t = atmosphereScale * cameraToWorldPos.z;
+    fogInt *= ( 1.0 - exp( -t ) ) / t;
+  }
+
+  // NOTE: volFogHeightDensityAtViewer = log2(e) * fogDensity * exp( -atmosphereScale * ( vfViewPos.z - waterLevel ) );
+  float u = length( cameraToWorldPos ) * volFogHeightDensityAtViewer;
+  fogInt = fogInt * u - artistTweakDensityOffset;
+
+  return saturate( exp2( -fogInt ) );
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Distance based implementation
+//////////////////////////////////////////////////////////////////////////
+
+// RET.xyz = fog color (HDR)
+// RET.w = fog factor to lerp scene/object color with (i.e. lerp( RET.xyz, sceneColor.xyz, RET.w ) )
+float4
+GetVolumetricFogColorDistanceBased( in float3 cameraToWorldPos )
+{
+  float fog = ComputeVolumetricFog( cameraToWorldPos );
+  return float4( vfFogColor.xyz, fog );
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Sky light based implementation
+//////////////////////////////////////////////////////////////////////////
+
+// RET.xyz = fog color (HDR)
+// RET.w = fog factor to lerp scene/object color with (i.e. lerp( RET.xyz, sceneColor.xyz, RET.w ) )
+float4
+GetVolumetricFogColorSkyLightBased( in float3 worldPos, in float3 cameraToWorldPos, in float sceneDepth )
+{
+  float fog = ComputeVolumetricFog( cameraToWorldPos );
+
+  //float g = slPhaseFunctionConstants.x;
+  //float g2 = slPhaseFunctionConstants.y;
+  //float miePart = slPhaseFunctionConstants.z;
+  float miePart_g_2 = slPhaseFunctionConstants.x;  // = pow(miePart, -2/3) * ( -2*g )
+  float miePart_g2_1 = slPhaseFunctionConstants.y; // = pow(miePart, -2/3) * ( 1 + g*g )
+
+  float3 skyDir = normalize( cameraToWorldPos );
+  float cosine = -dot( slSunDirection, skyDir );
+  float cosine2 = cosine * cosine;
+
+  //float miePhase = miePart * ( 1.0 + cosine2 ) / pow( 1.0 + g2 - 2.0 * g * cosine, 1.5 );
+  float miePhase = ( 1.0 + cosine2 ) * pow( miePart_g2_1 + miePart_g_2 * cosine, -1.5 );
+  float rayleighPhase = 0.75 * ( 1.0 + cosine2 );
+
+  float3 fogColor = slHazeColPartialMieInScatter * miePhase * saturate( ( sceneDepth - 1 ) * fog ) + slHazeColPartialRayleighInScatter * rayleighPhase;
+
+  fogColor.xyz += vfFogColor.xyz;
+
+#ifndef %_RT_HDR_MODE
+  fogColor.xyz = 1 - exp( -1 * fogColor.xyz );
+#else
+  fogColor.xyz = min(fogColor.xyz, (float3) 16384.0);
+#endif
+
+  return float4( fogColor.xyz, fog );
+}
+
+float4
+GetVolumetricFogColorSkyLightBased( in float3 worldPos )
+{
+#ifdef %_VS
+  vfViewPos.xyz = g_VS_WorldViewPos;
+#endif
+  float3 camToWorld = worldPos - vfViewPos.xyz;
+  float sceneDepth = dot( camToWorld, -miscCamFront.xyz ) * PS_NearFarClipDist.w;
+  return GetVolumetricFogColorSkyLightBased( worldPos, camToWorld, sceneDepth );
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Volumetric fog functions
+// !!! Only call these to get a correct translation    !!!
+// !!! based on the currently set rendering conditions !!!
+//////////////////////////////////////////////////////////////////////////
+
+float4
+GetVolumetricFogColor( in float3 worldPos, in float3 cameraToWorldPos, in float sceneDepth )
+{
+#if %_RT_SKYLIGHT_BASED_FOG
+  return GetVolumetricFogColorSkyLightBased( worldPos, cameraToWorldPos, sceneDepth );
+#else
+  return GetVolumetricFogColorDistanceBased( cameraToWorldPos );
+#endif
+}
+
+float4
+GetVolumetricFogColor( in float3 worldPos )
+{
+#if %_RT_SKYLIGHT_BASED_FOG
+  return GetVolumetricFogColorSkyLightBased( worldPos );
+#else
+#ifdef %_VS
+  vfViewPos.xyz = g_VS_WorldViewPos;
+#endif
+  float3 camToWorld = worldPos - vfViewPos.xyz;
+  return GetVolumetricFogColorDistanceBased( camToWorld );
+#endif
+}
+
+float
+GetVolumetricFogDensity( in float3 worldPos )
+{
+#ifdef %_VS
+  vfViewPos.xyz = g_VS_WorldViewPos;
+#endif
+  float3 camToWorld = worldPos - vfViewPos.xyz;
+
+  return ComputeVolumetricFog( camToWorld );
+}
+
+void FogFSAA(inout float4 Color, float3 worldPos)
+{
+#if %_RT_FSAA
+  float4 localFogColor = GetVolumetricFogColor(worldPos);
+  Color.g = localFogColor.a;
+#endif
+}

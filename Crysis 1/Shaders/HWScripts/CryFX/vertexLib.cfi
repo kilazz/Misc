@@ -1,0 +1,255 @@
+////////////////////////////////////////////////////////////////////////////
+//
+//  Crytek Engine Source File.
+//  Shader extension
+//  Copyright (C), Crytek Studios, 2001-2004.
+// -------------------------------------------------------------------------
+//  File name:   VertexLib.cfi
+//  Version:     v1.00
+//  Created:     08/07/2006 by Tiago Sousa
+//  Compilers:
+//  Description: Common vertex shader. Since almost all techniques share a similar
+//  vertex shader, a common vertex shader has been created to save some work/code lines
+//  and as an optimization at same time.
+//
+//  Notes:
+//    - When adding new features here, make sure it works with instancing
+//
+// -------------------------------------------------------------------------
+////////////////////////////////////////////////////////////////////////////
+
+#if !%TEMP_VEGETATION
+
+ #define INST_STREAM_CUSTOM                          \
+  #if %_RT_INSTANCING_ATTR                           \
+    float4 InstAmbientOp  : TEXCOORDN;               \
+   #if %_VT_BEND && %_RT_VEGETATION                  \
+    float4 InstBendInfo : TEXCOORDN;                 \
+   #endif                                            \
+   #if %_RT_FOG                                      \
+    float4 InstAvgFogVolumeContrib   : TEXCOORDN;    \
+   #endif                                            \
+  #endif                                             \
+
+#endif
+
+/// Un-Tweakables //////////////////////
+
+float4 EnvColors[6] : PI_EnvColor;
+
+float4 OutdoorAOVertInfo = { PB_ObjVal[0], PB_ObjVal[1], PB_ObjVal[2], PB_ObjVal[3] };
+float4 OutdoorAOFragInfo : PB_OutdoorAOParams;
+
+sampler2D fromObjSampler0 = sampler_state
+{
+  Texture = $FromObj0;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler2D fromObjSampler1 = sampler_state
+{
+  Texture = $FromObj1;
+  MinFilter = POINT;
+  MagFilter = POINT;
+  MipFilter = POINT;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler2D sceneDepthSamplerAO = sampler_state
+{
+ Texture = $ZTarget;
+ MinFilter = POINT;
+ MagFilter = POINT;
+ MipFilter = POINT;
+ AddressU = Clamp;
+ AddressV = Clamp;
+};
+
+///////////////// Vertex/texture modifiers //////////////////
+
+#include "ModificatorVT.cfi"
+#include "ModificatorTC.cfi"
+
+///////////////// General vertex output //////////////////
+
+struct vert2FragGeneral
+{
+  OUT_P
+  float4 baseTC     : TEXCOORDN;
+
+  float4 vTangent  : TEXCOORDN;
+  float4 vBinormal : TEXCOORDN;
+  float4 vView     : TEXCOORDN;
+
+  float4 screenProj : TEXCOORDN_centroid;   //z used for instanced alpha test value
+
+#if %_LT_LIGHTS && %_LT_HASPROJ
+  float4 projTC     : TEXCOORDN;
+#endif
+
+  float4 Ambient    : TEXCOORDN;
+
+#if %_RT_DECAL_TEXGEN_2D || %_RT_DECAL_TEXGEN_3D
+  float3 DistAtten : TEXCOORDN;
+#endif
+
+#if %_RT_FOG && (!%_RT_DECAL_TEXGEN_2D || !%_RT_DECAL_TEXGEN_3D)
+  float4 AvgFogVolumeContrib : TEXCOORDN;
+#endif
+
+#if D3D10
+ #if %_RT_NOZPASS && %_RT_ALPHATEST
+  float4 AlphaTest : TEXCOORDN;
+ #endif
+#endif
+
+  float4 Color      : COLOR0;
+};
+
+///////////////// Shared vertex shader computations //////////////////
+
+void vs_shared_output( in app2vertGeneral IN, inout vert2FragGeneral OUT, bool bUseBump )
+{
+
+  int nQuality = GetShaderQuality();
+
+  // Common data
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+  float4 vPosDecal = vertPassPos.Position;
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+  float3 vNorm = vertPassPos.ObjToTangentSpace[2];
+
+  float4 baseTC;
+#if %_RT_DECAL_TEXGEN_2D
+  // tex gen for 2d projected decals
+  baseTC.x = dot( DecalTangent, vPosDecal );
+  baseTC.y = dot( DecalBinormal, vPosDecal );
+  baseTC.zw = 0;
+
+  // attenuation for 2d projected decals
+  float3 DistAtten = vPosDecal.xyz - DecalAtten.xyz;
+  DistAtten = mul( vertPassPos.ObjToTangentSpace, DistAtten );
+  OUT.DistAtten = DistAtten / DecalAtten.w;
+#elif %_RT_DECAL_TEXGEN_3D
+  // tex gen for 3d projected decals
+  baseTC.x = dot( DecalTangent, vPosDecal );
+  baseTC.y = dot( DecalBinormal, vPosDecal );
+  baseTC.zw = 0;
+
+  float3 distWS = vPosDecal.xyz - DecalAtten.xyz;
+  float decalPlaneDist = dot( DecalNormal.xyz, distWS ); //float3 DecalNormal = normalize( cross( DecalBinormal.xyz, DecalTangent.xyz ) );
+
+  float invDecalSize = 1.0 / DecalAtten.w;
+
+  OUT.DistAtten.x = decalPlaneDist * invDecalSize;
+  OUT.DistAtten.y = saturate(dot(vNorm, DecalNormal) * 10);
+#else
+  baseTC = IN.baseTC;
+#endif
+
+  // Apply texture modifiers
+ _TCModify(baseTC, OUT.baseTC, vertPassPos.Position, vNorm, TS_DIFFUSE);
+
+ if (bUseBump)
+ {
+   float4 bumpTC;
+   _TCModify(baseTC, bumpTC, vertPassPos.Position, vNorm, TS_BUMP);
+   OUT.baseTC.zw = bumpTC.xy;
+ }
+
+  // Output world to tangent matrix and world space position
+
+  // Note: Normalization required for normal diffuse map in world space in case scale used - Do not remove
+  float3 worldTangentS = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]) );
+  float3 worldTangentT = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]) );
+  float3 worldTangentN = normalize(cross(worldTangentS, worldTangentT)) * IN.Tangent.w;
+
+  OUT.vTangent = float4(worldTangentS, IN.Tangent.w);
+  OUT.vBinormal.xyz = worldTangentT;
+  OUT.vView.xyz = vertPassPos.WorldPos.xyz;
+#if %_RT_OBJ_IDENTITY
+  OUT.vView.xyz -= g_VS_WorldViewPos.xyz;
+#else
+  vertPassPos.WorldPos.xyz += g_VS_WorldViewPos.xyz;
+#endif
+
+  // Output the screen-space texture coordinates - for shadows and general projections
+  OUT.screenProj = HPosToScreenTC(OUT.HPosition);
+
+   // Output projection and SH data
+#if %_LT_LIGHTS
+ #if %_LT_HASPROJ
+  OUT.projTC = mul(LightMatrix, vertPassPos.WorldPos);
+ #endif
+#endif
+
+  // Output ambient color
+  OUT.Ambient = AmbientOp;
+#if %_RT_INSTANCING_ATTR
+  OUT.Ambient = IN.InstAmbientOp;
+#endif
+
+ #if D3D10
+  #if %_RT_NOZPASS && %_RT_ALPHATEST
+   OUT.AlphaTest = AlphaTest;
+   #if %_RT_INSTANCING_ATTR
+    OUT.AlphaTest = IN.InstAlphaTest;
+   #endif
+  #endif
+ #endif
+
+  if( nQuality == QUALITY_LOW )
+  {
+    OUT.Ambient = lerp(OUT.Ambient*0.5f, OUT.Ambient, saturate(worldTangentN.z*0.5f+0.5f));             // 4 alu
+  }
+
+  // Output fog into view-vector W component (to save interpolator)
+#if %_RT_FOG && (!%_RT_DECAL_TEXGEN_2D || !%_RT_DECAL_TEXGEN_3D)
+  OUT.vView.w = GetVolumetricFogDensity(OUT.vView.xyz + g_VS_WorldViewPos.xyz);
+
+ #if %_RT_INSTANCING_ATTR
+   OUT.AvgFogVolumeContrib = IN.InstAvgFogVolumeContrib;
+ #else
+   OUT.AvgFogVolumeContrib = AvgFogVolumeContrib;
+ #endif
+
+ #if !%_RT_ALPHABLEND
+    // additive blending case
+    OUT.AvgFogVolumeContrib.w *= OUT.vView.w;
+    OUT.AvgFogVolumeContrib.xyz = 0.0;
+ #endif
+#else
+  OUT.vView.w = vertPassPos.Position.w;
+#endif
+
+#if %VERTCOLORS
+  OUT.Color = GetInputColor(IN.Color);
+#endif
+
+#if %_RT_AMBIENT
+  #if %_RT_RAE_GEOMTERM
+    OUT.baseTC.wz = IN.lmTC.xy;
+  #elif %_RT_AMBIENT_OCCLUSION
+
+    float3 vOutdoorAOInfo = 0;
+    vOutdoorAOInfo.x = OutdoorAOVertInfo.z*vertPassPos.WorldPos.y+OutdoorAOVertInfo.x; // tex coord x
+    vOutdoorAOInfo.y = OutdoorAOVertInfo.z*vertPassPos.WorldPos.x+OutdoorAOVertInfo.y; // tex coord y
+    vOutdoorAOInfo.z = vertPassPos.WorldPos.z-OutdoorAOVertInfo.w; // vertex z relative to terrain sector min z
+
+    OUT.baseTC.wz = vOutdoorAOInfo.xy;
+    OUT.screenProj.z = vOutdoorAOInfo.z;
+
+  #endif
+
+#endif
+
+}
+
+/////////////////////// eof ///

@@ -1,0 +1,264 @@
+#include "Common.cfi"
+#include "ShadeLib.cfi"
+#include "ModificatorVT.cfi"
+#include "ModificatorTC.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "NoPreview;"
+           "ShaderDrawType = General;"
+           "ShaderType = FX;"
+>;
+
+/// Un-Tweakables //////////////////////
+float2 ScrSize : PB_ScreenSize;
+
+float4x4 viewMatrixPS : PI_ViewProjection;
+
+ENVIRONMENTMAP
+ENVIRONMENTCUBEMAP
+
+float4 _GlowParams : PB_GlowParams;
+sampler2D decalMapSampler = sampler_state { Texture = $DecalOverlay; };
+
+sampler2D fringeMapSampler = sampler_state
+{
+  Texture = textures/defaults/fringe_map.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Clamp;
+};
+
+sampler2D screenNoiseSampler = sampler_state
+{
+  Texture = textures/defaults/interference.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = POINT;
+  AddressU = Wrap;
+  AddressV = Wrap;
+};
+
+sampler2D customSampler = sampler_state
+{
+  Texture = $CustomMap;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+float4x4 ObjectMatrix : PI_ObjMatrix;
+
+// Tweakables /////////////////
+
+float InterferenceSpeedScale
+<
+  vsregister      = VS_REG_PM_4.z;
+  string UIHelp   = "Set interference speed scale \nMin value = 0, Max value = 1.0 \nCorrect name - InterferenceSpeedScale";
+  string UIName   = "Interference speed scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.1;
+> = 1.0;
+
+float InterferenceContrast
+<
+  psregister      = PS_REG_PM_4.y;
+  string UIName   = "Interference contrast";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.1;
+> = 1.0;
+
+float InterferenceSizeScale
+<
+  psregister      = PS_REG_PM_4.z;
+  string UIHelp   = "Set interference size scale \nMin value = 0, Max value = 1.0 \nCorrect name - InterferenceSizeScale";
+  string UIName   = "Interference size scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.1;
+> = 0.9;
+
+float FresnelBias
+<
+  psregister      = PS_REG_PM_5.x;
+  string UIName   = "Fresnel bias";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.1;
+> = 0.0;
+
+float FresnelPower
+<
+  psregister      = PS_REG_PM_5.y;
+  string UIName   = "Fresnel pow";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.1;
+> = 5.0;
+
+float4 EdgeColor
+<
+  psregister      = PS_REG_PM_6;
+  string UIName   = "Edge color";
+  string UIWidget = "color";
+> = {1, 1, 1, 1};
+
+////////////////////////////////////////////////////////
+//                GENERAL PASS
+////////////////////////////////////////////////////////
+
+///////////////// vertex input/output //////////////////
+struct vtxOUT
+{
+  OUT_P
+
+  float2 baseTC    : TEXCOORDN;
+  float2 decalTC    : TEXCOORDN;
+  float4 viewVec   : TEXCOORDN;
+  float4 screenPos : TEXCOORDN;
+  float4 constsTbl : TEXCOORDN;
+};
+
+///////////////// vertex shader //////////////////
+vtxOUT HologramVS(app2vertGeneral IN)
+{
+  vtxOUT OUT = (vtxOUT)0;
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  _TCModify(IN.baseTC, OUT.baseTC, vertPassPos.Position, vertPassPos.ObjToTangentSpace[2], TS_DIFFUSE);
+  OUT.decalTC = mul(IN.baseTC, _TCMMatrixDecal);
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+  // Output the screen-space texture coordinates
+  OUT.screenPos = HPosToScreenTC(OUT.HPosition);
+
+  float3 vVec = ViewPos.xyz - vertPassPos.Position.xyz;
+  OUT.viewVec.xyz= (mul(vertPassPos.ObjToTangentSpace, vVec.xyz));
+
+  OUT.viewVec.w = OUT.HPosition.w;
+
+  OUT.constsTbl.xyz = g_VS_AnimGenParams.x * InterferenceSpeedScale;
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout HologramPS(vtxOUT IN)
+{
+  pixout OUT;
+
+   // Debug output
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, IN.baseTC);
+   return OUT;
+ #endif
+
+  half4 baseColor = tex2D(diffuseMapSampler, IN.baseTC.xy);
+  half4 decalColor = tex2D(decalMapSampler, IN.decalTC.xy);
+
+  baseColor.xyz *= decalColor.xyz * baseColor.w * decalColor.w;
+
+  half2 refrTC = (IN.screenPos.xy/IN.screenPos.ww) ;
+  half4 interferenceColA = tex2D(screenNoiseSampler, refrTC.xy * half2(1.0, 1.1 * InterferenceSizeScale) * (ScrSize.xy / 64.0) + half2(0, IN.constsTbl.z));
+  half4 interferenceColB = tex2D(screenNoiseSampler, refrTC.xy * half2(1.0, InterferenceSizeScale) * (ScrSize.xy / 64.0) - half2(0, IN.constsTbl.z));
+  half4 interferenceCol = interferenceColA * interferenceColB;
+
+  interferenceCol = max( lerp( dot(interferenceCol, 0.33), interferenceCol, InterferenceContrast), 0);
+
+  half4 normalVec=half4(0,0,1,1);
+  normalVec.xyz = GetNormalMap(bumpMapSampler, IN.baseTC.xy);
+
+  half3 eyeVec = normalize(IN.viewVec.xyz);
+  half NdotE = (dot(eyeVec.xyz, normalVec.xyz));
+
+  half3 cGradient = tex2D(customSampler, NdotE);
+
+  normalVec.xyz *= min(NdotE + 0.1, 1.0);
+
+  NdotE = saturate(dot(eyeVec.xyz, normalVec.xyz));
+
+  half fFresnel = GetFresnel(NdotE, FresnelBias, FresnelPower);
+  half3  fVis = fFresnel;
+
+  half3  finalColor = fFresnel*EdgeColor ;
+  finalColor *= interferenceCol * baseColor * _GlowParams * cGradient;
+
+  finalColor *= saturate(10 *( IN.viewVec.w - PS_NearFarClipDist.x ));
+
+  HDROutput(OUT, half4(finalColor.xyz, 0), 1);
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script = 
+        "TechniqueGlow=GlowPass;"
+>
+{
+ /* pass p0
+  {
+    VertexShader = compile vs_Auto CloakVS() GeneralVS;
+    PixelShader = compile ps_Auto CloakRefrationPS() GeneralPS;
+
+    Zenable = true;
+    ZWriteEnable = true;
+    CullMode = back;
+  }
+*/
+  /*
+  pass p1
+  {
+    VertexShader = compile vs_Auto CloakVS() GeneralVS;
+    PixelShader = compile ps_Auto CloakDifractionPS() GeneralPS;
+
+    Zenable = true;
+    ZWriteEnable = false;
+    CullMode = back;
+
+    SrcBlend = ONE;
+    DestBlend = ONE;
+    //AlphaBlendEnable = true;
+
+  }*/
+}
+
+technique GlowPass
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto HologramVS() GeneralVS;
+    PixelShader = compile ps_Auto HologramPS() GeneralPS;
+
+    ZEnable = true;
+    ZWriteEnable = false;
+    CullMode = Back;
+
+    SrcBlend = ONE;
+    DestBlend = ONE;
+    AlphaBlendEnable = true;
+    IgnoreMaterialState = true;
+  }
+}
+//////////////////////////////// Common techniques ////////////////
+
+/////////////////////// eof ///

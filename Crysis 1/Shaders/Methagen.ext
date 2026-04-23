@@ -1,0 +1,60 @@
+// Copyright (C) Crytek Studios 2001-2005
+// File: Methagen.ext
+// Created: 21/12/2005 by Nick Kasyan
+
+Version (1.00)
+
+Property
+{
+  Name            = %GLOSS_MAP
+  Mask            = 0x10
+  Property        (Gloss map)
+  Description     (Use gloss map as separate texture)
+  DependencySet   = $TEX_Gloss
+  DependencyReset = $TEX_Gloss
+  Hidden
+}
+
+Property
+{
+  Name            = %ENVCMSPEC
+  Mask            = 0x80
+  Property        (Specular EnvCM)
+  Description     (Use per-pixel Env. CM reflections with fresnel)
+  DependencyReset = $TEX_EnvCM
+}
+
+Property
+{
+  Name            = %SPECULARPOW_GLOSSALPHA
+  Mask            = 0x800
+  Property        (PerPixel Spec. Shinines)
+  Description     (Use specular shininess coef. as alpha channel of gloss texture)
+  DependencyReset = $TEX_Gloss
+}
+
+Property
+{
+  Name        = %ALPHA_OCCLUDERS
+  Mask        = 0x1000000
+  Property    (Use occlusion from alpha to modulate scattering)
+  Description (Use occlusion from alpha to modulate scattering)
+}
+
+Property
+{
+  Name            = %STAT_BRANCHING
+  Mask            = 0x10000000
+  DependencySet   = $HW_StaticBranching
+  DependencyReset = $HW_StaticBranching
+  Hidden
+}
+
+Property
+{
+  Name            = %DYN_BRANCHING
+  Mask            = 0x20000000
+  DependencySet   = $HW_DynamicBranching
+  DependencyReset = $HW_DynamicBranching
+  Hidden
+}

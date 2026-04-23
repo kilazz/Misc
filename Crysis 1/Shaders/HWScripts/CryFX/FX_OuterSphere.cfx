@@ -1,0 +1,581 @@
+// todo: cleanup/optimize !
+
+#include "Common.cfi"
+#include "ShadeLib.cfi"
+#include "ModificatorVT.cfi"
+
+#define TEXTURE_MATH
+
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+                "Public;"
+                "NoPreview;"
+                // Render in decal pass and force zpass rendering to make sure fog volumes work fine
+                "Decal;"
+                "ForceZpass;"
+                //"ForceDrawLast;"
+                "ShaderDrawType = General;"
+                "ShaderType = FX;"
+>;
+
+/// Un-Tweakables //////////////////////
+float3 vCameraFrontVector  : PB_CameraFront;
+
+/// Un-Tweakables //////////////////////
+// xyz = glow intensity/color, alpha is glow size
+
+float4 GlowParams : PB_GlowParams;
+
+ENVIRONMENTMAP
+ENVIRONMENTCUBEMAP
+
+float4x4 mUnProject : PB_UnProjMatrix;
+
+sampler2D outerSphereSampler = sampler_state
+{
+  Texture = textures/defaults/outer_sphere.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = NONE;
+  AddressU = Clamp;
+  AddressV = Clamp;
+};
+
+sampler3D volumeNoiseSampler = sampler_state
+{
+  Texture = textures/defaults/Noise3D.dds;
+  MinFilter = LINEAR;
+  MagFilter = LINEAR;
+  MipFilter = LINEAR;
+  AddressU = Wrap;
+  AddressV = Wrap;
+  AddressW = Wrap;
+};
+
+sampler2D sceneDepthSampler = sampler_state
+{
+ Texture = $ZTarget;
+ MinFilter = POINT;
+ MagFilter = POINT;
+ MipFilter = POINT;
+ AddressU = Clamp;
+ AddressV = Clamp;
+};
+
+// Tweakables /////////////////
+
+float OffsetBump
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Set offset bump amount";
+  string UIName   = "Offset bump amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.001;
+> = 0.2;
+
+float DetailOffsetBump
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Set offset bump amount";
+  string UIName   = "Detail layer offset bump amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.001;
+> = 0.4;
+
+float DetailDistance
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIHelp   = "Set detail layer blending distance";
+  string UIName   = "Detail layer distance";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 2000.0;
+  float UIStep    = 0.001;
+> = 400.0;
+
+float Tilling
+<
+  vsregister      = VS_REG_PM_5.x;
+  string UIHelp   = "Set smooke puff tilling";
+  string UIName   = "Tilling";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 0.5;
+
+float DetailTilling
+<
+  vsregister      = VS_REG_PM_5.y;
+  string UIHelp   = "Set smooke puff detail tilling";
+  string UIName   = "Detail Tilling";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float SpeedMultiplier
+<
+  vsregister      = VS_REG_PM_5.z;
+  string UIHelp   = "Set speed multiplier";
+  string UIName   = "Speed multiplier";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float DetailSpeedMultiplier
+<
+  vsregister      = VS_REG_PM_5.w;
+  string UIHelp   = "Set speed multiplier";
+  string UIName   = "Detail Speed multiplier";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float SurfaceThickness
+<
+  psregister      = PS_REG_PM_4.x;
+  string UIHelp   = "Set thickness amount";
+  string UIName   = "Surface thickness";
+  string UIWidget = "slider";
+  float UIMin     = 1.0;
+  float UIMax     = 50.0;
+  float UIStep    = 0.001;
+> = 10.0;
+
+float SmookePuffBias
+<
+  psregister      = PS_REG_PM_4.y;
+  string UIHelp   = "Set smooke puffiness";
+  string UIName   = "Smoke puff bias";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 2.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float SmookePuffPow
+<
+  psregister      = PS_REG_PM_4.z;
+  string UIHelp   = "Set smooke puff contrast areas";
+  string UIName   = "Smoke puff power";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float4 SmookePuffBeginColor
+<
+  psregister      = PS_REG_PM_5;
+  string UIName   = "Smoke puff Darker color";
+  string UIWidget = "color";
+> = {0.0, 0.0, 0.0, 1.0};
+
+float4 SmookePuffEndColor
+<
+  psregister      = PS_REG_PM_6;
+  string UIName   = "Smoke puff Brighter color";
+  string UIWidget = "color";
+> = {0.65, 0.65, 0.65, 1.0};
+
+float4 GroundColor
+<
+  psregister      = PS_REG_PM_7;
+  string UIHelp   = "Used to fake sky lighting";
+  string UIName   = "Ground Color";
+  string UIWidget = "color";
+> = {0.0, 0.0, 0.0, 1.0};
+
+float FinalMultiplier
+<
+  psregister      = PS_REG_PM_8.x;
+  string UIName   = "Final color multiplier";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+float SunScattering
+<
+  psregister      = PS_REG_PM_8.y;
+  string UIName   = "Sun scatering";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 255.0;
+  float UIStep    = 0.001;
+> = 32.0;
+
+float SunMultiplier
+<
+  psregister      = PS_REG_PM_8.z;
+  string UIName   = "Sun multiplier";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 1.0;
+
+#if %SUN_POSITION_BFH
+
+float SunPosX
+<
+  psregister      = PS_REG_PM_9.x;
+  string UIName   = "Sun pos x";
+  string UIWidget = "slider";
+  float UIMin     = -10000.0;
+  float UIMax     = 10000.0;
+  float UIStep    = 1.0;
+> = 10000.0;
+
+float SunPosY
+<
+  psregister      = PS_REG_PM_9.y;
+  string UIName   = "Sun pos y";
+  string UIWidget = "slider";
+  float UIMin     = -10000.0;
+  float UIMax     = 10000.0;
+  float UIStep    = 1.0;
+> = 10000.0;
+
+float SunPosZ
+<
+  psregister      = PS_REG_PM_9.z;
+  string UIName   = "Sun pos z";
+  string UIWidget = "slider";
+  float UIMin     = -10000.0;
+  float UIMax     = 10000.0;
+  float UIStep    = 1.0;
+> = 10000.0;
+
+#endif
+
+/////////// Common vertex shader ////////////////
+
+struct vtxOut
+{
+  OUT_P
+  float4 tcBase : TEXCOORDN;
+  float4 vPosTC0 : TEXCOORDN;
+  float4 vPosTC1 : TEXCOORDN;
+
+  float4 vViewOS : TEXCOORDN;
+  float4 vNormalWS   : TEXCOORDN;
+
+  float4 tcScreenPos : TEXCOORDN;
+  float4 vPositionWS : TEXCOORDN;
+
+  float4 localFogColor : TEXCOORDN;
+};
+
+vtxOut OuterSphereVS(app2vertGeneral IN)
+{
+  vtxOut OUT = (vtxOut)0;
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  // Position in screen space.
+  float4 vPosOrig = IN.Position;
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+  float3 vNorm = vertPassPos.ObjToTangentSpace[2];
+
+  OUT.vPositionWS.xyz = vertPassPos.WorldPos.xyz;
+  OUT.vPositionWS.w = OUT.HPosition.w;
+
+  OUT.vNormalWS.xyz = mul( (const float3x3)vertPassPos.InstMatrix, vNorm);
+
+  // output view vector also in object space
+  float3 vViewWS = vertPassPos.WorldPos.xyz;
+  OUT.vViewOS.xyz = mul( (const float3x3)vertPassPos.InstMatrix, vViewWS );
+
+  const float c_fTillingScale = 0.002;
+  const float c_DetailfTillingScale = 0.01;
+
+  // scale movement speed
+  OUT.vPosTC0.w = frac( g_VS_AnimGenParams.y * 0.2 * SpeedMultiplier);
+  OUT.vPosTC0.xyz = vPosOrig.xyz * Tilling * c_fTillingScale + float3(0, 0, OUT.vPosTC0.w );
+
+  OUT.vPosTC1.w = frac( g_VS_AnimGenParams.y * 0.2 * DetailSpeedMultiplier);
+  OUT.vPosTC1.xyz = vPosOrig.xyz * Tilling * DetailTilling * c_DetailfTillingScale + float3(0, 0, OUT.vPosTC1.w);
+
+  OUT.tcBase.xy = IN.baseTC.xy + float2(0, -frac( g_VS_AnimGenParams.y *  DetailSpeedMultiplier));
+
+ // OUT.tcBase.w  = OUT.HPosition.w;
+
+  // Output the screen-space texture coordinates
+  OUT.tcScreenPos = HPosToScreenTC(OUT.HPosition);
+
+  OUT.localFogColor = GetVolumetricFogColor(vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz);
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+pixout OuterSpherePS(vtxOut IN)
+{
+  pixout OUT;
+
+   // Debug output
+ #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+   DebugOutput(OUT.Color, IN.tcBase);
+   return OUT;
+ #endif
+
+  int nQuality = GetShaderQuality();
+
+  //float3 vCameraWS =IN.tcScreenPos/IN.tcScreenPos.w;//mul(mUnProject, IN.tcScreenPos);
+  float fDepth = DecodeSceneDepth(sceneDepthSampler, IN.tcScreenPos );
+  float fDistToCam = length(IN.vViewOS.xyz);
+  float3 vViewOS = normalize(IN.vViewOS.xyz);
+  float3 vViewWS = normalize( IN.vPositionWS.xyz  );
+
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+  // Thickness aproximation
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+  float fDistToHitIn = 0;
+  float fDistToHitOut= 0;
+
+  // biasing to voiding precision artefacts
+  half fBias = 0.001;//saturate( fDistToCam*0.01 );
+  IN.vPositionWS.w -= fBias;
+
+  fDistToHitIn =  max(IN.vPositionWS.w - SurfaceThickness , 0);
+  fDistToHitOut = min(fDepth , IN.vPositionWS.w);
+
+  // compute current thickness
+  float t1 = saturate( ( fDistToHitOut - fDistToHitIn ) /  SurfaceThickness );
+
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+  // Cloudy/Smooky layers
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+  half fLerp = fDistToCam / DetailDistance;
+
+  // volume accumulation
+  float fVolumeAccum = 0;
+  float fHeight = 0;
+
+  // moving 1st far away layer used as height
+  float fFarDetailOut = tex3D(volumeNoiseSampler, IN.vPosTC0.xyz).w;
+
+  // Add turbulence
+#if !TEXTURE_MATH
+  fHeight = cos( pow((fFarDetailOut*2.0), 3) ) * OffsetBump;
+#else
+  // OuterSphere sampler contains, same math as above, in red channel
+  fHeight = (tex2D( outerSphereSampler, fFarDetailOut ).x*2-1) * OffsetBump;
+#endif
+
+  // static 2nd far away layer, use height for displacement along view direction
+  float fFarDetailIn = tex3D(volumeNoiseSampler, (IN.vPosTC0.xyz - float3(0, 0, IN.vPosTC0.w ) ) * 2.0 + vViewOS.xyz * fHeight).w;
+
+  // Accumulate both results
+  fVolumeAccum = fFarDetailIn + fFarDetailOut;
+
+  // moving 1st nearby layer used as height
+  float fMidDetailOut = tex3D(volumeNoiseSampler, IN.vPosTC1.xyz).w;
+
+  fHeight = 0;
+  if( nQuality > QUALITY_MEDIUM)
+  {
+
+  // combine accumulation with height and add turbulence
+#if !TEXTURE_MATH
+  fHeight = (cos( pow(((fMidDetailOut*2 + fVolumeAccum)*0.5), 3)  ) )* DetailOffsetBump ;
+#else
+  // OuterSphere sampler contains, same math as above, in green channel
+  fHeight = (tex2D( outerSphereSampler, float2(fMidDetailOut, fVolumeAccum*0.5) ).y*2-1) * DetailOffsetBump ;
+#endif
+
+  // static 2nd nearby layer, use height for displacement along view direction
+  float fMidDetailIn = tex3D(volumeNoiseSampler, ( IN.vPosTC1.xyz - float3(0, 0, IN.vPosTC1.w ) ) * 3.2 + vViewOS.xyz * fHeight).w;
+
+  // Accumulate all results
+  fVolumeAccum = lerp( fMidDetailIn + fMidDetailOut, fVolumeAccum, saturate(fLerp + (fFarDetailIn*2-1)) );
+  }
+
+  float sparks = fVolumeAccum;
+
+  // final result based on tweakable turbulence
+#if !TEXTURE_MATH
+  fVolumeAccum = cos( pow(fVolumeAccum * SmookePuffBias, SmookePuffPow) );
+#else
+  // OuterSphere sampler contains, same math as above, in blue channel
+  fVolumeAccum = tex2D( outerSphereSampler, float2(fVolumeAccum * SmookePuffBias*0.25, SmookePuffPow*0.1) ).z*2-1;
+#endif
+
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+  // Shading
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+  float4 cFinal = 0;
+  float3 vProcNormal = IN.vNormalWS.xyz;
+
+  float3 SunDir = g_PS_SunLightDir;
+#if %SUN_POSITION_BFH
+  float3 vSunPos = float3(SunPosX, SunPosY, SunPosZ);
+  SunDir.xyz = normalize( vSunPos.xyz );
+#endif
+
+  float NdotL = dot( vProcNormal.xyz, (SunDir.xyz));
+#if %INSIDE_GEOMETRY
+  NdotL = saturate(NdotL*0.5+0.5);
+#endif
+
+  float EdotL = saturate( dot( vViewWS.xyz, -SunDir.xyz) );
+
+  float fDiffuseK = ( NdotL );
+  float fSunScattering = pow(EdotL, SunScattering) * SunMultiplier;
+
+  float3 cAmbTex = fVolumeAccum * FinalMultiplier;
+
+  fDiffuseK = saturate(NdotL) ;
+
+  float3 cAmbient = g_PS_SkyColor * lerp(GroundColor, 1.0, saturate(vProcNormal.z)) ;
+  float3 cDiffuse = (fDiffuseK +  fSunScattering) * g_PS_SunColor;
+
+  // create diffuse texture
+  float3 cDiffuseTex = lerp(SmookePuffBeginColor, SmookePuffEndColor, saturate(fVolumeAccum));
+  cFinal.xyz = (cAmbient + cDiffuse) * FinalMultiplier * cDiffuseTex * MatDifColor.xyz;
+
+  cFinal.w = saturate(t1);
+
+#if !%_RT_HDR_MODE
+  cFinal.xyz = 1 - exp( - cFinal.xyz );;
+#endif
+
+#if %_RT_FOG
+  HDRFogOutput(OUT, cFinal, 1, IN.localFogColor.xyz, IN.localFogColor.w);
+#else
+  HDROutput(OUT, cFinal, 1);
+#endif
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script = 
+#if !%NO_DEPTH_BFH
+        "TechniqueZ=ZPass;"
+#endif
+>
+{
+
+  pass p0
+  {
+
+    VertexShader = compile vs_Auto OuterSphereVS() GeneralVS;
+    PixelShader = compile ps_Auto OuterSpherePS() GeneralPS;
+
+    ZEnable = false;
+    ZWriteEnable = false;
+
+#if %INSIDE_GEOMETRY
+    CullMode = Front;
+#else
+    CullMode = Back;
+#endif
+
+    ZFunc = Equal;
+
+    SrcBlend = SRC_ALPHA;
+    DestBlend = ONE_MINUS_SRC_ALPHA;
+    AlphaBlendEnable = true;
+
+   IgnoreMaterialState = true;
+
+#if %NO_DEPTH_BFH
+    ZEnable = true;
+    ZFunc = LEqual;
+#endif
+
+  }
+}
+
+////////////////////////////////////////////////////////
+//                Z PASS
+////////////////////////////////////////////////////////
+
+///////////////// vertex input/output //////////////////
+struct vert2fragZ
+{
+  float4 HPosition : POSITION;
+  float4 ZInfo     : TEXCOORDN;
+};
+
+///////////////// vertex shaders //////////////////
+vert2fragZ ZPassVS(app2vertZGeneral IN)
+{
+  vert2fragZ OUT;
+#ifndef OPENGL
+  OUT = (vert2fragZ)0;
+#endif
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromZ(IN, vertPassPos);
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+#if %_RT_FSAA
+  OUT.ZInfo.xyz = mul(vertPassPos.InstMatrix, vertPassPos.Position).xyz + g_VS_WorldViewPos.xyz;
+#endif
+
+  OUT.ZInfo.w = OUT.HPosition.w * g_VS_NearFarClipDist.w;
+
+  return OUT;
+}
+
+///////////////// pixel shaders //////////////////
+pixout ZPassPS(vert2fragZ IN)
+{
+  pixout OUT = (pixout)0;
+
+  float fZ = IN.ZInfo.w;
+  OUT.Color = EncodeSceneDepthNoAlpha(fZ , 1, IN.ZInfo.xyz);
+
+  return OUT;
+}
+
+//////////////////////////////// technique ////////////////
+
+technique ZPass
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto ZPassVS() ZVS;
+    PixelShader = compile ps_Auto ZPassPS() ZPS;
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    ZFunc = LEqual;
+
+#if %INSIDE_GEOMETRY
+    CullMode = Front;
+#else
+    CullMode = Back;
+#endif
+
+    IgnoreMaterialState = true;
+  }
+
+}
+
+/////////////////////// eof ///

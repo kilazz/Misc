@@ -1,0 +1,15 @@
+//==============================================================================
+// Texture blocks with semantics
+//==============================================================================
+Block 'Textures'
+{
+  Type = Texture
+
+  Node 'Diffuse'
+  {
+    Type       = Out
+    Format     = Texture2D
+    Editable   = false
+    IOSemantic = $Diffuse
+  }
+}

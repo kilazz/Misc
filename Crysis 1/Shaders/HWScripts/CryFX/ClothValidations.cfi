@@ -1,0 +1,34 @@
+//===========================================================================
+// Validations
+// Removing of redundant and mutually exclusive flags to prevent generating
+// of the vertex/pixel shaders
+
+#if !%ANISO_SPECULAR
+  #if %SPECULARPOW_GLOSSALPHA
+    #undefine %SPECULARPOW_GLOSSALPHA
+  #endif
+#endif
+
+#if %ALPHAGLOW
+  #if %ALPHAMASK_DETAILMAP
+    #undefine %ALPHAMASK_DETAILMAP
+  #endif
+#endif
+
+#if !%ANISO_SPECULAR
+  #if %SPECULARPOW_GLOSSALPHA
+    #undefine %SPECULARPOW_GLOSSALPHA
+  #endif
+#endif
+
+#if !%NANOSUIT_CLOAK
+  #if %OPACITY_MAP
+    #undefine  %OPACITY_MAP
+  #endif
+#endif
+
+#if %NANOSUIT_CLOAK || %%NANOSUIT_EFFECTS
+  #if %DETAIL_BUMP_MAPPING
+    #undefine  %DETAIL_BUMP_MAPPING
+  #endif
+#endif

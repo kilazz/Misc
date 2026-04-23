@@ -1,0 +1,165 @@
+VertexStart
+{
+  Block 'VertexInput'
+  {
+    Class 'VertexInput'
+    Id    = 1
+    Output
+    {
+      Connection IN_Position : Position;
+      Connection IN_TexCoord : TexCoord0;
+    }
+  }
+  Block 'Matrix'
+  {
+    Class 'Constant'
+    Id    = 2
+    Output
+    {
+      Connection ViewProj : ViewProj;
+    }
+  }
+  Block 'Time'
+  {
+    Class 'Constant'
+    Id    = 5
+    Output
+    {
+      Connection RealTime : Time;
+    }
+  }
+  Block 'VertexOutput'
+  {
+    Class 'VertexOutput'
+    Id    = 3
+    Input
+    {
+      Connection OUT_Position : Position;
+      Connection OUT_TexCoord : TexCoord0;
+      Connection OUT_Color    : Color0;
+    }
+  }
+  Block 'Transform'
+  {
+    Id       = 4
+    Class    = Function
+    Subclass = Transform
+    Input
+    {
+      Connection Position : Position;
+      Connection ViewProj : ViewProjMatrix;
+    }
+    Output
+    {
+      Connection Result : Result;
+    }
+  }
+
+  Edges
+  {
+    Edge {OutId = 1  PortOut=IN_Position  InId = 4  PortIn=Position    }
+    Edge {OutId = 2  PortOut=ViewProj     InId = 4  PortIn=ViewProj    }
+    Edge {OutId = 4  PortOut=Result       InId = 3  PortIn=OUT_Position}
+    Edge {OutId = 1  PortOut=IN_TexCoord  InId = 3  PortIn=OUT_TexCoord}
+    Edge {OutId = 5  PortOut=RealTime     InId = 3  PortIn=OUT_Color   }
+  }
+}
+
+//==========================================================================
+
+PixelStart
+{
+  Block 'PixelInput'
+  {
+    Class 'PixelInput'
+    Id    = 1
+    Output
+    {
+      Connection IN_TexCoord : TexCoord0;
+      Connection IN_Color    : Color0;
+    }
+  }
+  Block 'Texture'
+  {
+    Class 'Texture'
+    Id    = 2
+    Output
+    {
+      Connection Texture : Diffuse;
+    }
+  }
+  Block 'Sampler'
+  {
+    Class    'Sampler'
+    Subclass = Sampler2D
+    Id       = 3
+    Input
+    {
+      Connection TexCoords : TexCoord;
+      Connection Texture   : Texture;
+    }
+    Output
+    {
+      Connection Pixel : Result;
+    }
+  }
+  Block 'Float'
+  {
+    Class 'Constant'
+    Id    = 4
+    Output
+    {
+      Connection Constant : Constant1f { Default = 0.1; }
+    }
+  }
+  Block 'PixelOutput'
+  {
+    Class 'PixelOutput'
+    Id    = 5
+    Input
+    {
+      Connection OUT_Color : Color0;
+    }
+  }
+  Block 'Multiply1'
+  {
+    Id       = 6
+    Class    = Function
+    Subclass = Multiply
+    Input
+    {
+      Connection Pixel    : Operand1;
+      Connection Constant : Operand2;
+    }
+    Output
+    {
+      Connection Result : Result;
+    }
+  }
+  Block 'Multiply2'
+  {
+    Id       = 7
+    Class    = Function
+    Subclass = Multiply
+    Input
+    {
+      Connection MultResult : Operand1;
+      Connection IN_Color0  : Operand2;
+    }
+    Output
+    {
+      Connection Result : Result;
+    }
+  }
+
+  Edges
+  {
+    Edge {OutId = 1  PortOut=IN_TexCoord  InId = 3  PortIn=TexCoords }
+    Edge {OutId = 2  PortOut=Texture      InId = 3  PortIn=Texture   }
+    Edge {OutId = 3  PortOut=Pixel        InId = 6  PortIn=Pixel     }
+    Edge {OutId = 4  PortOut=Constant     InId = 6  PortIn=Constant  }
+    Edge {OutId = 6  PortOut=Result       InId = 7  PortIn=MultResult}
+    Edge {OutId = 1  PortOut=IN_Color     InId = 7  PortIn=IN_Color0 }
+    Edge {OutId = 7  PortOut=Result       InId = 5  PortIn=OUT_Color }
+  }
+}

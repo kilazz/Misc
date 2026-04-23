@@ -1,0 +1,333 @@
+#include "Common.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+  string Script = 
+           "Public;"
+           "ShaderDrawType = Light;"
+           "ShaderType = General;"
+>;
+
+float4 Diffuses[4]  : PB_DiffuseMulti  < psregister = PS_REG_PL_00; >;
+float4 Speculars[4] : PB_SpecularMulti < psregister = PS_REG_PL_11; >;
+
+struct fragPassCustom
+{
+};
+
+struct fragLightPassCustom
+{
+};
+
+#include "ShadeLib.cfi"
+
+// Un-Tweakables /////////////////
+
+ENVIRONMENTMAP
+ENVIRONMENTCUBEMAP
+
+//////////////////////////////// Common vertex shader ////////////////
+
+#include "VertexLib.cfi"
+
+///////////////// vertex shader //////////////////
+vert2FragGeneral SketchVS(app2vertGeneral IN)
+{
+  vert2FragGeneral OUT = (vert2FragGeneral)0;
+
+  vs_shared_output( IN, OUT, false );
+
+  return OUT;
+}
+
+///////////////// pixel shader //////////////////
+
+void frag_unify_parameters( inout fragPass pPass )
+{
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_begin(inout fragPass pPass)
+{
+
+  pPass.fAlpha = pPass.cDiffuseMap.w * pPass.IN.Ambient.w;
+  pPass.vNormal = pPass.mTangentToWS[2];                                      // 3 alu
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_per_light(inout fragPass pPass, inout fragLightPass pLight)
+{
+  pPass.cDiffuseAcc.xyz += saturate( pLight.fNdotL ) * pLight.cDiffuse.xyz * pLight.fFallOff * pLight.cFilter;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_ambient(inout fragPass pPass, inout half3 cAmbient)
+{
+
+  pPass.cAmbientAcc.xyz += pPass.IN.Ambient.xyz;
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void frag_custom_end(inout fragPass pPass, inout half3 cFinal)
+{
+}
+
+#include "fragLib.cfi"
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pixout SketchPS(vert2FragGeneral IN)
+{
+  pixout OUT = (pixout) 0;
+
+  // Initialize fragPass structure
+  fragPass pPass = (fragPass) 0;
+  frag_unify(pPass, IN);
+  half4 cFinal = frag_shared_output(pPass);
+
+  HDROutput(OUT, cFinal, 1);
+
+  return OUT;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+vert2FragGeneral SketchFastVS(app2vertGeneral IN)
+{
+  vert2FragGeneral OUT = (vert2FragGeneral)0;
+
+  //vs_shared_output( IN, OUT, false );
+
+  streamPos vertPassPos = (streamPos)0;
+  streamPos_FromGeneral(IN, vertPassPos);
+
+  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+  OUT.baseTC = IN.baseTC;
+
+  // Output world to tangent matrix and world space position
+  // Note: Normalization required for normal diffuse map in world space in case scale used - Do not remove
+  float3 worldTangentS = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]) );
+  float3 worldTangentT = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]) );
+  float3 worldTangentN = normalize(cross(worldTangentS, worldTangentT)) * IN.Tangent.w;
+
+  OUT.vTangent = float4(worldTangentS, IN.Tangent.w);
+  OUT.vBinormal.xyz = worldTangentT;
+  OUT.vView.xyz = vertPassPos.WorldPos.xyz;
+
+  // Output ambient color
+  OUT.Ambient = AmbientOp;
+
+  return OUT;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+void sketch_frag_unify(inout fragPass pPass, in vert2FragGeneral IN)
+{
+  pPass.IN.baseTC = IN.baseTC;
+  pPass.IN.bumpTC = pPass.IN.baseTC;
+  pPass.IN.vTangent = IN.vTangent;
+  pPass.IN.vBinormal = IN.vBinormal;
+  pPass.IN.vNormal.xyz = (cross(IN.vTangent.xyz, IN.vBinormal.xyz)) * IN.vTangent.w;                  // 4 alu
+  pPass.IN.vView = IN.vView;
+  pPass.IN.screenProj = IN.screenProj;
+  pPass.IN.Ambient = IN.Ambient;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+half4 sketch_frag_shared_output(inout fragPass pPass)
+{
+  half4 cOut = 0;
+
+  float4 baseTC = pPass.IN.baseTC;
+
+  pPass.vView = normalize(-pPass.IN.vView.xyz);                                                           // 3 alu
+  pPass.mTangentToWS = float3x3(pPass.IN.vTangent.xyz, pPass.IN.vBinormal.xyz, pPass.IN.vNormal.xyz);
+
+  pPass.cDiffuseMap = tex2D(diffuseMapSampler, baseTC.xy);
+
+  // Get main vectors/coeficients
+  pPass.fAlpha = pPass.cDiffuseMap.w * pPass.IN.Ambient.w;
+  pPass.vNormal = pPass.mTangentToWS[2];                                      // 3 alu
+  pPass.vNormalDiffuse = pPass.vNormal;
+
+  // Store some constant coeficients
+  pPass.fNdotE = ( dot(pPass.vView.xyz, pPass.vNormal.xyz));                                        // 1 alu
+  pPass.fSpecPow = MatSpecColor.w;
+  pPass.vReflVec = (2.0 * pPass.fNdotE * pPass.vNormal.xyz) - pPass.vView.xyz;                      // 2 alu
+
+  half3 vAmbientNormal = pPass.vNormalDiffuse.xyz;
+
+#if %_LT_LIGHTS
+  // Light types
+  int aLType[4] = {%_LT_0_TYPE, %_LT_1_TYPE, %_LT_2_TYPE, %_LT_3_TYPE};
+  for (int i=0; i<%_LT_NUM; i++)
+  {
+    float4 WorldLightPos;
+
+    int nType = aLType[i];
+    WorldLightPos = LGetPosition(i);
+    half4 Diffuse = Diffuses[i];
+    half4 Specular = Speculars[i];
+
+    // Some optimisations for sun light (per-frame parameters and hardcoded values)
+    if (nType == LT_DIRECTIONAL)
+    {
+      WorldLightPos = g_PS_SunLightDir;
+    }
+
+    half fFallOff = 1;
+    float3 vLight, vLightWS;
+    if (nType == LT_DIRECTIONAL)
+    {
+      vLightWS = WorldLightPos.xyz * 10000.0f;
+      vLight = WorldLightPos.xyz;
+    }
+    else
+    {
+      vLightWS = WorldLightPos.xyz - pPass.IN.vView.xyz;
+      vLight = normalize(vLightWS.xyz);                                                         // 3 alu
+      fFallOff = GetAttenuation(vLightWS.xyz, WorldLightPos.w);                                   // 2 alu
+    }
+
+    half3 filterColor = 1;
+
+    // Compute diffuse
+    half fNdotL = dot(vLight.xyz, pPass.vNormal.xyz);                                                   // 1 alu
+
+    {
+      // Initialize light pass structure with per-light shared data
+      fragLightPass pLight = (fragLightPass) 0;
+
+      pLight.nType = nType;
+
+      pLight.cDiffuse = Diffuse;
+      pLight.cSpecular = Specular;
+
+      pLight.vLight = vLight;
+
+      pLight.fNdotL = fNdotL;
+
+      pLight.fFallOff = fFallOff;
+      pLight.cFilter = filterColor;
+
+      // per shader custom shading
+      //frag_custom_per_light(pPass, pLight);
+      pPass.cDiffuseAcc.xyz += saturate( pLight.fNdotL ) * pLight.cDiffuse.xyz * pLight.fFallOff * pLight.cFilter;
+    }
+  }
+#endif
+
+  half3 amb = pPass.IN.Ambient.xyz;
+  pPass.cAmbientAcc.xyz += pPass.IN.Ambient.xyz;
+
+  cOut.xyz = ( pPass.cAmbientAcc.xyz + pPass.cDiffuseAcc.xyz ) * pPass.cDiffuseMap.xyz;           // 2 alu
+  cOut.xyz += pPass.cSpecularAcc.xyz * pPass.cGlossMap.xyz;                                      // 1 alu
+
+  // distance blend out
+  cOut.w = pPass.fAlpha;
+
+  return cOut;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+pixout SketchFastPS(vert2FragGeneral IN)
+{
+  pixout OUT = (pixout) 0;
+
+  // Initialize fragPass structure
+  fragPass pPass = (fragPass) 0;
+
+  sketch_frag_unify(pPass, IN);
+  half4 cFinal = sketch_frag_shared_output(pPass);
+
+  OUT.Color = cFinal;
+
+  return OUT;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script = "TechniqueZ=ZPass;"
+>
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto SketchFastVS();
+    PixelShader = compile ps_Auto SketchFastPS();
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    CullMode = Back;
+  }
+}
+
+//////////////////////////////// helper techniques ////////////////
+technique General1
+<
+  string Script = "TechniqueZ=ZPass;"
+>
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto SketchVS();
+    PixelShader = compile ps_Auto SketchPS();
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    CullMode = Back;
+  }
+}
+
+technique General2
+<
+  string Script = "TechniqueZ=ZPass;"
+>
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto SketchVS();
+    PixelShader = compile ps_Auto SketchPS();
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    CullMode = Back;
+  }
+}
+
+technique Fast
+<
+  string Script = "TechniqueZ=ZPass;"
+>
+{
+  pass p0
+  {
+    VertexShader = compile vs_Auto SketchVS();
+    PixelShader = compile ps_Auto SketchPS();
+
+    ZEnable = true;
+    ZWriteEnable = true;
+    CullMode = Back;
+  }
+}
+
+#include "CommonZPass.cfi"
+
+/////////////////////// eof ///

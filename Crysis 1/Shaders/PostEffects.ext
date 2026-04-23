@@ -1,0 +1,32 @@
+// Copyright (C) Crytek Studios 2001-2004
+// File: PostEffects.ext
+// Created: 16/2/2004 by Tiago Sousa
+
+Version (1.00)
+
+Property
+{
+  Name            = %BILINEAR_FP16
+  Mask            = 0x1
+  DependencySet   = $HW_BilinearFP16
+  DependencyReset = $HW_BilinearFP16
+  Hidden
+}
+
+Property
+{
+  Name            = %SEPARATE_FP16
+  Mask            = 0x2
+  DependencySet   = $HW_SeparateFP16
+  DependencyReset = $HW_SeparateFP16
+  Hidden
+}
+
+Property
+{
+  Name            = %DYN_BRANCHING_POSTPROCESS
+  Mask            = 0x4
+  DependencySet   = $HW_PostProcessDynamicBranching
+  DependencyReset = $HW_PostProcessDynamicBranching
+  Hidden
+}
