@@ -4,67 +4,61 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "ShaderDrawType = General;"
 >;
 
 /// Un-Tweakables //////////////////////
-float4 ObjColor  : PI_AmbientOpacity;
-float HDRDynamicMultiplier : PB_HDRDynamicMultiplier;
+float4 ObjColor             : PI_AmbientOpacity;
+float  HDRDynamicMultiplier : PB_HDRDynamicMultiplier;
 
 sampler2D TexSampler = sampler_state
 {
-  Texture = $Diffuse;
+    Texture = $Diffuse;
 };
-
-/////////////////////////////
 
 struct a2v
 {
-  float4 Position : POSITION; //in object space
-  //float3 Normal : NORMAL; //in object space
-
-  float4 Tangent  : TANGENT;
-  float4 Binormal : BINORMAL;
+    float4 Position : POSITION;
+    float4 Tangent  : TANGENT;
+    float4 Binormal : BINORMAL;
 };
 
 struct v2f
 {
-  float4 Position  : POSITION;  //in projection space
-  float3 Normal  : COLOR;  //Normal
+    float4 Position : POSITION;
+    float3 Normal   : COLOR;
 };
 
-///////////////// vertex shader //////////////////
 v2f HelperVS(a2v IN)
 {
-  v2f OUT = (v2f)0;
+    v2f OUT = (v2f)0;
 
-  // Position in screen space.
-  float4 vPos = IN.Position;
-  OUT.Position = _pos_Common(vPos);
+    float4 vPos     = IN.Position;
+    OUT.Position    = _pos_Common(vPos);
 
-  OUT.Normal = normalize( (cross(IN.Tangent.xyz, IN.Binormal.xyz)) * IN.Tangent.w );
+    float3 tangent  = IN.Tangent.xyz;
+    float3 binormal = IN.Binormal.xyz;
+    float  tWeight  = IN.Tangent.w;
 
-  return OUT;
+    OUT.Normal = normalize(cross(tangent, binormal)) * tWeight;
+
+    return OUT;
 }
-
-///////////////// pixel shader //////////////////
 
 pixout HelperPS(v2f IN)
 {
-  pixout OUT;
+    pixout OUT;
 
-  // load the base
-  float3 LightVec = normalize( float3(1,1,1) );
-  float cosa = 0.2 + max( 0.2,dot( IN.Normal,LightVec ) );
-  OUT.Color.a = ObjColor.a;
-  OUT.Color.xyz = ObjColor.xyz * cosa * HDRDynamicMultiplier;
+    float3 LightVec = normalize(float3(1.0f, 1.0f, 1.0f));
+    float  cosa     = 0.2f + max(0.2f, dot(IN.Normal, LightVec));
 
-  return OUT;
+    OUT.Color.a     = ObjColor.a;
+    OUT.Color.xyz   = ObjColor.xyz * cosa * HDRDynamicMultiplier;
+
+    return OUT;
 }
-
-//////////////////////////////// technique ////////////////
 
 technique General
 {
@@ -79,5 +73,3 @@ technique General
     PixelShader = compile ps_Auto HelperPS();
   }
 }
-
-/////////////////////// eof ///

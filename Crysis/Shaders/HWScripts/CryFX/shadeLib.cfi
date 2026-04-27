@@ -1,34 +1,20 @@
-////////////////////////////////////////////////////////////////////////////
-//
-//  Crytek Engine Source File.
-//  Shader extension
-//  Copyright (C), Crytek Studios, 2001-2004.
-// -------------------------------------------------------------------------
-//  File name:   ShadeLib.cfi
-//  Version:     v1.00
-//  Created:     19/05/2006 by Tiago Sousa
-//  Compilers:
-//  Description: Common BRDF's/shading utilities library
-//
-// -------------------------------------------------------------------------
-////////////////////////////////////////////////////////////////////////////
+// Crytek Engine Source File.
+// Copyright (C), Crytek Studios, 2001-2004.
+// Created: 19/05/2006 by Tiago Sousa
 
-//==============================================================================
 // Dynamic branching support
 
 #if %DYN_BRANCHING
   LIGHTINFOMAP
   float4 LightInfoTC_DB : PB_LightInfoTC;
-  int LightsNum_DB      : PB_LightsNum;
+  int    LightsNum_DB   : PB_LightsNum;
 
   #define SHADER_MODEL_VS vs_3_0
   #define SHADER_MODEL_PS ps_3_0
 #else
- #define SHADER_MODEL_VS vs_Auto
- #define SHADER_MODEL_PS ps_Auto
+  #define SHADER_MODEL_VS vs_Auto
+  #define SHADER_MODEL_PS ps_Auto
 #endif
-
-// Common Samplers //////////////////////
 
 DIFFUSEMAP
 BUMPMAP
@@ -45,8 +31,6 @@ sampler2D detailMapSampler = sampler_state
   Texture = $Detail;
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 #define REFLECT_OFF    0
 #define REFLECT_CUBE   1
 #define REFLECT_SPHERE 2
@@ -55,7 +39,6 @@ sampler2D detailMapSampler = sampler_state
 
 struct fragInput
 {
-  //===============================================================================
   // input attribute data
   float4 baseTC;
   float4 basesectorTC;
@@ -76,7 +59,7 @@ struct fragInput
   float4 SunRefl;
   float4 Ambient;
 
-  half4 AlphaTest;
+  half4  AlphaTest;
 
   float3 DistAtten;
   float4 AvgFogVolumeContrib;
@@ -98,51 +81,53 @@ struct fragPass
   bool bDetailBumpMappingMasking;
   bool bOffsetBumpMapping;
   bool bParallaxOcclusionMapping;
-  bool bVertexColors;      // apply vertex color to final result
-  bool bAlphaGlow;         // use diffuse texture alpha has glow
+  bool bVertexColors;           // apply vertex color to final result
+  bool bAlphaGlow;              // use diffuse texture alpha has glow
   bool bHemisphereLighting;
   bool bDontUseEmissive;
   bool bRefractionMap;
   bool bTerrainPass;
   bool bDisableInShadowShading;
   bool bDisableAlphaTestD3D10;
-  int  nReflectionMapping; // reflection mapping type (0: off, 1: cube map, 2: spherical)
+  int  nReflectionMapping;      // reflection mapping type (0: off, 1: cube map, 2: spherical)
+
   half fBumpHeightScale;
   half fSelfShadowStrength;
 
-  half2 vDetailBumpTilling; // detail diffuse_bump mapping tilling
-  half fDetailBlendAmount;  // detail blend amount
-  half fDetailBumpScale;    // detail bump mapping scale
+  half2 vDetailBumpTilling;     // detail diffuse_bump mapping tilling
+  half  fDetailBlendAmount;     // detail blend amount
+  half  fDetailBumpScale;       // detail bump mapping scale
 
-  half fLod;                // lod scale: 1 max, 0 disabled
+  half  fLod;                   // lod scale: 1 max, 0 disabled
 
   // shared fields
-  int nQuality;           // shader quality level
+  int   nQuality;               // shader quality level
 
-  float3x3 mTangentToWS;  // tangent to world space transformation matrix - might be required for some vectors
-  half3 vView;           // eye vector, fFogFrac
-  half3 vNormal;         // normal vector
-  half3 vNormalDiffuse;  // diffuse normal vector
-  half3 vReflVec;        // reflection vector
+  float3x3 mTangentToWS;        // tangent to world space transformation matrix - might be required for some vectors
 
-  half3 cBumpMap;        // tangent space normal map
-  half4 cDiffuseMap;     // diffuse map
-  half4 cGlossMap;       // specular/gloss map
-  half3 cEnvironment;    // environment map
-  half4 cShadowOcclMap;  // shadow map
+  half3 vView;                  // eye vector, fFogFrac
+  half3 vNormal;                // normal vector
+  half3 vNormalDiffuse;         // diffuse normal vector
+  half3 vReflVec;               // reflection vector
 
-  half fNdotE;           // per pass constant NdotE
-  half fSpecPow;         // specular power
-  half fAlpha;           // opacity
-  half fAlphaTestRef;    // instanced alpha test value
-  half cAOMapVal;        // value from AO target
+  half3 cBumpMap;               // tangent space normal map
+  half4 cDiffuseMap;            // diffuse map
+  half4 cGlossMap;              // specular/gloss map
+  half3 cEnvironment;           // environment map
+  half4 cShadowOcclMap;         // shadow map
+
+  half  fNdotE;                 // per pass constant NdotE
+  half  fSpecPow;               // specular power
+  half  fAlpha;                 // opacity
+  half  fAlphaTestRef;          // instanced alpha test value
+  half  cAOMapVal;              // value from AO target
 
   // Note: parser bug, assumes fReflectionAmount, fFresnelBias, etc, are same as tweakable parameters, therefore the _ was added
 
-  half fReflection_Amount;  // amount of reflection
-  half fFresnel_Bias;     // fresnel biasing
-  half fFresnel_Scale;    // fresnel scale
-  half fFresnel;         // final fresnel term
+  half fReflection_Amount;      // amount of reflection
+  half fFresnel_Bias;           // fresnel biasing
+  half fFresnel_Scale;          // fresnel scale
+  half fFresnel;                // final fresnel term
 
   half fAlphaGlow_Multiplier;   // apply multiplier to diffuse alpha glow
 
@@ -158,113 +143,108 @@ struct fragPass
 
 struct fragLightPass
 {
-  int nType;          // light type
-  half3 cDiffuse;    // light diffuse color
-  half3 cSpecular;   // light specular color
-  half3 cFilter;     // light filter color
-  half3 vLight;      // light vector
+  int   nType;                  // light type
+  half3 cDiffuse;               // light diffuse color
+  half3 cSpecular;              // light specular color
+  half3 cFilter;                // light filter color
+  half3 vLight;                 // light vector
 
-  half fNdotL;       // normal dot light
-  half fFallOff;     // light attenuation
-  half fOcclShadow;  // light shadow term
+  half  fNdotL;                 // normal dot light
+  half  fFallOff;               // light attenuation
+  half  fOcclShadow;            // light shadow term
 
-  half3 cOut;        // light final contribution
+  half3 cOut;                   // light final contribution
 
   // ... Custom per light data ...
   fragLightPassCustom pCustom;
 };
 
-//////////////////////////////// Common shading utilities ////////////////
 
-#define PI 3.1415
-#define PI_X2 6.2831
-#define PI_X4 12.5663
-#define NEPPER 2.7183
+#define PI     3.14159265f
+#define PI_X2  6.28318530f
+#define PI_X4  12.56637061f
+#define NEPPER 2.71828182f
 
 half3 ModifyAmbient(half3 ambient, half bumpZ, half bias)
 {
-  return (ambient * ( saturate( bumpZ ) + bias ) );
+  return (ambient * (saturate(bumpZ) + bias));
 }
 
 // assumes 0 is min
 half smoothstep_opt(in half maxi, in half x)
 {
-  x = saturate( x / maxi );
-  return  x * x  * (3.0 - 2.0 * x);
+  x = saturate(x / max(maxi, 0.0001f));
+  return (x * x * (3.0f - 2.0f * x));
 }
 
 sampler2D smoothstepMapSampler = sampler_state
 {
-  Texture = textures/defaults/smoothstep_sampler.dds;
+  Texture   = textures/defaults/smoothstep_sampler.dds;
   MinFilter = LINEAR;
   MagFilter = LINEAR;
   MipFilter = NONE;
-  AddressU = Clamp;
-  AddressV = Clamp;
+  AddressU  = Clamp;
+  AddressV  = Clamp;
 };
 
 // assumes 0 is min, and max <= 1.0
 half smoothstep_opt_tex(in half maxi, in half x)
 {
 #if D3D10
-  return tex2Dlod( smoothstepMapSampler, float4(maxi, x, 0, 0) ).w;
+  return tex2Dlod(smoothstepMapSampler, float4(maxi, x, 0.0f, 0.0f)).w;
 #else
-  return tex2D( smoothstepMapSampler, float2(maxi, x) ).w;
+  return tex2D(smoothstepMapSampler, float2(maxi, x)).w;
 #endif
-
 }
 
 half GetFresnel(half NdotI, half bias, half power)
 {
-  half facing = (1.0 - NdotI);
-  return bias + (1-bias)*pow(facing, power);
+  half facing = saturate(1.0f - NdotI);
+  return bias + (1.0f - bias) * pow(facing, power);
 }
 
 half GetFresnelOpt(half NdotI, half bias, half power)
 {
-  half facing = (1.0 - NdotI);
+  half facing = saturate(1.0f - NdotI);
   return bias + pow(facing, power);  // opt: removed (1-bias) mul
 }
 
 sampler2D fresnelShlickMapSampler = sampler_state
 {
-  Texture = textures/defaults/fresnel_sampler.dds;
+  Texture   = textures/defaults/fresnel_sampler.dds;
   MinFilter = LINEAR;
   MagFilter = LINEAR;
   MipFilter = NONE;
-  AddressU = Clamp;
-  AddressV = Clamp;
+  AddressU  = Clamp;
+  AddressV  = Clamp;
 };
 
 // Cheap shlick fresnel term using lookup table (each channel has a diferent power (x = 1,  y = 2, z = 4, w = 5) )
-half4 GetFresnelTex( float NdotI, float bias)
+half4 GetFresnelTex(float NdotI, float bias)
 {
-
 #if D3D10
-  return tex2Dlod( fresnelShlickMapSampler, float4(NdotI, bias, 0, 0) );
+  return tex2Dlod(fresnelShlickMapSampler, float4(NdotI, bias, 0.0f, 0.0f));
 #else
-  return tex2D( fresnelShlickMapSampler, float2(NdotI, bias) );
+  return tex2D(fresnelShlickMapSampler, float2(NdotI, bias));
 #endif
-
 }
 
-half GetRim( in half NdotL, in half NdotH, in half fresnel, in half power, in half multiplier)
+half GetRim(in half NdotL, in half NdotH, in half fresnel, in half power, in half multiplier)
 {
-  half kr = smoothstep_opt(0.5, fresnel) * multiplier;
-  return kr * NdotL * pow(NdotH, power);
+  half kr = smoothstep_opt(0.5f, fresnel) * multiplier;
+  return kr * NdotL * pow(saturate(NdotH), power);
 }
 
-half GetRimTex( in half NdotL, in half NdotH, in half fresnel, in half power, in half multiplier)
+half GetRimTex(in half NdotL, in half NdotH, in half fresnel, in half power, in half multiplier)
 {
-  half kr = smoothstep_opt_tex(0.5, fresnel) * multiplier;
-  return kr * NdotL * pow(NdotH, power);
-  // 4 ALU and 1 TEX
+  half kr = smoothstep_opt_tex(0.5f, fresnel) * multiplier;
+  return kr * NdotL * pow(saturate(NdotH), power);
 }
 
 half GetAttenuation(half3 L, half fInvRadius)
 {
   half3 vDist = L * fInvRadius;
-  half fFallOff = saturate(1-dot(vDist, vDist));
+  half fFallOff = saturate(1.0f - dot(vDist, vDist));
 
   return fFallOff;
 }
@@ -279,740 +259,580 @@ half3 NormalToWorldSpace(half3 N, half3x3 mMatrix)
 half3 ShiftVector(half3 V, half3 N, half shiftAmount)
 {
   return normalize(V + shiftAmount * N);
-  // 3 alu, 1 mad
 }
 
 // optimized shift vector - skips normalization - use only when vector lenght not relevant
 half3 ShiftVectorOpt(half3 V, half3 N, half shiftAmount)
 {
   return (V + shiftAmount * N);
-  // 1 mad
 }
 
 // dot unnormalized vectors
 //  - beware that only in some cases this technique might be a win
 half dot_opt(half3 A, half3 B)
 {
-  // compiler should optimize redundant/repeated computations away
-  half AdotA = dot(A, A);                                                                          // 1 dot
-  half BdotB = dot(B, B);                                                                          // 1 dot
+  half AdotA = dot(A, A);
+  half BdotB = dot(B, B);
 
-  return dot(A, B) * rsqrt( AdotA * BdotB );                                                        // 1 dot, 3 alu
-
-  // 4 alu average
+  return dot(A, B) * rsqrt(max(AdotA * BdotB, 0.0001f));
 }
 
 // assumes base in 0..1 range
-float pow_schlick( float a, float exponent)
+float pow_schlick(float a, float exponent)
 {
-  return (1.0 / exponent) * (a - 1.0) + 1.0;
+  return (1.0f / max(exponent, 0.0001f)) * (a - 1.0f) + 1.0f;
 }
 
 //////////////////////////////// Color/blending processing ////////////////////////////////
 
 // Compute color luminosity
-float ColorLuminosity( half3 cColor )
+float ColorLuminosity(half3 cColor)
 {
-  const half3 cParams = half3( 0.33, 0.59, 0.11 );
-  return dot( cColor, cParams );                                                                    // 1 alu
+  const half3 cParams = half3(0.33f, 0.59f, 0.11f);
+  return dot(cColor, cParams);
 }
 
 // Adjust color contrast
-half3 ColorContrast( half3 cColor, half fAmount)
+half3 ColorContrast(half3 cColor, half fAmount)
 {
-   //return max( (0.5 - 0.5 * fAmount) + cColor * fAmount, 0.0);                                        // 2 alu
-   return max( lerp(0.5, cColor, fAmount), 0.0 );                                        // 2 alu
+  return max(lerp(0.5f, cColor, fAmount), 0.0f);
 }
 
 // Adjusts color saturation
-half3 ColorSaturation( half3 cColor, half fAmount)
+half3 ColorSaturation(half3 cColor, half fAmount)
 {
-   return lerp( ColorLuminosity(cColor), cColor, fAmount);                                          // should be 2 alu
+  return lerp(ColorLuminosity(cColor), cColor, fAmount);
 }
 
 // Adjusts color brightness
-half3 ColorBrightness( half3 cColor, half fAmount)
+half3 ColorBrightness(half3 cColor, half fAmount)
 {
-   return cColor * fAmount;                                                                         // 1 alu
+  return (cColor * fAmount);
 }
 
-float4 BlendDarken( float4 c1, float4 c2)
+float4 BlendDarken(float4 c1, float4 c2)
 {
-  return (c1 <  c2)? c1 : c2;                                                    // 1 alu
+  return (c1 < c2) ? c1 : c2;
 }
 
-float4 BlendDiference( float4 c1, float4 c2)
+float4 BlendDiference(float4 c1, float4 c2)
 {
-  return abs(c1 -  c2);                                                                    // 2 alu
+  return abs(c1 - c2);
 }
 
-float4 BlendScreen( float4 c1, float4 c2)
+float4 BlendScreen(float4 c1, float4 c2)
 {
-  return c1 +  c2 * ( 1.0 - c1);                                                      // 2 alu
+  return (c1 + c2 * (1.0f - c1));
 }
 
-float4 BlendOverlay( float4 c1, float4 c2)
+float4 BlendOverlay(float4 c1, float4 c2)
 {
-  return (c1 < 0.5f)? 2.0 * c1 * c2 : -1.0 + 2.0 * BlendScreen(c1, c2);    // 5 alu
+  return (c1 < 0.5f) ? (2.0f * c1 * c2) : (-1.0f + 2.0f * BlendScreen(c1, c2));
 }
 
 //////////////////////////////// Common HDR encoding/decoding ////////////////////////////////
 
-#define MAX_FLOAT 128.0
+#define MAX_FLOAT 128.0f
 
 // Using PPP format
-// quality: bad with big maximum
-float4 EncodePPP( float4 cColor )
+float4 EncodePPP(float4 cColor)
 {
-  float fInvMax = 1.0 / MAX_FLOAT;
-  return float4(pow( cColor.xyz * fInvMax,  0.25 ), 1);
+  float fInvMax = 1.0f / MAX_FLOAT;
+  return float4(pow(abs(cColor.xyz * fInvMax), 0.25f), 1.0f);
 }
 
-float3 DecodePPP( float4 cColor )
+float3 DecodePPP(float4 cColor)
 {
-  float fInvPowFactor = 1.0 / 0.25;
-  return MAX_FLOAT * pow(cColor.xyz, fInvPowFactor);
-}
-
-// Using EEE format (similar to rgbe, but in rgb instead)
-// quality: good (although some visible banding), filtering doable
-float4 EncodeEEE( float4 cColor )
-{
-  float fHDR_EXP_BASE = 1.04;
-  float fHDR_EXP_OFFSET = 128.0;
-
-  float3 cExp = log(cColor.xyz) / log(fHDR_EXP_BASE);
-
-  return float4((cExp + fHDR_EXP_OFFSET) / 255.0, 1);
+  float fInvPowFactor = 1.0f / 0.25f;
+  return MAX_FLOAT * pow(abs(cColor.xyz), fInvPowFactor);
 }
 
 // Using EEE format (similar to rgbe, but in rgb instead)
-// quality: good (although some visible banding), filtering doable
-float4 DecodeEEE( float4 cColor )
+float4 EncodeEEE(float4 cColor)
 {
-  float fHDR_EXP_BASE = 1.04;
-  float fHDR_EXP_OFFSET = 128.0;
+  float fHDR_EXP_BASE   = 1.04f;
+  float fHDR_EXP_OFFSET = 128.0f;
 
-  half3 cExp = cColor.xyz * 255.0 - fHDR_EXP_OFFSET;
-  return float4( pow(fHDR_EXP_BASE, cExp), 1 );
+  float3 cExp = log(max(cColor.xyz, 0.0001f)) / max(log(fHDR_EXP_BASE), 0.0001f);
+
+  return float4((cExp + fHDR_EXP_OFFSET) / 255.0f, 1.0f);
 }
 
-// Using RGBS + PPP(scale value stored in alpha - filtering should decode first)
-// quality: very good
-float4 EncodeRGBS( float4 cColor )
+float4 DecodeEEE(float4 cColor)
 {
-  float fInvMaxValue = 1.0 / MAX_FLOAT;
+  float fHDR_EXP_BASE   = 1.04f;
+  float fHDR_EXP_OFFSET = 128.0f;
 
-  //cColor.xyz = min(cColor.xyz, MAX_FLOAT);
-
-  // remove fractional part (to avoid artefacts)
-  float fMax = ceil(( max(cColor.x, max( cColor.y, cColor.z ) ) ));
-
-  float4 ret = 0;
-  ret.xyz = (cColor.xyz / (fMax));
-  ret.w = fMax * fInvMaxValue;
-
-  //ret.w *= rsqrt( ret.w );
-  //ret.xyz *= ret.w;
-
-  ret.xyz *= rsqrt( ret );
-
-  return (ret);
+  half3 cExp = cColor.xyz * 255.0f - fHDR_EXP_OFFSET;
+  return float4(pow(fHDR_EXP_BASE, cExp), 1.0f);
 }
 
-// Using RGBS format (scale value stored in alpha)
-// quality: very good
-float4 DecodeRGBS( float4 cColor )
+// Using RGBS + PPP
+float4 EncodeRGBS(float4 cColor)
 {
-  return float4( MAX_FLOAT * cColor.xyz * cColor.w * cColor.xyz, 1) ;
+  float fInvMaxValue = 1.0f / MAX_FLOAT;
+  float fMax = ceil(max(cColor.x, max(cColor.y, cColor.z)));
+
+  float4 ret = (float4)0.0f;
+  ret.xyz = (cColor.xyz / max(fMax, 0.0001f));
+  ret.w   = fMax * fInvMaxValue;
+  ret.xyz *= rsqrt(max(ret.w, 0.0001f));
+
+  return ret;
 }
 
-// Using RGBE format (exponent in alpha- filtering should decode first)
-// quality: perfect
-float4 EncodeRGBE( in float3 color )
+// Using RGBS format
+float4 DecodeRGBS(float4 cColor)
 {
-  float fHDR_EXP_BASE = 1.06;
-  float fHDR_EXP_OFFSET = 128.0;
+  return float4(MAX_FLOAT * cColor.xyz * cColor.w * cColor.xyz, 1.0f);
+}
 
-  //half fLen = dot(color.xyz, 1.0);
-  float fLen = max( color.x, max( color.y, color.z ) ) ;
-  //half fExp = ( log(fLen) / log(fHDR_EXP_BASE) );
-  half fExp = ceil( log(fLen) / log(fHDR_EXP_BASE) );
+// Using RGBE format
+float4 EncodeRGBE(in float3 color)
+{
+  float fHDR_EXP_BASE   = 1.06f;
+  float fHDR_EXP_OFFSET = 128.0f;
+
+  float fLen = max(color.x, max(color.y, color.z));
+  half  fExp = ceil(log(max(fLen, 0.0001f)) / max(log(fHDR_EXP_BASE), 0.0001f));
 
   half4 ret;
-  ret.w = (fExp + fHDR_EXP_OFFSET) / 256;
-  ret.xyz = color.xyz / pow( fHDR_EXP_BASE, fExp);
+  ret.w   = (fExp + fHDR_EXP_OFFSET) / 256.0f;
+  ret.xyz = color.xyz / max(pow(fHDR_EXP_BASE, fExp), 0.0001f);
 
   return ret;
 }
 
-// Using RGBE format (exponent in alpha- filtering should decode first)
-// quality: perfect
-float4 DecodeRGBE( in float4 rgbe )
+float4 DecodeRGBE(in float4 rgbe)
 {
-  float fHDR_EXP_BASE = 1.06;
-  float fHDR_EXP_OFFSET = 128.0;
+  float fHDR_EXP_BASE   = 1.06f;
+  float fHDR_EXP_OFFSET = 128.0f;
 
-  half fExp = rgbe.w * 256 - fHDR_EXP_OFFSET;
+  half fExp   = rgbe.w * 256.0f - fHDR_EXP_OFFSET;
   half fScale = pow(fHDR_EXP_BASE, fExp);
 
-  return float4( rgbe.xyz * fScale, 1);
+  return float4(rgbe.xyz * fScale, 1.0f);
 }
 
-// Using RGBE format (exponent in alpha - filtering should decode first)
-// quality: perfect
-float4 EncodeRGBECorrected( in float3 color )
+// Using RGBE format Corrected
+float4 EncodeRGBECorrected(in float3 color)
 {
+  float fMaxChannel = max(color.x, max(color.y, color.z));
+  float fExp        = ceil(log2(max(fMaxChannel, 0.0001f)));
 
-  float fMaxChannel = max( color.x, max( color.y, color.z ) ) ;
-  float fExp = ceil( log2( fMaxChannel ) );
-
-  float4 ret = 0;
-  ret.xyz = color.xyz / exp2( fExp );
-  ret.w = ( fExp + 128.0 ) / 256.0;
+  float4 ret = (float4)0.0f;
+  ret.xyz = color.xyz / max(exp2(fExp), 0.0001f);
+  ret.w   = (fExp + 128.0f) / 256.0f;
 
   return ret;
 }
 
-// Using RGBE format (exponent in alpha - filtering should decode first)
-// quality: perfect
-float4 DecodeRGBECorrected( in float4 rgbe )
+float4 DecodeRGBECorrected(in float4 rgbe)
 {
-  return float4( rgbe.xyz * exp2( rgbe.w * 256.0 - 128.0), 1 );
+  return float4(rgbe.xyz * exp2(rgbe.w * 256.0f - 128.0f), 1.0f);
 }
 
-//////////////////////////////// Common Brdfs ////////////////////////////////
-// Note that functions with Tex suffix use optimized code with texture lookups
-// else functions use pure math.
 
 //////////////////////////////// Disney Principled / PBR model ///////////////////////////////
-// - Robust BRDF model as used in modern engines (RE Engine).
 
 half D_GGX(half NdotH, half roughness)
 {
-  half a = roughness * roughness;
-  half a2 = a * a;
+  half a      = roughness * roughness;
+  half a2     = a * a;
   half NdotH2 = NdotH * NdotH;
-  half denom = (NdotH2 * (a2 - 1.0) + 1.0);
-  return a2 / (PI * denom * denom + 1e-5);
+  half denom  = (NdotH2 * (a2 - 1.0f) + 1.0f);
+  return (a2 / max(PI * denom * denom, 0.0001f));
 }
 
-// Correlated Smith-GGX Visibility term
-// Automatically cancels out the problematic 4 * NdotL * NdotV denominator.
-// This is CRITICAL to fix the black/white speckled artifacts at grazing angles!
 half V_SmithGGXCorrelated(half NdotL, half NdotV, half roughness)
 {
-  half a = roughness * roughness;
+  half a  = roughness * roughness;
   half a2 = a * a;
 
-  half GGXV = NdotL * sqrt(NdotV * (NdotV - NdotV * a2) + a2);
-  half GGXL = NdotV * sqrt(NdotL * (NdotL - NdotL * a2) + a2);
+  half GGXV = NdotL * sqrt(max(NdotV * (NdotV - NdotV * a2) + a2, 0.0f));
+  half GGXL = NdotV * sqrt(max(NdotL * (NdotL - NdotL * a2) + a2, 0.0f));
 
-  return 0.5 / (GGXV + GGXL + 1e-5);
+  return (0.5f / max(GGXV + GGXL, 0.0001f));
 }
 
 half3 Disney_BRDF_Specular(half3 N, half3 V, half3 L, half NdotV, half NdotL, half roughness, half3 F0)
 {
-  half3 H = normalize(V + L);
-  half NdotH = saturate(dot(N, H));
-  half VdotH = saturate(dot(V, H));
+  half3 H     = normalize(V + L);
+  half  NdotH = saturate(dot(N, H));
+  half  VdotH = saturate(dot(V, H));
 
-  // Clamp variables to prevent artifacts, divisions by zero, and NaNs
-  NdotV = max(NdotV, 1e-4);
-  NdotL = max(NdotL, 1e-4);
-  roughness = max(roughness, 0.04); // Absolute minimum roughness
+  NdotV     = max(NdotV, 0.0001f);
+  NdotL     = max(NdotL, 0.0001f);
+  roughness = max(roughness, 0.04f);
 
-  half D = D_GGX(NdotH, roughness);
+  half D   = D_GGX(NdotH, roughness);
   half Vis = V_SmithGGXCorrelated(NdotL, NdotV, roughness);
 
-  // Schlick Fresnel
-  half3 F = F0 + (1.0 - F0) * pow(saturate(1.0 - VdotH), 5.0);
+  half3 F = F0 + (1.0f - F0) * pow(saturate(1.0f - VdotH), 5.0f);
 
-  return D * Vis * F;
+  return (D * Vis * F);
 }
-
-//////////////////////////////// Blinn model ///////////////////////////////
-// - Blinn has good properties for plastic and some metallic surfaces.
-// - Good for general use. Very cheap.
 
 half Blinn(half3 N, half3 V, half3 L, half Exp)
 {
-  half3 H = normalize( V + L );        // 4 alu
-  return pow( saturate( dot(N, H) ) ,  Exp);  // 4 alu
-
-  // 8 ALU
+  half3 H = normalize(V + L);
+  return pow(saturate(dot(N, H)), Exp);
 }
-
-//////////////////////////////// Anisotropic blinn model ///////////////////////////////
-// - Blinn anisotropic model has good properties for generic anisotropic highlights
-// (can have radial or disk shape)
-// - Very cheap
 
 half BlinnAnisotropic(half3 T, half3 B, half3 N, half3 V, half3 L, half2 vSurfaceRoughness, half Exp)
 {
-  half3 H = ( V + L ) * 0.5;                                                                        // 2 alu
-  half2 HdotT_B = half2( dot(H, B), dot(H, T) ) * vSurfaceRoughness.xy;                           // 3 alu
-
-  //return pow( sqrt(saturate( 1 - HdotT_B.x * HdotT_B.x - HdotT_B.y * HdotT_B.y) ), Exp);            // 4 alu + 3 alu
-
-  // merged sqrt with pow -> sqrt<=> pow( scalar, 0.5)  -> pow(sqrt(scalar), exp) <=> pow(scalar, exp * 0.5 )
-
-  return pow( saturate( 1 - dot(HdotT_B.xy, HdotT_B.xy) ), 0.5 * Exp);            // 4 alu
-
-  // about 12 ALU
+  half3 H = (V + L) * 0.5f;
+  half2 HdotT_B = half2(dot(H, B), dot(H, T)) * vSurfaceRoughness.xy;
+  return pow(saturate(1.0f - dot(HdotT_B.xy, HdotT_B.xy)), 0.5f * Exp);
 }
 
 sampler2D blinnAnisotropicSampler = sampler_state
 {
-  Texture = textures/defaults/blinn_anisotropic_sampler.dds;
+  Texture   = textures/defaults/blinn_anisotropic_sampler.dds;
   MinFilter = POINT;
   MagFilter = POINT;
   MipFilter = NONE;
-  AddressU = Clamp;
-  AddressV = Clamp;
+  AddressU  = Clamp;
+  AddressV  = Clamp;
 };
 
 half BlinnAnisotropicTex(half3 T, half3 B, half3 N, half3 V, half3 L, half2 vSurfaceRoughness, half Exp)
 {
-  half3 H = ( V + L ) * 0.5;                                                                        // 2 alu
-  float2 HdotT_B = float2( dot(H, B), dot(H, T) ) * vSurfaceRoughness.xy;                           // 3 alu
+  half3 H = (V + L) * 0.5f;
+  float2 HdotT_B = float2(dot(H, B), dot(H, T)) * vSurfaceRoughness.xy;
 
-  const float4 cDecompressD = float4(1.0, 1.0/255.0, 1.0/(255.0*255.0), 1.0/(255.0*255.0*255.0)) * 32.0;
-  float fAnisoDistribution = dot( tex2D( blinnAnisotropicSampler, HdotT_B * 0.5 + 0.5).xyzw, cDecompressD.xyzw ); // 1 texl, 1 alu
+  const float4 cDecompressD = float4(1.0f, 1.0f/255.0f, 1.0f/(255.0f*255.0f), 1.0f/(255.0f*255.0f*255.0f)) * 32.0f;
+  float fAnisoDistribution = dot(tex2D(blinnAnisotropicSampler, HdotT_B * 0.5f + 0.5f).xyzw, cDecompressD.xyzw);
 
-  return pow( fAnisoDistribution, Exp);                         // 3 alu
-
-  // about 9 ALU
+  return pow(abs(fAnisoDistribution), Exp);
 }
-
-//////////////////////////////// Phong model /////////////////////////////////////
-// - Phong model has good properties for plastic and some metallic surfaces.
-// - Good for general use. Very cheap.
 
 half Phong(half3 N, half3 V, half3 L, half Exp)
 {
-  half3 R = reflect(-L, N);          // 3 ALU
-  return pow( saturate( dot(V, R) ) ,  Exp);  // 4
-
-  // 7 ALU
+  half3 R = reflect(-L, N);
+  return pow(saturate(dot(V, R)), Exp);
 }
 
-// Optimized phong, use if mirrowed reflection vector pre-computed
 half Phong(half3 R, half3 L, half Exp)
 {
-  return pow( saturate( dot(L, R) ) ,  Exp); //4
-  // 4 ALU
+  return pow(saturate(dot(L, R)), Exp);
 }
 
 //////////////////////////////// Cook-Torrance model ////////////////////////
-// - Cook-Torrance model has very good properties for metallic surfaces
-// - Pure math versions are expensive.
 
-// Pre-computed cook-torrance D term using a FP32 texture
-
-// todo: use FP16 instead (needs loading support also..)
 sampler2D cookTorranceDSampler = sampler_state
 {
-  Texture = textures/defaults/cook_d_sampler_g16r16f.dds;
+  Texture   = textures/defaults/cook_d_sampler_g16r16f.dds;
   MinFilter = LINEAR;
   MagFilter = LINEAR;
   MipFilter = NONE;
-  AddressU = Clamp;
-  AddressV = Clamp;
+  AddressU  = Clamp;
+  AddressV  = Clamp;
 };
 
 half GetBeckchamDistribution(half NdotH, half m)
 {
-  // Compute Beckcham distribution function (D term)
-  half  NdotH_pow2 = NdotH * NdotH;                                                              // 1 mul
-  half  m2_mul_NdotH_pow2 = m * m * NdotH_pow2;                                                  // 2 alu
-  half  tanDelta = ( 1.0 - NdotH_pow2 ) / ( m2_mul_NdotH_pow2 );                                 // 2 alu
-  return exp( -tanDelta ) / ( m2_mul_NdotH_pow2 * NdotH_pow2  + 0.001);                          // 3 alu
-  // 8 ALU
+  half NdotH_pow2        = NdotH * NdotH;
+  half m2_mul_NdotH_pow2 = m * m * NdotH_pow2;
+  half tanDelta          = (1.0f - NdotH_pow2) / max(m2_mul_NdotH_pow2, 0.0001f);
+
+  return exp(-tanDelta) / max(m2_mul_NdotH_pow2 * NdotH_pow2 + 0.001f, 0.0001f);
 }
 
 float GetBeckchamDistributionTex(float NdotH, float m)
 {
 #if D3D10
-  return tex2Dlod( cookTorranceDSampler, float4(NdotH, m, 0, 0) ).x;
+  return tex2Dlod(cookTorranceDSampler, float4(NdotH, m, 0.0f, 0.0f)).x;
 #else
-  return tex2D( cookTorranceDSampler, float2(NdotH, m) ).x;
+  return tex2D(cookTorranceDSampler, float2(NdotH, m)).x;
 #endif
 }
 
 half CookTorrance(half3 N, half3 V, half3 L, half fFresnelBias, half m)
 {
-  // Compute half vector and coeficients
-  half3 H = normalize( V + L );                                      // 1 add, 1 nrm
-  half NdotL = dot( N, L );                                    // 1 dot
-  half VdotH = dot( V, H );                                    // 1 dot
-  half NdotE = dot( N, V );                                    // 1 dot
-  half NdotH = dot( N, H );                                      // 1 dot
-  half fFresnel = GetFresnelTex(NdotE, fFresnelBias).w;                      // 1 texl
+  half3 H     = normalize(V + L);
+  half  NdotL = dot(N, L);
+  half  VdotH = dot(V, H);
+  half  NdotE = dot(N, V);
+  half  NdotH = dot(N, H);
 
-  // Compute Beckcham distribution function (D term)
-  half  D = GetBeckchamDistribution(NdotH, m);
+  half  fFresnel = GetFresnelTex(NdotE, fFresnelBias).w;
+  half  D        = GetBeckchamDistribution(NdotH, m);
 
-  // Compute geometric attenuation (G term)
-  float NdotH_div_VdotH = 2 * NdotH / saturate(VdotH);                        // 1 mul, 1 div
-  float G = saturate( min( NdotH_div_VdotH * NdotE, NdotH_div_VdotH * NdotL) ) ;          // 1 mins, 1 mul
+  float NdotH_div_VdotH = 2.0f * NdotH / max(saturate(VdotH), 0.0001f);
+  float G = saturate(min(NdotH_div_VdotH * NdotE, NdotH_div_VdotH * NdotL));
 
-  // Cook-torrance specular term
-  return D * G * fFresnel/ (PI * NdotL * (NdotE + 0.01));                      // 1 div, 5 muls
-
-  // aprox 26 ALU, 1 TEX
+  return (D * G * fFresnel) / max(PI * NdotL * (NdotE + 0.01f), 0.0001f);
 }
-
-// Cheaper version, with pre-computed NdotE and NdotL term. Assuming Fresnel and PI*NdotL term constant 1.0
 
 half CookTorrance(half3 N, half3 V, half3 L, half NdotE, half NdotL, half m)
 {
-  // Compute half vector and coeficients
-  half3 H = normalize( V + L );                                      // 1 add, 1 nrm
-  half VdotH= dot( V, H );                                    // 1 dot
-  half NdotH = dot(N, H);                                      // 1 dot
+  half3 H     = normalize(V + L);
+  half  VdotH = dot(V, H);
+  half  NdotH = dot(N, H);
 
-  // Compute Beckcham distribution function (D term)
   half  D = GetBeckchamDistribution(NdotH, m);
-  // Compute geometric attenuation (G term)
-  half NdotH_div_VdotH = 2 * NdotH / saturate(VdotH);                        // 1 mul, 1 div
-  float G = saturate( min( NdotH_div_VdotH * NdotE, NdotH_div_VdotH * NdotL) ) ;          // 1 mins, 1 mul
 
-  // Cook-torrance specular term
-  return D * G  / (NdotE + 0.01);                                      // 1 div, 1 mul
+  half  NdotH_div_VdotH = 2.0f * NdotH / max(saturate(VdotH), 0.0001f);
+  float G = saturate(min(NdotH_div_VdotH * NdotE, NdotH_div_VdotH * NdotL));
 
-  // aprox 18 ALU
+  return (D * G) / max(NdotE + 0.01f, 0.0001f);
 }
 
 half CookTorranceTex(half3 N, half3 V, half3 L, half NdotL, float m)
 {
-  // Compute half vector and coeficients
+  half3 H     = normalize(V + L);
+  half  VdotH = dot(V, H);
+  half  NdotE = dot(N, V);
+  float NdotH = dot(N, H);
 
-  half3 H = normalize( V + L );                                  // 1 add, 1 nrm
-  half VdotH = dot( V, H );                                    // 1 dot
-  half NdotE = dot( N, V );                                    // 1 dot
-  float NdotH = dot( N, H );                                      // 1 dot
-
-  // Compute Beckcham distribution function (D term)
   float D = GetBeckchamDistributionTex(NdotH, m);
 
-  // Compute geometric attenuation (G term)
-  half NdotH_div_VdotH = 2 * NdotH / saturate(VdotH);                        // 1 mul, 1 div
-  half G = saturate( min( NdotH_div_VdotH * NdotE, NdotH_div_VdotH * NdotL) ) ;                  // 1 mins, 1 mul
+  half NdotH_div_VdotH = 2.0f * NdotH / max(saturate(VdotH), 0.0001f);
+  half G = saturate(min(NdotH_div_VdotH * NdotE, NdotH_div_VdotH * NdotL));
 
-  return D * G / (NdotE + 0.01);
-
-  // aprox 12 ALU, 1 TEX
+  return (D * G) / max(NdotE + 0.01f, 0.0001f);
 }
-
-// A bit optimized version, with pre-computed NdotE for all lights and NdotL
 
 half CookTorranceTex(half3 N, half3 V, half3 L, half NdotE, half NdotL, half m)
 {
-  // Compute half vector and coeficients
+  half3 H     = normalize(V + L);
+  half  VdotH = dot(V, H);
+  half  NdotH = dot(N, H);
 
-  half3 H = normalize( V + L );                                  // 4 alu
-  half VdotH = dot( V, H );                                    // 1 dot
-  half NdotH = dot( N, H );                                    // 1 dot
+  half D = GetBeckchamDistributionTex(NdotH, m);
 
-  // Compute Beckcham distribution function (D term)
-  half D = GetBeckchamDistributionTex(NdotH, m);    // 1 alu
+  half NdotH_div_VdotH = 2.0f * NdotH / max(VdotH, 0.0001f);
+  half G = saturate(NdotH_div_VdotH * min(NdotE, NdotL));
 
-  // Compute geometric attenuation (G term)
-  half NdotH_div_VdotH = 2 * NdotH / VdotH;/// max(VdotH, 0.01);                        // 2 alu
-  half G =  saturate( NdotH_div_VdotH *min( NdotE, NdotL) ) ;          // 2 alu
-
-    // assume NdotE and Fresnel = 1
-  return D * G/ max(NdotE, 0.001);  // 4
-
-  // aprox 15 ALU
+  return (D * G) / max(NdotE, 0.001f);
 }
 
 //////////////////////////////// Ward model, anisotropic /////////////////////////
-// - Ward anisotropic model has good properties for generic anisotropic highlights
-// (can have radial or disk shape)
-// - Pure math versions are expensive
 
 half WardAnisotropic(half3 T, half3 B, half3 N, half3 V, half3 L, half2 vSurfaceRoughness, half Exp)
 {
-  half3 H = normalize( V + L );                                                                    // 1 add, 1 nrm  - 4 alu sum
-  half NdotL = saturate( dot( N, L ) );                              // 1 dot
-  half NdotE = saturate( dot( N, V ) );                              // 1 dot
-  half NdotH = dot( N, H );                                    // 1 dot
+  half3 H     = normalize(V + L);
+  half  NdotL = saturate(dot(N, L));
+  half  NdotE = saturate(dot(N, V));
+  half  NdotH = dot(N, H);
 
-  half2 HdotT_B = half2( dot( H, B ), dot( H, T ) ) / vSurfaceRoughness.xy;            // 2 dots, 1 div
-  HdotT_B *= HdotT_B;                                        // 1 mul
+  half2 HdotT_B = half2(dot(H, B), dot(H, T)) / max(vSurfaceRoughness.xy, 0.0001f);
+  HdotT_B *= HdotT_B;
 
-  half specK = saturate( rsqrt( NdotL * NdotE ) );                                                  //  1 rcp, 1 mul
-  specK *= NdotL * exp((-2.0 * (HdotT_B.x + HdotT_B.y))/(1.0 + NdotH));              // 7 alu
+  half specK = saturate(rsqrt(max(NdotL * NdotE, 0.0001f)));
+  specK *= NdotL * exp((-2.0f * (HdotT_B.x + HdotT_B.y)) / max(1.0f + NdotH, 0.0001f));
 
-  return pow(specK, Exp);                                      // 1 pow - 3 alu
-
-  // aprox 23 ALU
+  return pow(abs(specK), Exp);
 }
-
-// A bit cheaper version with NdotL and NdotE pre-computed
 
 half WardAnisotropic(half3 T, half3 B, half3 N, half3 V, half3 L, half NdotL, half NdotE, half2 vSurfaceRoughness, half Exp)
 {
-  half3 H = normalize( V + L );                                                                    // 1 add, 1 nrm   - 4 alu sum
-  half NdotH = dot( N, H ) ;                                                                        // 1 dot
+  half3 H     = normalize(V + L);
+  half  NdotH = dot(N, H);
 
-  half2 HdotT_B = half2( dot( H, B ), dot( H, T ) ) / vSurfaceRoughness.xy;                        // 2 dots, 1 div
-  HdotT_B *= HdotT_B;                                                                                // 1 mul
+  half2 HdotT_B = half2(dot(H, B), dot(H, T)) / max(vSurfaceRoughness.xy, 0.0001f);
+  HdotT_B *= HdotT_B;
 
-  // using sat instead, since it's free, but compensating by brighting specular
-  half specK = saturate( rsqrt( NdotL * NdotE ) );                                                  // 1 rcp, 1 div
-  specK *= NdotL * exp((-2.0 * (HdotT_B.x + HdotT_B.y))/(1.0 + NdotH));                              // 7 alu
+  half specK = saturate(rsqrt(max(NdotL * NdotE, 0.0001f)));
+  specK *= NdotL * exp((-2.0f * (HdotT_B.x + HdotT_B.y)) / max(1.0f + NdotH, 0.0001f));
 
-  return pow(specK, Exp);                                                                            // 1 pow - 3 alu
-
-  // aprox 21 ALU
+  return pow(abs(specK), Exp);
 }
 
 sampler2D anisExpSampler = sampler_state
 {
-  Texture = textures/defaults/anis_exp_sampler.dds;
+  Texture   = textures/defaults/anis_exp_sampler.dds;
   MinFilter = POINT;
   MagFilter = POINT;
   MipFilter = NONE;
-  AddressU = Clamp;
-  AddressV = Clamp;
+  AddressU  = Clamp;
+  AddressV  = Clamp;
 };
 
 half GetAnisoDistributionTex(half NdotVec, half s)
 {
-  const float4 cDecompressD = float4(1.0, 1.0/255.0, 1.0/(255.0*255.0), 1.0/(255.0*255.0*255.0)) * 32.0;
+  const float4 cDecompressD = float4(1.0f, 1.0f/255.0f, 1.0f/(255.0f*255.0f), 1.0f/(255.0f*255.0f*255.0f)) * 32.0f;
 #if D3D10
-  return dot( tex2Dlod( anisExpSampler, float4(NdotVec, s, 0, 0) ), cDecompressD );
+  return dot(tex2Dlod(anisExpSampler, float4(NdotVec, s, 0.0f, 0.0f)), cDecompressD);
 #else
-  return dot( tex2D( anisExpSampler, float2(NdotVec, s) ), cDecompressD );
+  return dot(tex2D(anisExpSampler, float2(NdotVec, s)), cDecompressD);
 #endif
-  // 1 tex, 1 dot
 }
 
-// Note: Assumes surface roughness divided by 10.0 - for a bit extra precision on texture lookup
 half WardAnisotropicTex(half3 T, half3 B, half3 N, half3 V, half3 L, half NdotL, half NdotE, half2 vSurfaceRoughness, half Exp)
 {
-  // opt: averaging vectors instead of normalization
-  half3 H = 0.5 *( V + L );                                                                        // 1 add, 1 mul
+  half3 H = 0.5f * (V + L);
+  half  NdotH = dot(N, H);
 
-  half NdotH = dot( N, H );                                                                        // 1 dot
+  float2 HdotT_B = abs(half2(dot(H, B), dot(H, T)) * vSurfaceRoughness.xy);
+  half2  vExpDist;
 
-  float2 HdotT_B = (abs( half2( dot( H, B ), dot( H, T ) ) *( vSurfaceRoughness.xy)));               // 2 dots, 1 div, 1 abs
-  half2 vExpDist;
-  vExpDist.x = GetAnisoDistributionTex( HdotT_B.x, NdotH );                                         // 1 tex, 1 dot
-  vExpDist.y = GetAnisoDistributionTex( HdotT_B.y, NdotH );                                         // 1 tex, 1 dot
+  vExpDist.x = GetAnisoDistributionTex(HdotT_B.x, NdotH);
+  vExpDist.y = GetAnisoDistributionTex(HdotT_B.y, NdotH);
 
-  // using sat instead, since it's free, but compensating by brighting specular
-  half specK = saturate( rsqrt( saturate( NdotL * NdotE ) ) );                                    // 1 rcp, 1 mul
-  specK *= NdotL * vExpDist.x * vExpDist.y;                                                         // 3 muls
+  half specK = saturate(rsqrt(max(saturate(NdotL * NdotE), 0.0001f)));
+  specK *= NdotL * vExpDist.x * vExpDist.y;
 
-  return pow(specK, max(Exp, 0.0001));    // # temporary solution #
-
-  // 18 alu
+  return pow(abs(specK), max(Exp, 0.0001f));
 }
 
 half WardAnisotropic_opt(half3 T, half3 B, half3 N, half3 V, half3 L, half NdotL, half NdotE, half2 vSurfaceRoughness, half Exp)
 {
-  // opt: averaging vectors instead of normalization
-  //half3 H =  (V + L)*  0.5;                                        // 1 alu
-  half3 H =  normalize(V + L);                                        // 1 alu
+  half3 H = normalize(V + L);
+  half  NdotH = dot(N, H);
 
-  half NdotH = dot( N, H );                                                    // 1 alu
+  float2 HdotT_B = half2(dot(H, B), dot(H, T)) * vSurfaceRoughness.xy;
+  HdotT_B *= HdotT_B;
 
-  float2 HdotT_B = ( half2( dot( H, B ), dot( H, T ) ) )* vSurfaceRoughness.xy;                 // 3 alu
-  HdotT_B *= HdotT_B;                                                                             // 1 alu
-
-  // using sat instead, since it's free, but compensating by brighting specular
-  half specK = saturate( rsqrt( saturate( NdotL * NdotE ) ) );                                 // 2 alu
-
-  // opt: merged exponential with power factor
-  //specK *= NdotL * exp( Exp* (-2.0 * (HdotT_B.x + HdotT_B.y) )/(1.001 + NdotH) );  // 6 alu
-  specK *= NdotL * exp( dot(HdotT_B.xy, -2.0 * Exp/(1.001 + NdotH)) );  // 6 alu
+  half specK = saturate(rsqrt(max(saturate(NdotL * NdotE), 0.0001f)));
+  specK *= NdotL * exp(dot(HdotT_B.xy, -2.0f * Exp / max(1.001f + NdotH, 0.0001f)));
 
   return specK;
-
-  // 14 alu
 }
 
 //////////////////////////////// Banks model, anisotropic /////////////////////////
-// - Banks anisotropic model has Good properties for disk shape anisotropic
-// highlights (good for metallic surfaces)
-// - Very cheap
 
 half BanksAnisotropic(half3 T, half3 V, half3 L, half Exp)
 {
-    half LdotT = dot( L, T );                                    // 1 dot
-    half VdotT = dot( V, T );                                    // 1 dot
+  half LdotT = dot(L, T);
+  half VdotT = dot(V, T);
 
-    half fSpec = sqrt( 1 - LdotT * LdotT );                            // 1 mad, 1 rcp
-    fSpec *= sqrt( 1 - VdotT * VdotT );                                // 1 mul, 1 mad, 1 rcp
-    fSpec = saturate( fSpec - LdotT * VdotT );
+  half fSpec = sqrt(max(1.0f - LdotT * LdotT, 0.0f));
+  fSpec *= sqrt(max(1.0f - VdotT * VdotT, 0.0f));
+  fSpec = saturate(fSpec - LdotT * VdotT);
 
-  return pow(fSpec, Exp);                                      // 1 pow
-
-  // aprox 8 ALU
+  return pow(fSpec, Exp);
 }
 
 half BanksAnisotropicTex(half3 T, half3 V, half3 L, half Exp)
 {
-  // Todo
-
-  return 1;
-
-  // 1 ALU, 1 TEX
+  return 1.0f;
 }
 
 //////////////////////////////// Kajiya-Kay model, anisotropic /////////////////////////
-// - Kajiya-Kay anisotropic model has Good properties for radial shape anisotropic
-// highlights (good for hair)
-// - Very cheap
 
 half KajiyaKayAnisotropic(half3 T, half3 V, half3 L, half Exp)
 {
-  half3 H = normalize( V + L );                                // 4 alu
-  half TdotH = dot( T, H );                                    // 1 dot
+  half3 H = normalize(V + L);
+  half  TdotH = dot(T, H);
 
-  half fSpec = sqrt( max( 1.0 - TdotH * TdotH, 0.01) );                    // 1 mad, 1 sqrt
+  half fSpec = sqrt(max(1.0f - TdotH * TdotH, 0.01f));
 
-  return pow( fSpec, Exp );                                      // 3 alu
-
-  // aprox 10 ALU
+  return pow(fSpec, Exp);
 }
 
-// A bit cheaper version, half vector already pre-computed
 half KajiyaKayAnisotropic(half3 T, half3 H, half Exp)
 {
-  half TdotH = dot( T, H );                                  // 1 dot
-  half fSpec = sqrt( max( 1.0 - TdotH * TdotH, 0.01) );                  // 1 mad, 1 sqrt
+  half TdotH = dot(T, H);
+  half fSpec = sqrt(max(1.0f - TdotH * TdotH, 0.01f));
 
-  return pow( fSpec, Exp );                                    // 3 alu
-
-  // aprox 6 ALU
+  return pow(fSpec, Exp);
 }
 
-//////////////////////////////// Kajiya-Kay model, anisotropic /////////////////////////
-// - Oren-Nayar model has good properties for very rough surfaces (eg: sand, paper, cloth).
-// - Expensive
+//////////////////////////////// Oren-Nayar model /////////////////////////
 
 half OrenNayar(half3 N, half3 V, half3 L, half Exp)
 {
-
-  // Todo
-
-  return 1;
-
+  return 1.0f;
 }
 
 half OrenNayarTex(half3 N, half3 V, half3 L, half Exp)
 {
-
-  // Todo
-
-  return 1;
-
+  return 1.0f;
 }
-//////////////////////////////// Vegetation shading ////////////////
 
 // Common vegetation shading
 
 half3 LeafShadingBack(half3 vEye, half3 vLight, half3 vNormal, half3 cDiffBackK, half backViewDep)
 {
-  half EdotL=saturate(dot(vEye.xyz, -vLight.xyz));
+  half EdotL = saturate(dot(vEye.xyz, -vLight.xyz));
+  half fLdotNBack = saturate(dot(vNormal.xyz, vLight.xyz) * 0.6f + 0.4f);
 
-  // Tweaked NdotL wrapping - Artists request
-  half fLdotNBack=saturate(dot(vNormal.xyz, vLight.xyz)*0.6+0.4);
-
-  half powEdotL = EdotL*EdotL;
+  half powEdotL = EdotL * EdotL;
   powEdotL *= powEdotL;
 
-  half3 vBackShading = saturate(powEdotL*backViewDep + (1.0-backViewDep) * fLdotNBack);
+  half3 vBackShading = saturate(powEdotL * backViewDep + (1.0f - backViewDep) * fLdotNBack);
 
-  return vBackShading * cDiffBackK.xyz;
+  return (vBackShading * cDiffBackK.xyz);
 }
 
 void LeafShadingFront(half3 vEye, half3 vLight, half3 vNormal, half3 cDifK, half3 cSpecK, inout half3 outDif, inout half3 outSpec, half fSpecularExp)
 {
-  half fLdotNFront=dot(vNormal.xyz, vLight.xyz);
-  // Compute front diffuse term
+  half fLdotNFront = dot(vNormal.xyz, vLight.xyz);
 #if %GRASS
-  outDif=max(fLdotNFront, 0.5)*cDifK.xyz;
+  outDif = max(fLdotNFront, 0.5f) * cDifK.xyz;
 #else
-  outDif=saturate(fLdotNFront)*cDifK.xyz;
+  outDif = saturate(fLdotNFront) * cDifK.xyz;
 #endif
-  // compute specular if necessary
+
 #if !%GRASS
-  outSpec= Phong(vEye, vLight, fSpecularExp) * cSpecK.xyz;
+  outSpec = Phong(vEye, vLight, fSpecularExp) * cSpecK.xyz;
 #endif
 }
 
 // Common SH vegetation shading
 
-//simple sin approx for 2 at a time
 float2 ApproxSine2(float2 arg)
 {
-  #define PI 3.14159265
-  float2 x = frac(arg/(2.0*PI)+0.5)*2.0*PI-PI;//brings into -pi..pi, same instr. generated as for sincos
-  float2 x3 = x * x * x;  //cubic component
-  float a = -8.0/(3*PI*PI*PI);  //constant
-  float c = 8.0/(3*PI);      //constant
-  return (a*x3 + c*x); //4 at once, how fast can it get...
+  float2 x = frac(arg / (2.0f * PI) + 0.5f) * 2.0f * PI - PI;
+  float2 x3 = x * x * x;
+  float a = -8.0f / (3.0f * PI * PI * PI);
+  float c = 8.0f / (3.0f * PI);
+  return (a * x3 + c * x);
 }
 
-//simple sin approx for 4 at a time
 float4 ApproxSine4(float4 arg)
 {
-  #define PI 3.14159265
-  float4 x = frac(arg/(2.0*PI)+0.5)*2.0*PI-PI;//brings into -pi..pi, same instr. generated as for sincos
-  float4 x3 = x * x * x;  //cubic component
-  float a = -8.0/(3*PI*PI*PI);  //constant
-  float c = 8.0/(3*PI);      //constant
-  return (a*x3 + c*x); //4 at once, how fast can it get...
+  float4 x = frac(arg / (2.0f * PI) + 0.5f) * 2.0f * PI - PI;
+  float4 x3 = x * x * x;
+  float a = -8.0f / (3.0f * PI * PI * PI);
+  float c = 8.0f / (3.0f * PI);
+  return (a * x3 + c * x);
 }
 
 float DoSHLookup(float3 vDir, float4 SHShadowing[2])
 {
-  float4 tempSH0 = float4(vDir,1);//use normalized object space light vector as query input
-  float2 tempSH1 = float2(dot(tempSH0, SHShadowing[0]),0);
+  float4 tempSH0 = float4(vDir, 1.0f);
+  float2 tempSH1 = float2(dot(tempSH0, SHShadowing[0]), 0.0f);
   float4 tempSH3 = tempSH0.xyzz * tempSH0.yzzx;
+
   tempSH0.xy *= tempSH0.xy;
   tempSH3.x = tempSH0.x - tempSH0.y;
   tempSH1.y = dot(tempSH3, SHShadowing[1]);
+
   return (tempSH1.x + tempSH1.y);
 }
 
-//============================================================================================
-
 float2 ParallaxOcclusionMap(in float2 baseTC, in float lod, in float3 viewDirNrm, in int numSteps, in float displacement)
 {
-  float step =  1.0 / numSteps;
+  float step = 1.0f / max((float)numSteps, 0.0001f);
   float bumpScale = displacement;
 
-  float2 delta = float2(viewDirNrm.x, viewDirNrm.y) * bumpScale / (-viewDirNrm.z * numSteps); // / max(-viewDirNrm.z * numSteps, 0.1)
+  float2 delta = float2(viewDirNrm.x, viewDirNrm.y) * bumpScale / max(-viewDirNrm.z * numSteps, 0.0001f);
 
   float4 NB0 = tex2D(bumpHeightMapSampler, baseTC);
 
-  float height = 1 - step;
-  float4 offset = float4(baseTC + delta, 0, lod);
+  float height = 1.0f - step;
+  float4 offset = float4(baseTC + delta, 0.0f, lod);
   float4 NB1 = tex2D(bumpHeightMapSampler, offset);
 
-  for (int i=0; i<numSteps; i++)
+  for (int i = 0; i < numSteps; i++)
   {
-    [flatten]
+    // WARNING: Removed [flatten] attr because it causes parser crash on legacy engine branches.
     if (NB1.w >= height)
+    {
       break;
+    }
 
     NB0 = NB1;
-
     height -= step;
     offset.xy += delta;
-
     NB1 = tex2Dlod(bumpHeightMapSampler, offset);
   }
 
   float4 offsetBest = offset;
-  float error = 1.0;
+  float error = 1.0f;
 
   float t1 = height;
   float t0 = t1 + step;
@@ -1022,20 +842,23 @@ float2 ParallaxOcclusionMap(in float2 baseTC, in float lod, in float3 viewDirNrm
 
   float4 intersect = float4(delta * numSteps, delta * numSteps + baseTC);
 
-  for (int i=0; i<10; i++)
+  for (int j = 0; j < 10; j++)
   {
-    [flatten]
-    if (abs(error) <= 0.01)
+    if (abs(error) <= 0.01f)
+    {
       break;
+    }
 
     float denom = delta1 - delta0;
-    float t = (t0 * delta1 - t1 * delta0) / denom;
-    offsetBest.xy = -t * intersect.xy + intersect.zw;
+    float denomSafe = (denom < 0.0f ? min(denom, -0.0001f) : max(denom, 0.0001f));
+    float t = (t0 * delta1 - t1 * delta0) / denomSafe;
 
+    offsetBest.xy = -t * intersect.xy + intersect.zw;
     float4 NB = tex2Dlod(bumpHeightMapSampler, offsetBest);
 
     error = t - NB.w;
-    if (error < 0)
+
+    if (error < 0.0f)
     {
       delta1 = error;
       t1 = t;

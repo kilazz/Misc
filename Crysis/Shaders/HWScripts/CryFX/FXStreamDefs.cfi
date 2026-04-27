@@ -1,41 +1,41 @@
 //=== Base stream definitions ==================================================
 
-#define IN_P    float4 Position  : POSITION;
-#define IN_C0   float4 Color     : COLOR;
+#define IN_P     float4 Position : POSITION;
+#define IN_C0    float4 Color    : COLOR;
 #define IN_TBASE float2 baseTC   : TEXCOORD0;
 #define IN_TLM   float2 lmTC     : TEXCOORD1;
 
 // ==== Additional streams ==================================
 
-#define IN_TANG_STREAM                \
-          float4 Tangent  : TANGENT;  \
-          float4 Binormal : BINORMAL; \
+#define IN_TANG_STREAM                                                                                                      \
+          float4 Tangent  : TANGENT;                                                                                        \
+          float4 Binormal : BINORMAL;                                                                                       \
 
-#define TANG_MATR                                    \
-          float3x3 objToTangentSpace;                \
-          objToTangentSpace[0] = IN.Tangent.xyz;     \
-          objToTangentSpace[1] = IN.Binormal.xyz;    \
-          objToTangentSpace[2] = normalize(cross(objToTangentSpace[0], objToTangentSpace[1])) * IN.Tangent.w;    \
+#define TANG_MATR                                                                                                           \
+          float3x3 objToTangentSpace;                                                                                       \
+          objToTangentSpace[0] = IN.Tangent.xyz;                                                                            \
+          objToTangentSpace[1] = IN.Binormal.xyz;                                                                           \
+          objToTangentSpace[2] = normalize(cross(objToTangentSpace[0], objToTangentSpace[1])) * IN.Tangent.w;               \
 
-#define IN_SKIN_STREAM float4 BlendWeights : BLENDWEIGHT; float4 BlendIndices : BLENDINDICES; float4 BoneSpace : POSITION4;
+#define IN_SKIN_STREAM float4 BlendWeights : BLENDWEIGHT; float4 BlendIndices : BLENDINDICES; float4 BoneSpace : POSITION4; \
 
-#define IN_SHAPEDEFORM_STREAM      \
-    float4 ShapeDeformInfo : COLOR4;\
-    float4 Thin : POSITION1;    \
-    float4 Fat : POSITION2;      \
+#define IN_SHAPEDEFORM_STREAM                                                                                               \
+    float4 ShapeDeformInfo : COLOR4;                                                                                        \
+    float4 Thin : POSITION1;                                                                                                \
+    float4 Fat : POSITION2;                                                                                                 \
 
-#define IN_MORPHTARGET_STREAM        \
-    float3 MorphTargetDelta : POSITION3;\
+#define IN_MORPHTARGET_STREAM                                                                                               \
+    float3 MorphTargetDelta : POSITION3;                                                                                    \
 
 //=== Vertex shader output ===================================================
 
-#define OUT_P    float4 HPosition : POSITION;
-#define OUT_C0   float4 Color     : COLOR0;
-#define OUT_C1   float4 Color1    : COLOR1;
+#define OUT_P           float4 HPosition : POSITION;
+#define OUT_C0          float4 Color     : COLOR0;
+#define OUT_C1          float4 Color1    : COLOR1;
 
 //=== Pixel shader output structure ==========================================
 
 struct pixout
 {
-  float4 Color  : COLOR0;
+    float4 Color : COLOR0;
 };

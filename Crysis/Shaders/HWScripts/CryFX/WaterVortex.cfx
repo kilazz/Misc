@@ -6,7 +6,7 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "ForceDrawAfterWater;"
            "Refractive;"
@@ -35,7 +35,6 @@ float4x4 mCamera      : PB_CameraMatrix;
 
 float4 TerrainLMParams : PB_TerrainLMParams;
 
-// Tweakables /////////////////
 
 float BigWavesScale
 <
@@ -136,7 +135,6 @@ float FresnelScale
   float UIStep    = 0.05;
 > = 1.0;
 
-////////////////////////////////////////////////////////////////
 
 sampler2D waveSampler = sampler_state
 {
@@ -190,7 +188,7 @@ sampler2D sunSampler = sampler_state
 
 sampler2D envMapSamplerRefl
 <
-  string Script = 
+  string Script =
       "RenderOrder=PreProcess;"
       "ProcessOrder=WaterReflection;"
       "RenderCamera=WaterPlaneReflected;"
@@ -233,7 +231,6 @@ sampler2D sceneDepthSampler = sampler_state
   AddressV = Clamp;
 };
 
-/////////////////////////////
 
 struct v2fWater
 {
@@ -250,7 +247,6 @@ struct v2fWater
 
 };
 
-///////////////// vertex shader //////////////////
 v2fWater WaterVS(app2vertGeneral IN)
 {
 
@@ -294,7 +290,6 @@ v2fWater WaterVS(app2vertGeneral IN)
   return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 pixout WaterPS(v2fWater IN)
 {
@@ -354,11 +349,10 @@ pixout WaterPS(v2fWater IN)
   return OUT;
 }
 
-//////////////////////////////// technique ////////////////
 
 technique General
 <
-  string Script = 
+  string Script =
   "TechniqueZ=ZPass;"
 >
 {
@@ -382,4 +376,3 @@ technique General
 
 #include "CommonZPass.cfi"
 
-/////////////////////// eof ///

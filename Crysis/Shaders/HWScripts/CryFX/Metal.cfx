@@ -3,7 +3,7 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            //"SingleLightPass;"
            "SupportsAttrInstancing;"
@@ -14,39 +14,29 @@ float Script : STANDARDSGLOBAL
            "ShaderType = Metal;"
 >;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////// Custom shading pass structure /////////////////////////////////////
-
 struct fragPassCustom
 {
+    // Custom per pass data
+    half3 vTangent;        // perturbed tangent vector
+    half3 vBinormal;       // perturbed binormal vector
 
-  // Custom per pass data
-  half3 vTangent;        // perturbed tangent vector
-  half3 vBinormal;       // perturbed binormal vector
-
-  half fFresnel;         // fresnel term
-  half fSpecMultiplier;
-  half2 vSurfaceRoughness;
-
+    half  fFresnel;         // fresnel term
+    half  fSpecMultiplier;
+    half2 vSurfaceRoughness;
 };
 
 struct fragLightPassCustom
 {
-  // ... Custom per light data ...
+    // ... Custom per light data ...
 };
 
 #include "ShadeLib.cfi"
-
-//////////////////////////////// Common vertex shader ////////////////
-
 #include "VertexLib.cfi"
 
-// Samples /////////////////
 DECALMAP
 ENVIRONMENTMAP
 ENVIRONMENTCUBEMAP
 
-// Tweakables /////////////////
 float SpecularMultiplier
 <
   vsregister      = VS_REG_PM_4.y;
@@ -59,390 +49,331 @@ float SpecularMultiplier
 > = 0.314;
 
 #if !%ANISO_SPECULAR
-  float Glossiness
-  <
-    psregister      = PS_REG_PM_3.x;
-    string UIHelp   = "Set specular sharpness";
-    string UIName   = "Specular sharpness";
-    string UIWidget = "slider";
-    float UIMin     = 0.0;
-    float UIMax     = 1.0;
-    float UIStep    = 0.001;
-  > = 0.75;
+float Glossiness
+<
+  psregister      = PS_REG_PM_3.x;
+  string UIHelp   = "Set specular sharpness";
+  string UIName   = "Specular sharpness";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.001;
+> = 0.75;
 #endif
 
 #ifdef %ENVIRONMENT_MAP
+float ReflectionAmount
+<
+  psregister      = PS_REG_PM_3.y;
+  string UIHelp   = "Set amount of reflection";
+  string UIName   = "Reflect Amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.001;
+> = 0.25;
 
-  float ReflectionAmount
-  <
-    psregister      = PS_REG_PM_3.y;
-    string UIHelp   = "Set amount of reflection";
-    string UIName   = "Reflect Amount";
-    string UIWidget = "slider";
-    float UIMin     = 0.0;
-    float UIMax     = 10.0;
-    float UIStep    = 0.001;
-  > = 0.25;
+float FresnelBias
+<
+  psregister      = PS_REG_PM_3.z;
+  string UIHelp   = "Set how much reflective material is";
+  string UIName   = "Fresnel bias";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.001;
+> = 0.0;
 
-  float FresnelBias
-  <
-    psregister      = PS_REG_PM_3.z;
-    string UIHelp   = "Set how much reflective material is";
-    string UIName   = "Fresnel bias";
-    string UIWidget = "slider";
-    float UIMin     = 0.0;
-    float UIMax     = 1.0;
-    float UIStep    = 0.001;
-  > = 0.0;
-
-  float FresnelScale
-  <
-    psregister      = PS_REG_PM_3.w;
-    string UIHelp   = "Set fresnel term scale";
-    string UIName   = "Fresnel Scale";
-    string UIWidget = "slider";
-    float UIMin     = 0.0;
-    float UIMax     = 32.0;
-    float UIStep    = 0.001;
-  > = 1.0;
-
+float FresnelScale
+<
+  psregister      = PS_REG_PM_3.w;
+  string UIHelp   = "Set fresnel term scale";
+  string UIName   = "Fresnel Scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 32.0;
+  float UIStep    = 0.001;
+> = 1.0;
 #endif
 
 #if %ALPHAGLOW
-  float AmbientMultiplier
-  <
-    psregister      = PS_REG_PM_4.x;
-    string UIHelp   = "Set alpha glow multiplier";
-    string UIName   = "Alpha glow multiplier";
-    string UIWidget = "slider";
-    float UIMin     = 0.0;
-    float UIMax     = 32.0;
-    float UIStep    = 0.1;
-  > = 1.0;
+float AmbientMultiplier
+<
+  psregister      = PS_REG_PM_4.x;
+  string UIHelp   = "Set alpha glow multiplier";
+  string UIName   = "Alpha glow multiplier";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 32.0;
+  float UIStep    = 0.1;
+> = 1.0;
 #endif
 
 #if %ANISO_SPECULAR
-  float AnisotropicShape
-  <
-    vsregister      = VS_REG_PM_4.z;
-    string UIHelp   = "Set anisotropy shape (0.5 is isotropic, 1 is radial, 0 is disk)";
-    string UIName   = "Anisotropy Shape";
-    string UIWidget = "slider";
-    float UIMin     = 0.0;
-    float UIMax     = 1.0;
-    float UIStep    = 0.001;
-  > = 0.25;
+float AnisotropicShape
+<
+  vsregister      = VS_REG_PM_4.z;
+  string UIHelp   = "Set anisotropy shape (0.5 is isotropic, 1 is radial, 0 is disk)";
+  string UIName   = "Anisotropy Shape";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.001;
+> = 0.25;
 #endif
 
 #if %OFFSETBUMPMAPPING
-  float Displacement
-  <
-    psregister      = PS_REG_PM_4.z;
-    string UIWidget = "slider";
-    string UIName   = "Displacement";
-    float UIMin     = -0.2;
-    float UIMax     = 1.0;
-    float UIStep    = 0.001;
-  > = 0.025;
+float Displacement
+<
+  psregister      = PS_REG_PM_4.z;
+  string UIWidget = "slider";
+  string UIName   = "Displacement";
+  float UIMin     = -0.2;
+  float UIMax     = 1.0;
+  float UIStep    = 0.001;
+> = 0.025;
 #endif
 
 #if %DETAIL_BUMP_MAPPING
-  float DetailBumpTillingU
-  <
-    psregister      = PS_REG_PM_5.x;
-    string UIHelp   = "Set detail diffuse_bump tilling";
-    string UIName   = "Detail tilling U";
-    string UIWidget = "slider";
-    float UIMin     = 0.0;
-    float UIMax     = 32.0;
-    float UIStep    = 0.1;
-  > = 1.0;
+float DetailBumpTillingU
+<
+  psregister      = PS_REG_PM_5.x;
+  string UIHelp   = "Set detail diffuse_bump tilling";
+  string UIName   = "Detail tilling U";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 32.0;
+  float UIStep    = 0.1;
+> = 1.0;
 
-  float DetailBumpTillingV
-  <
-    psregister      = PS_REG_PM_5.y;
-    string UIHelp   = "Set detail diffuse_bump tilling";
-    string UIName   = "Detail tilling V";
-    string UIWidget = "slider";
-    float UIMin     = 0.0;
-    float UIMax     = 32.0;
-    float UIStep    = 0.1;
-  > = 1.0;
+float DetailBumpTillingV
+<
+  psregister      = PS_REG_PM_5.y;
+  string UIHelp   = "Set detail diffuse_bump tilling";
+  string UIName   = "Detail tilling V";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 32.0;
+  float UIStep    = 0.1;
+> = 1.0;
 
-  float DetailBumpScale
-  <
-    psregister      = PS_REG_PM_5.z;
-    string UIHelp   = "Set detail bump scale";
-    string UIName   = "Detail bump scale";
-    string UIWidget = "slider";
-    float UIMin     = 0.0;
-    float UIMax     = 10.0;
-    float UIStep    = 0.1;
-  > = 1.0;
+float DetailBumpScale
+<
+  psregister      = PS_REG_PM_5.z;
+  string UIHelp   = "Set detail bump scale";
+  string UIName   = "Detail bump scale";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 10.0;
+  float UIStep    = 0.1;
+> = 1.0;
 
-  float DetailBlendAmount
-  <
-    psregister      = PS_REG_PM_5.w;
-    string UIHelp   = "Set diffuse detail blend scale";
-    string UIName   = "Detail blend amount";
-    string UIWidget = "slider";
-    float UIMin     = 0.0;
-    float UIMax     = 1.0;
-    float UIStep    = 0.1;
-  > = 0.0;
+float DetailBlendAmount
+<
+  psregister      = PS_REG_PM_5.w;
+  string UIHelp   = "Set diffuse detail blend scale";
+  string UIName   = "Detail blend amount";
+  string UIWidget = "slider";
+  float UIMin     = 0.0;
+  float UIMax     = 1.0;
+  float UIStep    = 0.1;
+> = 0.0;
 #endif
 
-////////////////////////////////////////////////////////
-//                GENERAL PASS
-////////////////////////////////////////////////////////
-
-// Comment out of structure to avoid anoying assertions
-
-// baseTC.zw: anisotropic shape
-// screenProj.w: specular multiplier (redundant in cook torrance case - but usefull in anisotropic since we can premultiply some terms)
-// vView.w: used for fog - is this still used at all ?
-
-///////////////// vertex shader //////////////////
 vert2FragGeneral MetalVS(app2vertGeneral IN)
 {
-  vert2FragGeneral OUT;
+    vert2FragGeneral OUT;
+
 #ifndef OPENGL
-  OUT = (vert2FragGeneral)0;
+    OUT = (vert2FragGeneral)0;
 #endif
 
-  vs_shared_output( IN, OUT, false );
+    vs_shared_output(IN, OUT, false);
 
-  // temporary solution until we get tweakables modifiers...
+    OUT.vBinormal.w = SpecularMultiplier;
 
-  // custom vertex shader computations
-
-  OUT.vBinormal.w = SpecularMultiplier;
 #if %ANISO_SPECULAR
+    float2 vAnisoShape = float2(1.0f - AnisotropicShape, AnisotropicShape);
+    OUT.baseTC.zw      = vAnisoShape;
 
-  // * 10 required for anisotropic version using texture lookups
-  OUT.baseTC.zw = float2(1.0 - AnisotropicShape, AnisotropicShape);
+    half fAnisoK = (1.0f / PI_X4) / (vAnisoShape.x * vAnisoShape.y);
 
-  float2 vAnisoShape = OUT.baseTC.zw;
-  half fAnisoK = (1.0/PI_X4) / (vAnisoShape.x * vAnisoShape.y);
+    // Premultiplied constants for anisotropic specular
+    OUT.vBinormal.w = SpecularMultiplier * fAnisoK * 15.0f;
 
-  // Store in W, premultiplied constants required for anisotropic specular
-  OUT.vBinormal.w = SpecularMultiplier * fAnisoK * 15.0; // 10 is default multiplier + 5 for compensating specK clamping
-
-  // Invert swizzles to generate less mov's in ps2.0
-  OUT.baseTC.zw = max(1.0 / OUT.baseTC.zw, 0.001);
-  OUT.baseTC.zw = OUT.baseTC.wz;
-
+    // Vectorized inversion and swizzle to reduce MOV instructions
+    float2 invShape  = max(1.0f / vAnisoShape, 0.001f);
+    OUT.baseTC.zw    = invShape.yx;
 #endif
 
- // Override specular multiplier for low-specs
- int nQuality = GetShaderQuality();
- if( nQuality == QUALITY_LOW)
- {
-   OUT.vBinormal.w = SpecularMultiplier * 5;
- }
+    int nQuality = GetShaderQuality();
 
-  return OUT;
+    if (nQuality == QUALITY_LOW)
+    {
+        OUT.vBinormal.w = SpecularMultiplier * 5.0f;
+    }
+
+    return OUT;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-void frag_unify_parameters( inout fragPass pPass )
+void frag_unify_parameters(inout fragPass pPass)
 {
+    pPass.bRenormalizeNormal   = true;
+    pPass.bHemisphereLighting   = true;
 
-  pPass.bRenormalizeNormal = true;
-  pPass.bHemisphereLighting = true;
-
-  #if %ALPHAGLOW
-    pPass.bAlphaGlow = true;
+#if %ALPHAGLOW
+    pPass.bAlphaGlow           = true;
     pPass.fAlphaGlow_Multiplier = AmbientMultiplier;
-  #endif
+#endif
 
-  #if %VERTCOLORS
-    pPass.bVertexColors = true;
-  #endif
+#if %VERTCOLORS
+    pPass.bVertexColors        = true;
+#endif
 
 #if %BUMP_DIFFUSE
-  pPass.bDiffuseBump = true;
+    pPass.bDiffuseBump         = true;
 #endif
 
 #if %OFFSETBUMPMAPPING
-  pPass.bOffsetBumpMapping = true;
-  pPass.fBumpHeightScale = Displacement;
+    pPass.bOffsetBumpMapping   = true;
+    pPass.fBumpHeightScale     = Displacement;
 #endif
 
 #if %ENVIRONMENT_MAP
-  #if %_TT3_TCUBE
-    pPass.nReflectionMapping = REFLECT_CUBE;
-  #else
-    pPass.nReflectionMapping = REFLECT_SPHERE;
-  #endif
+    #if %_TT3_TCUBE
+        pPass.nReflectionMapping = REFLECT_CUBE;
+    #else
+        pPass.nReflectionMapping = REFLECT_SPHERE;
+    #endif
 
-  pPass.fReflection_Amount = ReflectionAmount;
-  pPass.fFresnel_Bias = FresnelBias;
-  pPass.fFresnel_Scale = FresnelScale;
-
+    pPass.fReflection_Amount   = ReflectionAmount;
+    pPass.fFresnel_Bias        = FresnelBias;
+    pPass.fFresnel_Scale       = FresnelScale;
 #endif
 
 #if %DETAIL_BUMP_MAPPING
-  pPass.bDetailBumpMapping = true;
-  pPass.vDetailBumpTilling = half2(DetailBumpTillingU, DetailBumpTillingV);
-  pPass.fDetailBumpScale = DetailBumpScale;
-  pPass.fDetailBlendAmount = DetailBlendAmount;
+    pPass.bDetailBumpMapping   = true;
+    pPass.vDetailBumpTilling   = half2(DetailBumpTillingU, DetailBumpTillingV);
+    pPass.fDetailBumpScale     = DetailBumpScale;
+    pPass.fDetailBlendAmount   = DetailBlendAmount;
 #endif
-
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void frag_custom_begin(inout fragPass pPass)
 {
-  pPass.pCustom.fSpecMultiplier = pPass.IN.vBinormal.w;
-  pPass.pCustom.vSurfaceRoughness = pPass.IN.baseTC.wz;
+    pPass.pCustom.fSpecMultiplier   = pPass.IN.vBinormal.w;
+    pPass.pCustom.vSurfaceRoughness = pPass.IN.baseTC.wz;
 
-  // Set opacity, gloss-map and per pixel shininess
-  pPass.fAlpha = pPass.cDiffuseMap.w * pPass.IN.Ambient.w;
-  pPass.cGlossMap = tex2D(glossMapSampler, pPass.IN.baseTC.xy);
+    pPass.fAlpha    = pPass.cDiffuseMap.w * pPass.IN.Ambient.w;
+    pPass.cGlossMap = tex2D(glossMapSampler, pPass.IN.baseTC.xy);
 
-  pPass.cGlossMap.w = 1.0;
-  #if %SPECULARPOW_GLOSSALPHA
-    pPass.fSpecPow *= pPass.cGlossMap.w;                                                              // 1 alu
-  #endif
+    pPass.cGlossMap.w = 1.0f;
 
-  // Output perturbed tangent and binormal vector for anisotropic shading
-#if %ANISO_SPECULAR
-  pPass.pCustom.vTangent = pPass.IN.vTangent.xyz;
-  pPass.pCustom.vBinormal = pPass.IN.vBinormal.xyz;
-
-  if( pPass.nQuality == QUALITY_HIGH )
-  {
-    pPass.pCustom.vTangent = ShiftVectorOpt(pPass.IN.vTangent.xyz, pPass.vNormal.xyz, -pPass.cBumpMap.x);           // 1 alu
-    pPass.pCustom.vBinormal = ShiftVectorOpt(pPass.IN.vBinormal.xyz, pPass.vNormal.xyz, -pPass.cBumpMap.y);         // 1 alu
-
-  }
-
+#if %SPECULARPOW_GLOSSALPHA
+    pPass.fSpecPow *= pPass.cGlossMap.w;
 #endif
 
-}
+#if %ANISO_SPECULAR
+    pPass.pCustom.vTangent  = pPass.IN.vTangent.xyz;
+    pPass.pCustom.vBinormal = pPass.IN.vBinormal.xyz;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
+    if (pPass.nQuality == QUALITY_HIGH)
+    {
+        pPass.pCustom.vTangent  = ShiftVectorOpt(pPass.IN.vTangent.xyz, pPass.vNormal.xyz, -pPass.cBumpMap.x);
+        pPass.pCustom.vBinormal = ShiftVectorOpt(pPass.IN.vBinormal.xyz, pPass.vNormal.xyz, -pPass.cBumpMap.y);
+    }
+#endif
+}
 
 void frag_custom_per_light(inout fragPass pPass, inout fragLightPass pLight)
 {
-  if ( pPass.bDiffuseBump )
-  {
-    pLight.fNdotL = dot(pPass.vNormalDiffuse.xyz, pLight.vLight.xyz);
-  }
+    if (pPass.bDiffuseBump)
+    {
+        pLight.fNdotL = dot(pPass.vNormalDiffuse.xyz, pLight.vLight.xyz);
+    }
 
-  pLight.fNdotL = saturate(pLight.fNdotL);
+    pLight.fNdotL = saturate(pLight.fNdotL);
 
-  half3 cDiffuse = pLight.cDiffuse.xyz * pLight.fNdotL;                    // 1 alu
+    half3 cDiffuse = pLight.cDiffuse.xyz * pLight.fNdotL;
+    half  fSpec    = 0.0f;
 
-  half fSpec = 0;
-  if( pPass.nQuality == QUALITY_HIGH )
-  {
-
+    if (pPass.nQuality == QUALITY_HIGH)
+    {
 #if %ANISO_SPECULAR
-
-  fSpec = WardAnisotropic_opt(pPass.pCustom.vTangent,
-                              pPass.pCustom.vBinormal,
-                              pPass.vNormal,
-                              pPass.vView,
-                              pLight.vLight,
-                              pLight.fNdotL,
-                              pPass.fNdotE,
-                              pPass.pCustom.vSurfaceRoughness,
-                              pPass.fSpecPow);                                                 // aprox 13 alu
-
+        fSpec = WardAnisotropic_opt(pPass.pCustom.vTangent,
+                                    pPass.pCustom.vBinormal,
+                                    pPass.vNormal,
+                                    pPass.vView,
+                                    pLight.vLight,
+                                    pLight.fNdotL,
+                                    pPass.fNdotE,
+                                    pPass.pCustom.vSurfaceRoughness,
+                                    pPass.fSpecPow);
 #else
-
-  fSpec = CookTorranceTex(pPass.vNormal,
+        fSpec = CookTorranceTex(pPass.vNormal,
                                 pPass.vView,
                                 pLight.vLight,
                                 pPass.fNdotE,
                                 pLight.fNdotL,
-                                Glossiness);                                                        // aprox 15 alu
+                                Glossiness);
 
-  // Apply per-pixel specular shininess
-  fSpec *= pPass.cGlossMap.w;                                                                        // 1 mul
+        fSpec *= pPass.cGlossMap.w;
 #endif
+    }
+    else
+    {
+        half fGlossiness = 1.0f;
 
-  }
-  else
-  {
-    half fGlossiness = 1.0;
 #if %ANISO_SPECULAR
-    fGlossiness = pPass.fSpecPow;
+        fGlossiness = pPass.fSpecPow;
 #else
-    fGlossiness = Glossiness * pPass.cGlossMap.w * 10.0;
+        fGlossiness = Glossiness * pPass.cGlossMap.w * 10.0f;
 #endif
 
-    fSpec = Phong(pPass.vReflVec, pLight.vLight, fGlossiness)*pLight.fNdotL;
+        fSpec = Phong(pPass.vReflVec, pLight.vLight, fGlossiness) * pLight.fNdotL;
+    }
 
-  }
+    half3 cSpecular = pLight.cSpecular.xyz * fSpec * pPass.pCustom.fSpecMultiplier;
+    half3 cK        = pLight.fOcclShadow * pLight.fFallOff * pLight.cFilter;
 
-  // Final specular term
-  half3 cSpecular = pLight.cSpecular.xyz * fSpec * pPass.pCustom.fSpecMultiplier;                     // 2 alu
-
-  half3 cK = pLight.fOcclShadow * pLight.fFallOff * pLight.cFilter;                                // 2 alu
-
-  pPass.cDiffuseAcc.xyz += cDiffuse.xyz * cK.xyz;                                                   // 1 alu
-  pPass.cSpecularAcc.xyz += cSpecular.xyz * cK.xyz;                                                 // 1 alu
-
+    pPass.cDiffuseAcc.xyz  += cDiffuse * cK;
+    pPass.cSpecularAcc.xyz += cSpecular * cK;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void frag_custom_ambient(inout fragPass pPass, inout half3 cAmbient)
 {
+    if (pPass.bDiffuseBump)
+    {
+        cAmbient.xyz *= saturate(dot(pPass.vNormalDiffuse.xyz, pPass.vNormal.xyz));
+    }
 
-  if ( pPass.bDiffuseBump )
-  {
-    // darken ambient if there is unoccluded area direction
-    cAmbient.xyz *= saturate( dot(pPass.vNormalDiffuse.xyz, pPass.vNormal.xyz) );
-  }
-
-  pPass.cAmbientAcc.xyz += cAmbient.xyz;
-
+    pPass.cAmbientAcc.xyz += cAmbient.xyz;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void frag_custom_end(in fragPass pPass, inout half3 cFinal)
 {
-
+    // Empty
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "fragLib.cfi"
 
-///////////////// pixel shader //////////////////
-
 pixout MetalPS(vert2FragGeneral IN)
 {
-  pixout OUT = (pixout) 0;
+    pixout OUT = (pixout)0;
 
-  fragPass pPass = (fragPass) 0;              // Initialize fragPass structure
-  frag_unify(pPass, IN);                      // Unify data
+    fragPass pPass = (fragPass)0;
+    frag_unify(pPass, IN);
 
-  half4 cFinal = frag_shared_output(pPass);
+    half4 cFinal = frag_shared_output(pPass);
 
-  HDROutput(OUT, cFinal, 1);
+    HDROutput(OUT, cFinal, 1);
 
-  return OUT;
+    return OUT;
 }
-
-//////////////////////////////// technique ////////////////
 
 technique General
 <
-  string Script = 
+  string Script =
         "TechniqueZ=ZPass;"
         "TechniqueGlow=GlowPass;"
         "TechniqueMotionBlur=MotionBlurPass;"
@@ -459,24 +390,21 @@ technique General
         "TechniqueShadowPass=ShadowPass;"
 >
 {
-  pass p0
-  {
+    pass p0
+    {
 #if %DYN_BRANCHING
-    VertexShader = compile vs_3_0 MetalVS() GeneralVS;
-    PixelShader = compile ps_3_0 MetalPS() GeneralPS;
+        VertexShader = compile vs_3_0 MetalVS() GeneralVS;
+        PixelShader  = compile ps_3_0 MetalPS() GeneralPS;
 #else
-    VertexShader = compile vs_Auto MetalVS() GeneralVS;
-    PixelShader = compile ps_Auto MetalPS() GeneralPS;
+        VertexShader = compile vs_Auto MetalVS() GeneralVS;
+        PixelShader  = compile ps_Auto MetalPS() GeneralPS;
 #endif
 
-    ZEnable = true;
-    ZWriteEnable = true;;
-    CullMode = Back;
-
-  }
+        ZEnable       = true;
+        ZWriteEnable  = true;
+        CullMode      = Back;
+    }
 }
-
-//////////////////////////////// Common techniques ////////////////
 
 #include "CommonZPass.cfi"
 #include "CommonDetailPass.cfi"
@@ -493,5 +421,3 @@ technique General
   #include "CommonShadowGenPassGS.cfi"
 #endif
 #include "CommonShadowPass.cfi"
-
-/////////////////////// eof ///

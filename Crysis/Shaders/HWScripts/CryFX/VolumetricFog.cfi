@@ -33,9 +33,7 @@ ComputeVolumetricFog( in float3 cameraToWorldPos )
   return saturate( exp2( -fogInt ) );
 }
 
-//////////////////////////////////////////////////////////////////////////
 // Distance based implementation
-//////////////////////////////////////////////////////////////////////////
 
 // RET.xyz = fog color (HDR)
 // RET.w = fog factor to lerp scene/object color with (i.e. lerp( RET.xyz, sceneColor.xyz, RET.w ) )
@@ -46,9 +44,7 @@ GetVolumetricFogColorDistanceBased( in float3 cameraToWorldPos )
   return float4( vfFogColor.xyz, fog );
 }
 
-//////////////////////////////////////////////////////////////////////////
 // Sky light based implementation
-//////////////////////////////////////////////////////////////////////////
 
 // RET.xyz = fog color (HDR)
 // RET.w = fog factor to lerp scene/object color with (i.e. lerp( RET.xyz, sceneColor.xyz, RET.w ) )
@@ -95,11 +91,9 @@ GetVolumetricFogColorSkyLightBased( in float3 worldPos )
   return GetVolumetricFogColorSkyLightBased( worldPos, camToWorld, sceneDepth );
 }
 
-//////////////////////////////////////////////////////////////////////////
 // Volumetric fog functions
 // !!! Only call these to get a correct translation    !!!
 // !!! based on the currently set rendering conditions !!!
-//////////////////////////////////////////////////////////////////////////
 
 float4
 GetVolumetricFogColor( in float3 worldPos, in float3 cameraToWorldPos, in float sceneDepth )

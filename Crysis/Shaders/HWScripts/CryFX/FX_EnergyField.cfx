@@ -1,6 +1,3 @@
-// TODO:
-// Clean up, lots of redundancy and optimize
-
 #include "Common.cfi"
 #include "ShadeLib.cfi"
 #include "ModificatorVT.cfi"
@@ -8,7 +5,7 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
                 "Public;"
                 "NoPreview;"
                 "ShaderDrawType = General;"
@@ -21,7 +18,7 @@ ENVIRONMENTCUBEMAP
 
 sampler2D envMapSamplerRefr
 <
-  string Script = 
+  string Script =
       "RenderOrder=PreDraw;"
       "RenderCamera=Current;"
       "RenderType=CurScene;"
@@ -43,7 +40,6 @@ sampler2D envMapSamplerRefr
 float4x4 ObjectMatrix : PI_TransObjMatrix;
 float AnimGenParams = { PB_time 0.5 };
 
-// Tweakables /////////////////
 
 float4 ShieldColor
 <
@@ -193,162 +189,171 @@ float VtxAnimSpeed
   float UIStep    = 0.001;
 > = 5.0;
 
-/////////// Common vertex shader ////////////////
 
 struct vtxOut
 {
-  OUT_P
-  float4 tcBase : TEXCOORDN;
-  float4 vView : TEXCOORDN;
-  float4 tcScreenPos : TEXCOORDN;
-  float4 localFogColor : TEXCOORDN;
+    OUT_P
+    float4 tcBase       : TEXCOORDN;
+    float4 vView        : TEXCOORDN;
+    float4 tcScreenPos  : TEXCOORDN;
+    float4 localFogColor : TEXCOORDN;
 };
 
 vtxOut EnergyFieldVS(app2vertGeneral IN)
 {
-  vtxOut OUT = (vtxOut)0;
+    vtxOut OUT = (vtxOut)0;
 
-  streamPos vertPassPos = (streamPos)0;
-  streamPos_FromGeneral(IN, vertPassPos);
+    streamPos vertPassPos = (streamPos)0;
+    streamPos_FromGeneral(IN, vertPassPos);
 
-  float procAnim = (sin( frac(vertPassPos.Position.x + vertPassPos.Position.y + vertPassPos.Position.z)*g_VS_AnimGenParams.y * VtxAnimSpeed) + cos( frac(vertPassPos.Position.x + vertPassPos.Position.y + vertPassPos.Position.z)*g_VS_AnimGenParams.y * VtxAnimSpeed * 2))*0.5;
-  vertPassPos.Position.xyz += vertPassPos.ObjToTangentSpace[2].xyz * procAnim * VtxAnimScale;
+    // --- ENHANCED PROCEDURAL ANIMATION ---
+    // Combined waves for organic feel
+    float fPosSum      = frac(vertPassPos.Position.x + vertPassPos.Position.y + vertPassPos.Position.z);
+    float fPhase1      = fPosSum * g_VS_AnimGenParams.y * VtxAnimSpeed;
+    float fPhase2      = fPosSum * g_VS_AnimGenParams.y * (VtxAnimSpeed * 0.7f) + 1.5f;
 
-  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+    float procAnim     = (sin(fPhase1) + cos(fPhase2)) * 0.5f;
 
-  OUT.tcBase = IN.baseTC;
+    vertPassPos.Position.xyz += vertPassPos.ObjToTangentSpace[2].xyz * procAnim * VtxAnimScale;
 
-  // Output view-vector
-  float3 vView = ViewPos.xyz - vertPassPos.Position.xyz;
-  OUT.vView.xyz= (mul(vertPassPos.ObjToTangentSpace, vView.xyz));
+    // --- OUTPUTS ---
+    OUT.HPosition    = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+    OUT.tcBase       = IN.baseTC;
 
-  // Output the screen-space texture coordinates
-  OUT.tcScreenPos = HPosToScreenTC(OUT.HPosition);
+    float3 vViewWS   = ViewPos.xyz - vertPassPos.Position.xyz;
+    OUT.vView.xyz    = mul(vertPassPos.ObjToTangentSpace, vViewWS);
+    OUT.tcScreenPos  = HPosToScreenTC(OUT.HPosition);
+    OUT.localFogColor = GetVolumetricFogColor(vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz);
 
-  OUT.localFogColor = GetVolumetricFogColor(vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz);
-
-  return OUT;
+    return OUT;
 }
-
-///////////////// pixel shader //////////////////
 
 pixout EnergyFieldPS(vtxOut IN)
 {
-  pixout OUT;
+    pixout OUT;
 
-   // Debug output
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   DebugOutput(OUT.Color, IN.tcBase);
-   return OUT;
- #endif
-
-  // 2.5*0.5 * 0.5
-  float fAnim = frac(AnimGenParams * ShieldAnimSpeedScale);
-
-  half3 cBumpMap = half3(0,0,1);
-  half2 tcTilling = half2(BumpTillingX, BumpTillingY);
-#if %BUMP_MAP
-  half3 cBumpMap_1 = GetNormalMap(bumpMapSampler, IN.tcBase.xy * tcTilling.xy * 10 - float2(0, fAnim) );
-
-  half3 cBumpMap_2 = GetNormalMap(bumpMapSampler, IN.tcBase.yx * tcTilling.xy * 40 - fAnim.xx);
-
-  cBumpMap.xy = (cBumpMap_1.xy + cBumpMap_2.xy);
-  cBumpMap.z = (cBumpMap_1.z + cBumpMap_2.z)*0.5;
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    DebugOutput(OUT.Color, IN.tcBase);
+    return OUT;
 #endif
 
-  half3 vNormal = normalize(cBumpMap.xyz * half3(0.5,0.5, 1) );
+    // --- INPUTS ---
+    float fAnim      = frac(AnimGenParams * ShieldAnimSpeedScale);
+    half3 cBumpMap   = half3(0.0f, 0.0f, 1.0f);
+    half2 tcTilling  = half2(BumpTillingX, BumpTillingY);
 
-  half3 vEye = normalize(IN.vView.xyz);
-  half NdotE = abs(dot(vEye.xyz, vNormal.xyz));
+    // --- BUMP GENERATION ---
+#if %BUMP_MAP
+    half3 cBumpMap_1 = GetNormalMap(bumpMapSampler, IN.tcBase.xy * tcTilling.xy * 10.0f - float2(0.0f, fAnim));
+    half3 cBumpMap_2 = GetNormalMap(bumpMapSampler, IN.tcBase.yx * tcTilling.xy * 40.0f - fAnim);
 
-  half2 tcRefr = (IN.tcScreenPos.xy/IN.tcScreenPos.w);
+    cBumpMap.xy      = (cBumpMap_1.xy + cBumpMap_2.xy);
+    cBumpMap.z       = (cBumpMap_1.z + cBumpMap_2.z) * 0.5f;
+#endif
 
-  vNormal.xy *= (half) RefrBumpScale.x;
-  half3 cRefrR = tex2D(envMapSamplerRefr, tcRefr.xy + vNormal.xy*0.01*1.5);
-  half3 cRefrG = tex2D(envMapSamplerRefr, tcRefr.xy + vNormal.xy*0.01);
-  half3 cRefrB = tex2D(envMapSamplerRefr, tcRefr.xy + vNormal.xy*0.01*0.1);
+    half3 vNormal    = normalize(cBumpMap.xyz * half3(0.5f, 0.5f, 1.0f));
+    half3 vEye       = normalize(IN.vView.xyz);
+    half  NdotE      = abs(dot(vEye, vNormal));
 
-  half3 cRefr = half3(cRefrR.r, cRefrG.g, cRefrB.b);
+    // --- ENHANCED CHROMATIC REFRACTION ---
+    half2 tcRefr     = (IN.tcScreenPos.xy / IN.tcScreenPos.w);
 
-  half4 cFinal = 0;
-  half NdotE_a = vEye.z;
+    // Dynamic refraction offset based on time and normals
+    float fRefrTime   = sin(AnimGenParams * 2.0f) * 0.002f;
+    half2 vNormalOff = vNormal.xy * (half)RefrBumpScale * 0.01f + fRefrTime;
 
-  cFinal.xyz = cRefr.xyz * (half3) ShieldColor.xyz;
-  HDRFogOutput(OUT, half4(cFinal.xyz,  abs(NdotE_a)), 1, IN.localFogColor.xyz, IN.localFogColor.w);
+    half3 cRefrR     = tex2D(envMapSamplerRefr, tcRefr + vNormalOff * 1.5f);
+    half3 cRefrG     = tex2D(envMapSamplerRefr, tcRefr + vNormalOff);
+    half3 cRefrB     = tex2D(envMapSamplerRefr, tcRefr + vNormalOff * 0.1f);
 
-  return OUT;
+    half3 cRefr      = half3(cRefrR.r, cRefrG.g, cRefrB.b);
+
+    // --- RIM GLOW (Fresnel) ---
+    // Creates a bright energy edge at the sphere boundaries
+    half fRimGlow    = pow(1.0f - saturate(vEye.z), 3.0f) * 2.0f;
+    half3 cEdgeColor = (half3)ShieldColor.xyz * fRimGlow;
+
+    half  NdotE_a    = vEye.z;
+    half3 cFinalRGB  = (cRefr + cEdgeColor) * (half3)ShieldColor.xyz;
+
+    HDRFogOutput(OUT, half4(cFinalRGB, abs(NdotE_a)), 1.0f, IN.localFogColor.xyz, IN.localFogColor.w);
+
+    return OUT;
 }
 
 pixout EnergyFieldSparksPS(vtxOut IN)
 {
-  pixout OUT;
+    pixout OUT;
 
-   // Debug output
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   DebugOutput(OUT.Color, IN.tcBase);
-   return OUT;
- #endif
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    DebugOutput(OUT.Color, IN.tcBase);
+    return OUT;
+#endif
 
-  half2 tcSparksTilling = half2(SparksTillingX, SparksTillingY);
+    // --- ENHANCED ELECTRIC SPARKS ---
+    half2 tcSparksTilling = half2(SparksTillingX, SparksTillingY);
+    float fAnimSparks     = frac(AnimGenParams * SparksAnimSpeedScale);
 
-  float fAnimSparks = frac(AnimGenParams * SparksAnimSpeedScale);
-  half4 cBaseMap_1 = tex2D(diffuseMapSampler, IN.tcBase.xy * tcSparksTilling.xy * 5   - float2(0, fAnimSparks) );
-  half4 cBaseMap_2 = tex2D(diffuseMapSampler, IN.tcBase.yx * tcSparksTilling.xy * 20 - fAnimSparks.xx );
+    half4 cBaseMap_1 = tex2D(diffuseMapSampler, IN.tcBase.xy * tcSparksTilling.xy * 5.0f - float2(0.0f, fAnimSparks));
+    half4 cBaseMap_2 = tex2D(diffuseMapSampler, IN.tcBase.yx * tcSparksTilling.xy * 20.0f - fAnimSparks);
 
-  half4 cBaseMap = 0.5 * (cBaseMap_1.x + cBaseMap_2.x);
-  cBaseMap = pow(1-abs(cBaseMap.x*2-1), 16);
-  cBaseMap.xyz *= (half3) SparksColor.xyz;
+    half4 cBaseMap    = 0.5f * (cBaseMap_1.x + cBaseMap_2.x);
 
-  float fAnimShield = frac(AnimGenParams * ShieldAnimSpeedScale);
+    // SHARPEN SPARKS: Using smoothstep instead of pow for a "lightning" look
+    float fSparkMask  = smoothstep(0.4f, 0.6f, 1.0f - abs(cBaseMap.x * 2.0f - 1.0f));
 
-  IN.tcBase.xy *=2;
-  half3 cBumpMap = half3(0,0,1);
-  half2 tcTilling = half2(BumpTillingX, BumpTillingY);
+    // Pulse intensity
+    float fPulse      = sin(AnimGenParams * 10.0f) * 0.2f + 0.8f;
+    half3 cSparkCol   = fSparkMask * (half3)SparksColor.xyz * fPulse;
+
+    // --- BUMP & REFLECTION ---
+    float fAnimShield = frac(AnimGenParams * ShieldAnimSpeedScale);
+    half2 tcTilling   = half2(BumpTillingX, BumpTillingY);
+    half3 cBumpMap    = half3(0.0f, 0.0f, 1.0f);
+
 #if %BUMP_MAP
-  half3 cBumpMap_1 = tex2D(bumpMapSampler, IN.tcBase.xy * tcTilling.xy * 5 - float2(0, fAnimShield) );
-  cBumpMap_1.xyz = cBumpMap_1.xyz*2-1;
+    half3 cBumpMap_1 = tex2D(bumpMapSampler, IN.tcBase.xy * 2.0f * tcTilling.xy * 5.0f - float2(0.0f, fAnimShield));
+    half3 cBumpMap_2 = tex2D(bumpMapSampler, IN.tcBase.yx * 2.0f * tcTilling.xy * 20.0f - fAnimShield);
 
-  half3 cBumpMap_2 = tex2D(bumpMapSampler, IN.tcBase.yx * tcTilling.xy * 20 - fAnimShield.xx );
-  cBumpMap_2.xyz = cBumpMap_2.xyz*2-1;
-
-  cBumpMap.xy = (cBumpMap_1.xy + cBumpMap_2.xy);
-  cBumpMap.z = (cBumpMap_1.z + cBumpMap_2.z)*0.5;
+    cBumpMap_1       = cBumpMap_1 * 2.0f - 1.0f;
+    cBumpMap_2       = cBumpMap_2 * 2.0f - 1.0f;
+    cBumpMap.xy      = (cBumpMap_1.xy + cBumpMap_2.xy);
+    cBumpMap.z       = (cBumpMap_1.z + cBumpMap_2.z) * 0.5f;
 #endif
 
-  half3 vNormal = normalize(cBumpMap.xyz * half3((half2)ReflBumpScale.xx, 1) );
+    half3 vNormal     = normalize(cBumpMap.xyz * half3((half2)ReflBumpScale.xx, 1.0f));
+    half3 vEye        = normalize(IN.vView.xyz);
+    half  NdotE       = abs(dot(vEye, vNormal));
 
-  half3 vEye = normalize(IN.vView.xyz);
-  half NdotE = abs(dot(vEye.xyz, vNormal.xyz));
+    half3 vReflect    = reflect(-vEye, vNormal);
+    half3 cEnvMap     = 1.0f;
 
-  // Compute reflection vector
-  half3 vReflect = reflect( -vEye.xyz, vNormal.xyz );
-
-  half3 cEnvMap = 1;
 #if %ENVIRONMENT_MAP
-  cEnvMap.xyz = tex2D(envMapSampler, 1.0/abs(NdotE) ).xyz;
+    cEnvMap.xyz       = tex2D(envMapSampler, 1.0f / max(abs(NdotE), 0.01f)).xyz;
 #endif
 
-  half fFresnel = GetFresnel(saturate(NdotE), 1.0, 1);
-  half3 cReflection = cEnvMap.xyz * fFresnel;
+    half fFresnel     = GetFresnel(saturate(NdotE), 1.0f, 1.0f);
+    half3 cReflection = cEnvMap * fFresnel;
 
-  half4 cFinal = 0;
-  half NdotE_a = abs(vEye.z);
+    // --- FINAL COMPOSITION ---
+    half  NdotE_a     = abs(vEye.z);
+    float fSpecular   = pow(NdotE, MatSpecColor.w);
 
-  cFinal.xyz = NdotE_a*(cReflection*pow(NdotE, MatSpecColor.w)*cBaseMap.xyz*(half)SparksMul + cReflection*pow(NdotE, MatSpecColor.w)* (half) ReflectionAmount);
+    half3 cSparks     = cReflection * fSpecular * cSparkCol * (half)SparksMul;
+    half3 cReflBase   = cReflection * fSpecular * (half)ReflectionAmount;
 
-  HDROutput(OUT, half4(cFinal.xyz,  abs(NdotE_a)), 1);
-  return OUT;
+    half3 cFinalRGB   = NdotE_a * (cSparks + cReflBase);
+
+    HDROutput(OUT, half4(cFinalRGB, abs(NdotE_a)), 1.0f);
+    return OUT;
 }
-
-//////////////////////////////// technique ////////////////
 
 technique General
 <
-  string Script = 
+  string Script =
         "TechniqueZ=ZPass;"
 >
 {
-  // depth sorting aproximation, render backfaces first, then front faces
   pass p0
   {
     VertexShader = compile vs_Auto EnergyFieldVS();
@@ -393,8 +398,4 @@ technique General
 
 }
 
-//////////////////////////////// Common techniques ////////////////
-
 #include "CommonZPass.cfi"
-
-/////////////////////// eof ///

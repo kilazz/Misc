@@ -3,7 +3,7 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            //"SingleLightPass;"
            "SupportsAttrInstancing;"
@@ -11,43 +11,36 @@ float Script : STANDARDSGLOBAL
            "ShaderType = General;"
 >;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////// Custom shading pass structure /////////////////////////////////////
-
 struct fragPassCustom
 {
-  // Custom per pass data
-  half4 cSubsurfaceMap;  // subsurface map
+    // Custom per pass data
+    half4 cSubsurfaceMap; // subsurface map
 
-  half3 cRim;            // rim term
-  half fFresnel;         // fresnel term
+    half3 cRim;    // rim term
+    half fFresnel; // fresnel term
 
-  half fSubsurfaceMultiplier;
-  half fSpecularMultiplier;
-  half fRimMultiplier;
+    half fSubsurfaceMultiplier;
+    half fSpecularMultiplier;
+    half fRimMultiplier;
 
-  half fWrinkleDiffuseAmount;
-  half fWrinkleAmount;
-  half fWrinkleBumpAmount;
+    half fWrinkleDiffuseAmount;
+    half fWrinkleAmount;
+    half fWrinkleBumpAmount;
 };
 
 struct fragLightPassCustom
 {
-  // ... Custom per light data ...
+    // ... Custom per light data ...
 };
 
 #include "ShadeLib.cfi"
 
 // Un-Tweakables /////////////////
 
-float4x4 mCamera      : PB_CameraMatrix;
-float4 AmbientObjectCol : PI_ObjectAmbColComp;//x=Ambient.w, y=ObjColor.w, w = Obj Rend quality
-
-//////////////////////////////// Common vertex shader ////////////////
+float4x4 mCamera        : PB_CameraMatrix;
+float4 AmbientObjectCol : PI_ObjectAmbColComp; //x=Ambient.w, y=ObjColor.w, w = Obj Rend quality
 
 #include "VertexLib.cfi"
-
-//////////////////////////////// Samplers ////////////////
 
 SUBSURFACEMAP
 DECALMAP
@@ -57,15 +50,13 @@ ENVIRONMENTCUBEMAP
 
 sampler2D customSampler = sampler_state
 {
-  Texture = $CustomMap;
+    Texture = $CustomMap;
 };
 
 sampler2D customSecondarySampler = sampler_state
 {
-  Texture = $CustomSecondaryMap;
+    Texture = $CustomSecondaryMap;
 };
-
-/// Tweakables //////////////////////
 
 float SpecularStrenght
 <
@@ -165,296 +156,217 @@ float WrinklesDiffuseBlend
 
 #endif
 
-////////////////////////////////////////////////////////
-//                PRE-SHADERS
-////////////////////////////////////////////////////////
-
-//float prsh_SubsurfaceStrenght  = ( SubsurfaceStrenght * 2.0 );
-//float prsh_RimStrenght  = ( RimStrenght * 4.0 );
-
-///////////////// vertex shaders //////////////////
-
 vert2FragGeneral SkinVS(app2vertGeneral IN)
 {
-  vert2FragGeneral OUT;
+    vert2FragGeneral OUT;
 
 #ifndef OPENGL
-  OUT = (vert2FragGeneral)0;
+    OUT = (vert2FragGeneral)0;
 #endif
 
-  vs_shared_output( IN, OUT, false );
+    vs_shared_output(IN, OUT, false);
 
-  // temporary solution until we get tweakables modifiers...
-
-  OUT.baseTC.z = SubsurfaceStrenght * 2.0;  // consts x
-  OUT.baseTC.w = RimStrenght * 4.0; // consts y
+    OUT.baseTC.z = SubsurfaceStrenght * 2.0f;
+    OUT.baseTC.w = RimStrenght * 4.0f;
 
 #if %WRINKLE_BLENDING
-  #if %_RT_SKELETON_SSD && !OPENGL
-    #if %_RT_MORPHTARGET
-
-      //OUT.vBinormal.w = abs(IN.MorphTargetDelta.z)* WrinklesBlend;
-      //OUT.Color.w = saturate( OUT.vBinormal.w * WrinklesDiffuseBlend * 4.0 );
-      OUT.vBinormal.w = (IN.MorphTargetDelta.z)* WrinklesBlend;
-      //OUT.Color.w = saturate( abs(OUT.vBinormal.w) * WrinklesDiffuseBlend * 4.0 );
-
+    #if %_RT_SKELETON_SSD && !OPENGL
+        #if %_RT_MORPHTARGET
+            OUT.vBinormal.w = IN.MorphTargetDelta.z * WrinklesBlend;
+        #endif
     #endif
-  #endif
 #endif
 
-  return OUT;
+    return OUT;
 }
 
-//////////////////////////////// Custom shading utils ////////////////
-
-half3 SkinSinthesys( in half3 diffuseTex, in half m)
+half3 SkinSinthesys(in half3 diffuseTex, in half m)
 {
-  half fLum = dot(diffuseTex.xyz, half3(0.33, 0.59, 0.11));
-  half3 melaninMax = diffuseTex.xyz * fLum;
-  return diffuseTex.xyz * lerp(1.0, melaninMax.xyz, m);
+    half  fLum       = dot(diffuseTex, half3(0.33f, 0.59f, 0.11f));
+    half3 melaninMax = diffuseTex * fLum;
+
+    return lerp(diffuseTex, diffuseTex * melaninMax, m);
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-void frag_unify_parameters( inout fragPass pPass )
+void frag_unify_parameters(inout fragPass pPass)
 {
-  pPass.bRenormalizeNormal = true;
+    pPass.bRenormalizeNormal = true;
 
 #if %BUMP_DIFFUSE
-  pPass.bDiffuseBump = true;
+    pPass.bDiffuseBump = true;
 #endif
-
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void frag_custom_begin(inout fragPass pPass)
 {
-  // ... custom setup/initialization goes here ...
-  pPass.pCustom.fSubsurfaceMultiplier = pPass.IN.baseTC.z;
-  pPass.pCustom.fSpecularMultiplier = SpecularStrenght; // (this is redundant, could remove but assets will look wrong)
-  pPass.pCustom.fRimMultiplier = pPass.IN.baseTC.w;
+    pPass.pCustom.fSubsurfaceMultiplier = pPass.IN.baseTC.z;
+    pPass.pCustom.fSpecularMultiplier   = SpecularStrenght;
+    pPass.pCustom.fRimMultiplier       = pPass.IN.baseTC.w;
 
-  // Apply decal texture (if present)
-  half4 cDecal = tex2D(decalMapSampler, pPass.IN.baseTC.xy);
-  pPass.cDiffuseMap.xyz *= cDecal.xyz * 2;
+    half4 cDecal = tex2D(decalMapSampler, pPass.IN.baseTC.xy);
+    pPass.cDiffuseMap.xyz *= cDecal.xyz * 2.0f;
 
-  // Pre-process skin diffuse map color
-  pPass.cDiffuseMap.xyz = SkinSinthesys(pPass.cDiffuseMap.xyz, Melanin);
+    pPass.cDiffuseMap.xyz = SkinSinthesys(pPass.cDiffuseMap.xyz, Melanin);
 
-  // Fetch sub-surface map
-  pPass.pCustom.cSubsurfaceMap = tex2D(subsurfaceMapSampler, pPass.IN.baseTC.xy);
-  // Apply sub-surface multiplier
-  pPass.pCustom.cSubsurfaceMap.xyz *= pPass.pCustom.fSubsurfaceMultiplier;
+    pPass.pCustom.cSubsurfaceMap        = tex2D(subsurfaceMapSampler, pPass.IN.baseTC.xy);
+    pPass.pCustom.cSubsurfaceMap.xyz   *= pPass.pCustom.fSubsurfaceMultiplier;
 
-  // Wrinkle blending
 #if %WRINKLE_BLENDING
-  if( pPass.nQuality >= QUALITY_HIGH )
-  {
-    //pPass.pCustom.fWrinkleDiffuseAmount = pPass.IN.Color.w;
-    half fWrinkleAmount = pPass.IN.vBinormal.w;// * 0.5 + 0.5;
-    pPass.pCustom.fWrinkleAmount =pPass.IN.vBinormal.w;
-    pPass.pCustom.fWrinkleBumpAmount = abs(fWrinkleAmount) * WrinklesBumpScale;             // 1 inst
+    if (pPass.nQuality >= QUALITY_HIGH)
+    {
+        half  fWrinkleAmount     = pPass.IN.vBinormal.w;
+        pPass.pCustom.fWrinkleAmount    = fWrinkleAmount;
+        pPass.pCustom.fWrinkleBumpAmount = abs(fWrinkleAmount) * WrinklesBumpScale;
 
-    half4 vWrinkleWeights = tex2D(customSecondarySampler, pPass.IN.baseTC.xy)*2;
-    half4 vWrinkleN = tex2D(customSampler, pPass.IN.baseTC.xy)*2-1;
-    vWrinkleN.xy = vWrinkleN.xy * saturate( -fWrinkleAmount )*vWrinkleWeights.x;
-    vWrinkleN.xy += vWrinkleN.zw * saturate( fWrinkleAmount )*vWrinkleWeights.z;
+        half4 vWrinkleWeights = tex2D(customSecondarySampler, pPass.IN.baseTC.xy) * 2.0f;
+        half4 vWrinkleN       = tex2D(customSampler, pPass.IN.baseTC.xy) * 2.0f - 1.0f;
 
-    // detail bump
-    pPass.cBumpMap.xy = lerp(pPass.cBumpMap.xy , vWrinkleN.xy, saturate(dot(vWrinkleWeights.xz, 1)) * pPass.pCustom.fWrinkleBumpAmount); //*100;                              // 1 inst
-    pPass.vNormal = mul(pPass.cBumpMap.xyz, pPass.mTangentToWS);                                      // 3 inst
-    pPass.vNormal = normalize(pPass.vNormal);                                                          // 3 inst
+        half  sNeg = saturate(-fWrinkleAmount) * vWrinkleWeights.x;
+        half  sPos = saturate(fWrinkleAmount) * vWrinkleWeights.z;
 
-    pPass.vNormalDiffuse = tex2D(bumpMapSampler_Diffuse, pPass.IN.baseTC.xy)*2-1;
-    pPass.vNormalDiffuse.xy += vWrinkleN.xy*pPass.pCustom.fWrinkleBumpAmount;
-    pPass.vNormalDiffuse =  mul(pPass.vNormalDiffuse.xyz, pPass.mTangentToWS);                                      // 3 alu
+        half2 vWrinkleN_XY = (vWrinkleN.xy * sNeg) + (vWrinkleN.zw * sPos);
 
-    half fWrinkleDiff = (1-vWrinkleWeights.y*0.5)* saturate( -fWrinkleAmount*vWrinkleWeights.x*2 ) +
-                        (1-vWrinkleWeights.w*0.5)* saturate( fWrinkleAmount*vWrinkleWeights.z*2 );
-    fWrinkleDiff = saturate( 1-fWrinkleDiff*fWrinkleDiff*WrinklesDiffuseBlend );
-    pPass.cDiffuseMap.xyz *= fWrinkleDiff;
-  }
+        half  fBumpWeight   = saturate(dot(vWrinkleWeights.xz, 1.0f)) * pPass.pCustom.fWrinkleBumpAmount;
+        pPass.cBumpMap.xy    = lerp(pPass.cBumpMap.xy, vWrinkleN_XY, fBumpWeight);
+        pPass.vNormal        = normalize(mul(pPass.cBumpMap.xyz, pPass.mTangentToWS));
+
+        half3 vNormalDiffRaw = tex2D(bumpMapSampler_Diffuse, pPass.IN.baseTC.xy) * 2.0f - 1.0f;
+        vNormalDiffRaw.xy    += vWrinkleN_XY * pPass.pCustom.fWrinkleBumpAmount;
+        pPass.vNormalDiffuse = mul(vNormalDiffRaw, pPass.mTangentToWS);
+
+        half  fWrinkleDiff = (1.0f - vWrinkleWeights.y * 0.5f) * saturate(-fWrinkleAmount * vWrinkleWeights.x * 2.0f) +
+                             (1.0f - vWrinkleWeights.w * 0.5f) * saturate(fWrinkleAmount * vWrinkleWeights.z * 2.0f);
+
+        fWrinkleDiff = saturate(1.0f - fWrinkleDiff * fWrinkleDiff * WrinklesDiffuseBlend);
+        pPass.cDiffuseMap.xyz *= fWrinkleDiff;
+    }
 #endif
 
-  // Set opacity, gloss-map and per pixel shininess
+    pPass.fAlpha    = pPass.IN.Ambient.w;
+    pPass.cGlossMap = pPass.cDiffuseMap.w;
 
-  pPass.fAlpha = pPass.IN.Ambient.w;
-  pPass.cGlossMap = pPass.cDiffuseMap.w;
 #if %GLOSS_MAP
-  pPass.cGlossMap = tex2D(glossMapSampler, pPass.IN.baseTC.xy);
-
-  // In case spec map defined, we get extra channel, that can be used for alpha testing
-
-  // Apply per pixel shininess
-  pPass.fSpecPow *= pPass.cGlossMap.w;
-
-  // Set alpha
-  pPass.fAlpha *= pPass.cDiffuseMap.w;
+    pPass.cGlossMap = tex2D(glossMapSampler, pPass.IN.baseTC.xy);
+    pPass.fSpecPow  *= pPass.cGlossMap.w;
+    pPass.fAlpha    *= pPass.cDiffuseMap.w;
 #endif
 
-  // Output constant fresnel term (using pow2 and bias = 0)
-  pPass.pCustom.fFresnel =  GetFresnelTex( pPass.fNdotE , 0 ).y;
+    pPass.pCustom.fFresnel = GetFresnelTex(pPass.fNdotE, 0.0f).y;
 
-  if( pPass.nQuality == QUALITY_HIGH )
-  {
-    // Apply decal gloss to main gloss also
-    pPass.cGlossMap.xyz *= cDecal.w;
+    if (pPass.nQuality == QUALITY_HIGH)
+    {
+        pPass.cGlossMap.xyz *= cDecal.w;
 
-    half4 cReflectMap = 1;
-    #if %ENVIRONMENT_MAP
-      #if %_TT3_TCUBE
-        cReflectMap =  GetEnvironmentCMap(envMapSamplerCUBE, pPass.vReflVec.xyz);
-      #else
-        // Xform reflection to eye-space (required for correct spherical env. mapping...)
-        float3 vReflectES = ( mul( (float3x3)mCamera, pPass.vReflVec.xyz ) );                                 // 3 alu
-
-        float m = - 2.828 * sqrt( vReflectES.z + 1.0 );                                                 // 3 alu
-        vReflectES.xy = (vReflectES.xy / m ) + 0.5;                                                     // 2 alu
-
-        cReflectMap.xyz = GetEnvironment2DMap(envMapSampler, vReflectES.xy).xyz;
-      #endif
-    #endif
-
-    // Pre-computed rim term
-    pPass.pCustom.cRim =smoothstep_opt_tex(0.5, pPass.pCustom.fFresnel) * pPass.pCustom.fRimMultiplier * cReflectMap;
-  }
-
+        half4 cReflectMap = 1.0f;
+#if %ENVIRONMENT_MAP
+        #if %_TT3_TCUBE
+            cReflectMap = GetEnvironmentCMap(envMapSamplerCUBE, pPass.vReflVec.xyz);
+        #else
+            float3 vReflectES = mul((float3x3)mCamera, pPass.vReflVec.xyz);
+            float  m          = -2.828f * sqrt(vReflectES.z + 1.0f);
+            vReflectES.xy     = (vReflectES.xy / m) + 0.5f;
+            cReflectMap.xyz   = GetEnvironment2DMap(envMapSampler, vReflectES.xy).xyz;
+        #endif
+#endif
+        pPass.pCustom.cRim = smoothstep_opt_tex(0.5f, pPass.pCustom.fFresnel) * pPass.pCustom.fRimMultiplier * cReflectMap;
+    }
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// todo: shadow bias stuff must go - check with Hanno...
 
 void frag_custom_per_light(inout fragPass pPass, inout fragLightPass pLight)
 {
-  if (pPass.bDiffuseBump )
-  {
-    pLight.fNdotL = dot(pPass.vNormalDiffuse.xyz, pLight.vLight.xyz);
-  }
+    if (pPass.bDiffuseBump)
+    {
+        pLight.fNdotL = dot(pPass.vNormalDiffuse.xyz, pLight.vLight.xyz);
+    }
 
-  half3 vHalf = normalize(pLight.vLight.xyz + pPass.vView.xyz);
-  half fNdotH = saturate(dot(pPass.vNormal.xyz, vHalf.xyz));
+    half3 vHalf   = normalize(pLight.vLight.xyz + pPass.vView.xyz);
+    half  fNdotH  = saturate(dot(pPass.vNormal.xyz, vHalf.xyz));
+    half  fWrappedNdotL = saturate(pLight.fNdotL * 0.5f + 0.5f);
 
-  // Subsurface scattering aproximation (just simple wrapped diffuse shading)
-  half fWrappedNdotL = saturate( (pLight.fNdotL*0.5 + 0.5)  );
+    pLight.fNdotL = saturate(pLight.fNdotL);
 
-  pLight.fNdotL = saturate( pLight.fNdotL );
+    half3 cSubSurface = fWrappedNdotL * pPass.pCustom.cSubsurfaceMap;
+    half3 cDiffuse    = 0.0f;
 
-  // Compute coeficients
-  half3 cSubSurface =  fWrappedNdotL * pPass.pCustom.cSubsurfaceMap;
+    if (pPass.nQuality == QUALITY_HIGH)
+    {
+        half  fShadowHalf = pLight.fOcclShadow * 0.5f + 0.5f;
+        half  fDiffL      = lerp(pLight.fNdotL, 1.0f, DiffusionAmount);
+        cDiffuse = saturate(lerp(cSubSurface * fShadowHalf, pLight.fOcclShadow * fDiffL, fWrappedNdotL));
+    }
+    else
+    {
+        cDiffuse = fWrappedNdotL * pLight.fOcclShadow;
+    }
 
-  // update: shadows dont affect sss term much now
-  half3 cDiffuse = 0;
+    cDiffuse *= pLight.cDiffuse.xyz;
 
-  if( pPass.nQuality == QUALITY_HIGH )
-  {
-    cDiffuse = saturate( lerp( cSubSurface.xyz*(pLight.fOcclShadow*0.5+0.5), pLight.fOcclShadow * lerp(pLight.fNdotL, 1, DiffusionAmount), fWrappedNdotL) );
-  }
-  else
-  {
-    cDiffuse = fWrappedNdotL * pLight.fOcclShadow;
-  }
+    half3 cRim = 0.0f;
+    if (pPass.nQuality == QUALITY_HIGH)
+    {
+        cRim = pPass.pCustom.cRim * pLight.fNdotL * pow(fNdotH, RimPow) * pLight.cDiffuse.xyz * pLight.fOcclShadow;
+    }
 
-  cDiffuse *= pLight.cDiffuse.xyz;
+    half3 cSpecular = pow(fNdotH, pPass.fSpecPow) * pLight.cSpecular.xyz * pLight.fOcclShadow;
+    cSpecular      *= pPass.pCustom.fSpecularMultiplier;
 
-  // Add rim term
-  half3 cRim = 0;
-  if( pPass.nQuality == QUALITY_HIGH )
-  {
-    cRim = pPass.pCustom.cRim * pLight.fNdotL * pow( fNdotH, RimPow ) * pLight.cDiffuse.xyz *  pLight.fOcclShadow;
-  }
+    if (pPass.nQuality == QUALITY_HIGH)
+    {
+        cSpecular *= saturate(pLight.fNdotL * 4.0f);
+    }
 
-  // Specular term
-  half3 cSpecular = pow(fNdotH, pPass.fSpecPow) * pLight.cSpecular.xyz * pLight.fOcclShadow;
-  cSpecular *= pPass.pCustom.fSpecularMultiplier;
+    half EdotL = 1.0f;
+    if (pPass.nQuality == QUALITY_HIGH)
+    {
+        EdotL = saturate(dot(pPass.vView.xyz, pLight.vLight.xyz) * 0.5f + 0.5f);
+    }
 
-  if( pPass.nQuality == QUALITY_HIGH )
-    cSpecular *= saturate( pLight.fNdotL * 4 );  // apply self-shadowing
+    half3 cK = pLight.fFallOff * pLight.cFilter * EdotL;
 
-  // Use EdotL to attenuate bump strenght in shadow area
-  half EdotL = 1;
-  if( pPass.nQuality == QUALITY_HIGH )
-    EdotL = saturate(dot(pPass.vView.xyz, pLight.vLight.xyz)*0.5 + 0.5);
-
-  half3 cK = pLight.fFallOff * pLight.cFilter*EdotL;                                                     // 1 alu
-
-  pPass.cDiffuseAcc.xyz += cDiffuse.xyz * cK;                                                       // 1 alu
-  pPass.cSpecularAcc.xyz += (cSpecular.xyz + cRim) * cK;                                            // 2 alu
+    pPass.cDiffuseAcc.xyz  += cDiffuse * cK;
+    pPass.cSpecularAcc.xyz += (cSpecular + cRim) * cK;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void frag_custom_ambient(inout fragPass pPass, inout half3 cAmbient)
 {
+    if (pPass.bDiffuseBump)
+    {
+        cAmbient.xyz *= saturate(dot(pPass.vNormalDiffuse.xyz, pPass.vNormal.xyz));
+    }
 
-  if ( pPass.bDiffuseBump )
-  {
-    // darken ambient if there is unoccluded area direction
-    cAmbient.xyz *= saturate( dot(pPass.vNormalDiffuse.xyz, pPass.vNormal.xyz) );
-    //pPass.vNormal.xyz = pPass.vNormalDiffuse.xyz;
-  }
-
-  // update: brighten up ambient depending on diffusion amount
-  if( pPass.nQuality == QUALITY_HIGH )
-    pPass.cAmbientAcc.xyz += cAmbient.xyz*(1.0 + 0.5* pPass.pCustom.cSubsurfaceMap);
-  else
-    pPass.cAmbientAcc.xyz += cAmbient.xyz;
-
+    if (pPass.nQuality == QUALITY_HIGH)
+    {
+        pPass.cAmbientAcc.xyz += cAmbient * (1.0f + 0.5f * pPass.pCustom.cSubsurfaceMap);
+    }
+    else
+    {
+        pPass.cAmbientAcc.xyz += cAmbient;
+    }
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void frag_custom_end(inout fragPass pPass, inout half3 cFinal)
 {
-  //cFinal.xyz = pPass.cDiffuseMap.xyz;
-  //cFinal.xyz = pPass.pCustom.cSubsurfaceMap.w;
-  //cFinal.xyz = pPass.cDiffuseMap.xyz*0.5+0.5;
-
-  //cFinal.xyz = pPass.cDiffuseMap.xyz;
-  // display bump
-  //cFinal = dot(pPass.vNormal*0.5+0.5, 0.333);
-
-  //cFinal.xyz = pPass.cBumpMap.xyz*0.5+0.5;
-
-  //cFinal =half3( pPass.cBumpMap.xy,0) ; //pPass.cDiffuseMap.xyz;
-
-  // display neg/pos color weights
-  //cFinal *= saturate(0.5 +  float3(1,0, 0) * saturate(-pPass.pCustom.fWrinkleAmount) + float3(0, 0, 1)* saturate(pPass.pCustom.fWrinkleAmount) );
-
+    // Empty
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "fragLib.cfi"
 
-///////////////// pixel shader //////////////////
-
 pixout SkinPS(vert2FragGeneral IN)
 {
-  pixout OUT = (pixout) 0;
+    pixout OUT = (pixout)0;
 
-  // Initialize fragPass structure
-  fragPass pPass = (fragPass) 0;
-  frag_unify(pPass, IN);
-  half4 cFinal = frag_shared_output(pPass);
+    fragPass pPass = (fragPass)0;
+    frag_unify(pPass, IN);
+    half4 cFinal   = frag_shared_output(pPass);
 
-  HDROutput(OUT, cFinal, 1);
+    HDROutput(OUT, cFinal, 1);
 
-  return OUT;
+    return OUT;
 }
-
-//////////////////////////////// techniques ////////////////
 
 technique General
 <
-  string Script = 
+  string Script =
         "TechniqueZ=ZPass;"
         "TechniqueMotionBlur=MotionBlurPass;"
         //"TechniqueDetail=DetailPass;"
@@ -481,8 +393,6 @@ technique General
   }
 }
 
-//////////////////////////////// Common techniques ////////////////
-
 #include "CommonZPass.cfi"
 //include "CommonDetailPass.cfi"
 #include "CommonCausticsPass.cfi"
@@ -497,5 +407,3 @@ technique General
   #include "CommonShadowGenPassGS.cfi"
 #endif
 #include "CommonShadowPass.cfi"
-
-/////////////////////// eof ///

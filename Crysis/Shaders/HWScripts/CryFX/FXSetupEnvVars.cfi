@@ -1,5 +1,4 @@
 //=== Hardware depended variables ======================================================
-
 // D3D, DIRECT3D
 // D3D8, DIRECT3D8
 // D3D9, DIRECT3D9
@@ -21,10 +20,7 @@
 // HDR
 // PS20Only
 // PS30
-//
-
 //=== Environment variables ============================================================
-
 // Environment variables are used for proper cache of shaders for specific hardware platform
 // by separating of cache folders
 
@@ -57,7 +53,7 @@
 //=== Data types used in PS ============================================================
 
 #ifdef D3D10
-#define COLOR_SWAP 1
+  #define COLOR_SWAP 1
 #endif
 
 #if %DYN_BRANCHING
@@ -68,20 +64,3 @@
 #ifcvar r_MeshShort
   #define MESH_SHORT_POS 1
 #endif
-
-/*
-#ifdef PS30
-  #define vs_Auto vs_3_0
-  #define ps_Auto ps_3_0
-#endif
-*/
-
-/*
-#ifndef PS2X
-  #define vs_Auto vs_3_0
-  #define ps_Auto ps_3_0
-#else
-  #define vs_Auto vs_2_0
-  #define ps_Auto ps_2_0
-#endif
-*/

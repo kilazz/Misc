@@ -1,42 +1,25 @@
-////////////////////////////////////////////////////////////////////////////
-//
-//  Crytek Engine Source File.
-//  Shader extension
-//  Copyright (C), Crytek Studios, 2001-2004.
-// -------------------------------------------------------------------------
-//  File name:   PostEffectsLib.cfi
-//  Version:     v1.00
-//  Created:     13/06/2006 by Tiago Sousa
-//  Compilers:
-//  Description: Common post-process utilities library
-//
-//  Todo: Clean stuff up
-//
-// -------------------------------------------------------------------------
-////////////////////////////////////////////////////////////////////////////
-
-//////////////////////////////// Common constants ////////////////
-
+// Crytek Engine Source File. - PostEffectsLib.cfi
+// Copyright (C), Crytek Studios, 2001-2004.
+// Created:     13/06/2006 by Tiago Sousa
+// Description: Common post-process utilities library
 // Common vertex and pixel shader params
-//    - use for explicitly setting values from code
+// Use for explicitly setting values from code
 
 float4 vsParams[16];
 float4 psParams[16];
 
-float4   RotGridScreenOffset : PB_RotGridScreenOff;
-float   AnimGenParams = { PB_time 1.0 };
-float4   WorldViewPos  : PB_CameraPos;
+float4 RotGridScreenOffset : PB_RotGridScreenOff;
+float  AnimGenParams       = { PB_time 1.0f };
+float4 WorldViewPos        : PB_CameraPos;
 
-float4   CameraUp : PB_CameraUp;
-float4   CameraRight : PB_CameraRight;
-float4   CamFront : PB_CameraFront;
+float4 CameraUp            : PB_CameraUp;
+float4 CameraRight         : PB_CameraRight;
+float4 CamFront            : PB_CameraFront;
 
-float4  ScrSize : PB_ScreenSize;
+float4 ScrSize             : PB_ScreenSize;
 
 // x, y, z - unused, w - particle lifetime
 float4  vScrParticleInfo;
-
-//////////////////////////////// Common samplers ////////////////
 
 // Use when explicitly binding from code (_tex to void name colision)
 sampler2D _tex0 : register(s0);
@@ -51,65 +34,63 @@ sampler2D _tex7 : register(s7);
 // Use for auto binding
 sampler2D screenMapSampler : register (s0)
 {
-  Texture = $BackBuffer;
+  Texture   = $BackBuffer;
   MinFilter = POINT;
   MagFilter = POINT;
   MipFilter = POINT;
-  AddressU = Clamp;
-  AddressV = Clamp;
+  AddressU  = Clamp;
+  AddressV  = Clamp;
 };
 
-sampler2D depthMapSampler  : register (s1)
+sampler2D depthMapSampler : register (s1)
 {
-  Texture = $ZTarget;
+  Texture   = $ZTarget;
   MinFilter = POINT;
   MagFilter = POINT;
   MipFilter = POINT;
-  AddressU = Clamp;
-  AddressV = Clamp;
+  AddressU  = Clamp;
+  AddressV  = Clamp;
 };
 
-sampler2D screenMapScaledSampler_d2  : register (s2)
+sampler2D screenMapScaledSampler_d2 : register (s2)
 {
-  Texture = $BackBufferScaled_d2;
+  Texture   = $BackBufferScaled_d2;
   MinFilter = LINEAR;
   MagFilter = LINEAR;
   MipFilter = POINT;
-  AddressU = Clamp;
-  AddressV = Clamp;
+  AddressU  = Clamp;
+  AddressV  = Clamp;
 };
 
-sampler2D screenMapScaledSampler_d4  : register (s3)
+sampler2D screenMapScaledSampler_d4 : register (s3)
 {
-  Texture = $BackBufferScaled_d4;
+  Texture   = $BackBufferScaled_d4;
   MinFilter = LINEAR;
   MagFilter = LINEAR;
   MipFilter = POINT;
-  AddressU = Clamp;
-  AddressV = Clamp;
+  AddressU  = Clamp;
+  AddressV  = Clamp;
 };
 
-sampler2D screenMapScaledSampler_d8  : register (s4)
+sampler2D screenMapScaledSampler_d8 : register (s4)
 {
-  Texture = $BackBufferScaled_d8;
+  Texture   = $BackBufferScaled_d8;
   MinFilter = LINEAR;
   MagFilter = LINEAR;
   MipFilter = POINT;
-  AddressU = Clamp;
-  AddressV = Clamp;
+  AddressU  = Clamp;
+  AddressV  = Clamp;
 };
 
 sampler2D screenTargetSampler : register (s0)
 {
-  Texture = $SceneTarget;
+  Texture   = $SceneTarget;
   MinFilter = POINT;
   MagFilter = POINT;
   MipFilter = POINT;
-  AddressU = Clamp;
-  AddressV = Clamp;
+  AddressU  = Clamp;
+  AddressV  = Clamp;
 };
-
-//////////////////////////////// Common vertex shader stuff ////////////////
 
 struct pixout_MRT
 {
@@ -132,18 +113,16 @@ struct vtxInWPOS
 
 struct vtxOut
 {
-  float4 HPosition  : POSITION;
-  float4 baseTC     : TEXCOORD0;
+  float4 HPosition : POSITION;
+  float4 baseTC    : TEXCOORD0;
 };
 
 struct vtxOutWPOS
 {
-  float4 HPosition   : POSITION;
-  float4 baseTC      : TEXCOORD0;
-  float3 CamVec : TEXCOORD1;
+  float4 HPosition : POSITION;
+  float4 baseTC    : TEXCOORD0;
+  float3 CamVec    : TEXCOORD1;
 };
-
-///////////////// vertex shader //////////////////
 
 vtxOut BaseVS(vtxIn IN)
 {
@@ -153,13 +132,13 @@ vtxOut BaseVS(vtxIn IN)
   OUT.HPosition = mul(vpMatrix, vPos);
   OUT.baseTC.xy = IN.baseTC.xy;
 
-  // output with correct aspect ratio into wz
-  OUT.baseTC.wz = (IN.baseTC.xy -0.5 ) * float2(0.75*(ScrSize.x/ScrSize.y), 1.0) + 0.5;
+  // Output with correct aspect ratio into wz
+  // Pre-calculate aspect ratio scale to reduce ALU
+  float2 aspectScale = float2(0.75f * (ScrSize.x / ScrSize.y), 1.0f);
+  OUT.baseTC.wz = (IN.baseTC.xy - 0.5f) * aspectScale + 0.5f;
 
   return OUT;
 }
-
-///////////////// vertex shader //////////////////
 
 vtxOutWPOS BaseWPOSVS(vtxInWPOS IN)
 {
@@ -172,5 +151,3 @@ vtxOutWPOS BaseWPOSVS(vtxInWPOS IN)
 
   return OUT;
 }
-
-/////////////////////// eof ///

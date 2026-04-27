@@ -1,398 +1,222 @@
 #include "Common.cfi"
 #include "ModificatorVT.cfi"
 
-// Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = "ShaderDrawType = Custom;"
-                  "ShaderType = General;"
-                  "PreprType = GenerateSprites;"
+    string Script =
+        "Public;"
+        "Decal;"
+        "ShaderDrawType = General;"
+        "ShaderType = FX;"
+        "PreprType = GenerateSprites;";
 >;
 
-/// Un-Tweakables //////////////////////
-float4 vSunSkyConstants : PB_SunSkyConstants;    // fMaxSunSky=max(g_PS_SunColor.r+SkyColor.r,max(g_PS_SunColor.g+SkyColor.g,g_PS_SunColor.g+SkyColor.b)); .a=fMaxSunSky/max(g_PS_SunColor.r,max(SunColor.g,g_PS_SunColor.g)); .rgb=SkyColor/fMaxSunSky;
-
+float4 vSunSkyConstants;
 float4 SpritesOutdoorAOVertInfo;
 float4 TexAtlasSize : PB_TexAtlasSize;
 
-sampler2D BaseSampler  : register(s0);    // linear
-sampler2D shadowOccludeMapSampler : register(s1);
+sampler2D BaseSampler : register(s0);
+sampler2D shadowOccludeMapSampler : register(s1)
 {
- Texture = $ScreenShadowMap;
- MinFilter = LINEAR;
- MagFilter = LINEAR;
- MipFilter = NONE;
- AddressU = Clamp;
- AddressV = Clamp;
+    Texture   = $ScreenShadowMap;
+    MinFilter = LINEAR;
+    MagFilter = LINEAR;
+    MipFilter = NONE;
+    AddressU  = Clamp;
+    AddressV  = Clamp;
 };
 
 sampler2D sceneAOTargetForSprites : register(s2);
-sampler2D TerrainInfoSampler0  : register(s3);
-
-/////////////////////////////
+sampler2D TerrainInfoSampler0     : register(s3);
 
 struct a2v
 {
-  float4 Position : POSITION; //in object space
-  float2 baseTC   : TEXCOORD0;
-  IN_C0
+    float4 Position : POSITION;
+    float2 baseTC   : TEXCOORD0;
+    IN_C0
 };
 
 struct v2f
 {
-  float4 Position  : POSITION;  //in projection space
-  float4 baseTC    : TEXCOORD0_centroid;
-  float4 OutdoorAOInfo   : TEXCOORD1;
-
-  float4 shadowTC  : TEXCOORD2;
+    float4 Position      : POSITION;
+    float4 baseTC        : TEXCOORD0_centroid;
+    float4 OutdoorAOInfo : TEXCOORD1;
+    float4 shadowTC      : TEXCOORD2;
 #if %_RT_FOG
-  float4 localFogColor : TEXCOORD3;
+    float4 localFogColor : TEXCOORD3;
 #endif
-  OUT_C0
+    OUT_C0
 };
 
 struct v2f_z
 {
-  float4 Position  : POSITION;  //in projection space
-  float4 baseTC    : TEXCOORD0_centroid;
-  float4 ZInfo     : TEXCOORD1; // w is uzed during impostors gen
+    float4 Position : POSITION;
+    float4 baseTC   : TEXCOORD0_centroid;
+    float4 ZInfo    : TEXCOORD1;
 };
-
-///////////////// vertex shader //////////////////
 
 v2f_z SpriteVS_Z(a2v IN)
 {
-  v2f_z OUT;
-#ifndef OPENGL
-  OUT = (v2f_z)0;
-#endif
+    v2f_z OUT = (v2f_z)0;
 
-  // Position in screen space.
-  float4 vPos = IN.Position;
-  OUT.Position = mul(g_VS_ViewProjMatr, vPos);
-
+    OUT.Position  = mul(g_VS_ViewProjMatr, IN.Position);
 #if %_RT_FSAA
-  OUT.ZInfo.xyz = vPos.xyz;
+    OUT.ZInfo.xyz = IN.Position.xyz;
 #endif
+    float4 inColor = GetInputColor(IN.Color);
+    OUT.baseTC.xy  = IN.baseTC.xy;
+    OUT.baseTC.z   = inColor.b;
+    OUT.ZInfo.w    = OUT.Position.w * g_VS_NearFarClipDist.w;
 
-  float4 inColor = GetInputColor(IN.Color);
-  OUT.baseTC.xy = IN.baseTC.xy;
-  OUT.baseTC.z = inColor.b; // pass custom alpha ref
-
-  OUT.ZInfo.w = OUT.Position.w * g_VS_NearFarClipDist.w;
-
-  return OUT;
+    return OUT;
 }
 
 v2f SpriteVS(a2v IN)
 {
-  v2f OUT;
-#ifndef OPENGL
-  OUT = (v2f)0;
-#endif
+    v2f OUT = (v2f)0;
 
-  // Position in screen space.
-  float4 vPos = IN.Position;
-  OUT.Position = mul(g_VS_ViewProjMatr, vPos);
-
-  OUT.baseTC.xy = IN.baseTC.xy;
-  OUT.baseTC.zw=-1; // use higher lod
-
-  float4 inColor = GetInputColor(IN.Color);
-  OUT.Color = inColor;
+    OUT.Position  = mul(g_VS_ViewProjMatr, IN.Position);
+    OUT.baseTC.xy = IN.baseTC.xy;
+    OUT.baseTC.zw = -1.0f;
+    OUT.Color     = GetInputColor(IN.Color);
 
 #if %_RT_FOG
-  OUT.localFogColor = GetVolumetricFogColor( vPos );
+    OUT.localFogColor = GetVolumetricFogColor(IN.Position);
 #endif
 
-  int nQuality = GetShaderQuality();
-  if( nQuality > QUALITY_LOW )
-  {
-    OUT.OutdoorAOInfo.x = SpritesOutdoorAOVertInfo.z*vPos.y+SpritesOutdoorAOVertInfo.x;
-    OUT.OutdoorAOInfo.y = SpritesOutdoorAOVertInfo.z*vPos.x+SpritesOutdoorAOVertInfo.y;
-    OUT.OutdoorAOInfo.z = vPos.z-SpritesOutdoorAOVertInfo.w; // vertex z relative to terrain sector min z
-  }
+    if (GetShaderQuality() > QUALITY_LOW)
+    {
+        OUT.OutdoorAOInfo.x = SpritesOutdoorAOVertInfo.z * IN.Position.y + SpritesOutdoorAOVertInfo.x;
+        OUT.OutdoorAOInfo.y = SpritesOutdoorAOVertInfo.z * IN.Position.x + SpritesOutdoorAOVertInfo.y;
+        OUT.OutdoorAOInfo.z = IN.Position.z - SpritesOutdoorAOVertInfo.w;
+    }
+    OUT.shadowTC = HPosToScreenTC(OUT.Position);
 
-  OUT.shadowTC = HPosToScreenTC(OUT.Position);
-
-  return OUT;
+    return OUT;
 }
 
-// TODO: vectorize, make simplified version for zpass
-half4 tex2DBilinearSprites( sampler2D MapSampler, float2 texTC, float fAlphaRef,
-                           out float fSunContribution, out float fAlpha )
+half4 tex2DBilinearSprites(sampler2D MapSampler, float2 texTC, float fAlphaRef, out float fSunContribution, out float fAlpha)
 {
-  const float4 MapParams = TexAtlasSize;
+    const float4 MapParams = TexAtlasSize;
 
-  // MapParams.xy = texture size
-  // MapParams.zw = texture texel size
+    if (GetShaderQuality() > QUALITY_LOW)
+    {
+        float2 f = frac(texTC.xy * MapParams.xy);
 
-  if( GetShaderQuality() > QUALITY_LOW )
-  {
-    float2 f = frac( texTC.xy * MapParams.xy );
+        float4 t00 = tex2D(MapSampler, texTC);
+        float  S00 = (1.0f - t00.a) * (1.0f / (1.0f - fAlphaRef));
+        float  A00 = t00.a > fAlphaRef;
 
-    float4 t00 = tex2D( MapSampler, texTC );
-    float S00 = (1.0f-t00.a)*(1.0/(1.0-fAlphaRef));
-    float fAlpha00 = t00.a>fAlphaRef;
+        float4 t10 = tex2D(MapSampler, texTC + MapParams.zw * float2(1.0f, 0.0f));
+        float  S10 = (1.0f - t10.a) * (1.0f / (1.0f - fAlphaRef));
+        float  A10 = t10.a > fAlphaRef;
 
-    float4 t10 = tex2D( MapSampler, texTC + MapParams.zw * float2( 1.0, 0.0 ) );
-    float S10 = (1.0f-t10.a)*(1.0/(1.0-fAlphaRef));
-    float fAlpha10 = t10.a>fAlphaRef;
+        float4 tA    = lerp(t00, t10, f.x);
+        float  SA    = lerp(S00, S10, f.x);
+        float  AlphaA = lerp(A00, A10, f.x);
 
-    float4 tA = lerp( t00, t10, f.x );
-    float SA = lerp( S00, S10, f.x );
-    float fAlphaA = lerp( fAlpha00, fAlpha10, f.x );
+        float4 t01 = tex2D(MapSampler, texTC + MapParams.zw * float2(0.0f, 1.0f));
+        float  S01 = (1.0f - t01.a) * (1.0f / (1.0f - fAlphaRef));
+        float  A01 = t01.a > fAlphaRef;
 
-    float4 t01 = tex2D( MapSampler, texTC + MapParams.zw * float2( 0.0, 1.0 ) );
-    float S01 = (1.0f-t01.a)*(1.0/(1.0-fAlphaRef));
-    float fAlpha01 = t01.a>fAlphaRef;
+        float4 t11 = tex2D(MapSampler, texTC + MapParams.zw * float2(1.0f, 1.0f));
+        float  S11 = (1.0f - t11.a) * (1.0f / (1.0f - fAlphaRef));
+        float  A11 = t11.a > fAlphaRef;
 
-    float4 t11 = tex2D( MapSampler, texTC + MapParams.zw * float2( 1.0, 1.0 ) );
-    float S11 = (1.0f-t11.a)*(1.0/(1.0-fAlphaRef));
-    float fAlpha11 = t11.a>fAlphaRef;
+        float4 tB    = lerp(t01, t11, f.x);
+        float  SB    = lerp(S01, S11, f.x);
+        float  AlphaB = lerp(A01, A11, f.x);
 
-    float4 tB = lerp( t01, t11, f.x );
-    float SB = lerp( S01, S11, f.x );
-    float fAlphaB = lerp( fAlpha01, fAlpha11, f.x );
+        fSunContribution = lerp(SA, SB, f.y);
+        fAlpha           = lerp(AlphaA, AlphaB, f.y);
 
-    fSunContribution = lerp( SA, SB, f.y );
-    fAlpha = lerp( fAlphaA, fAlphaB, f.y );
-
-    return lerp( tA, tB, f.y );
-  }
-  else
-  {
-    half4 cSprite = tex2D( MapSampler, texTC);
-
-    fSunContribution = (1.0f-cSprite.a)*(1.0/(1.0-fAlphaRef));
-    fAlpha = cSprite.a>fAlphaRef;
-
-    return cSprite;
-  }
-
-}
-
-///////////////// pixel shader //////////////////
-
-half4 GetTerrainColor(sampler2D s, float2 terrainTC, float fTerrNdotL, float shadowOccl, float fSkyBr, float SSAOVal)
-{
-  half4 terrainInfo = tex2DTerrain(s, terrainTC);
-
-#if %_RT_AMBIENT_OCCLUSION
-  float fSkyAccess = lerp(terrainInfo.a,1.f,fSkyBr);
-#else
-  float fSkyAccess = SSAOVal;
-#endif
-
-  terrainInfo.xyz = terrainInfo.xyz * (g_PS_SunColor.xyz*fTerrNdotL*(1-shadowOccl) + g_PS_SkyColor.xyz * fSkyAccess);
-  return terrainInfo;
+        return lerp(tA, tB, f.y);
+    }
+    else
+    {
+        half4 cSprite = tex2D(MapSampler, texTC);
+        fSunContribution = (1.0f - cSprite.a) * (1.0f / (1.0f - fAlphaRef));
+        fAlpha           = cSprite.a > fAlphaRef;
+        return cSprite;
+    }
 }
 
 pixout SpritePS(v2f IN)
 {
-  pixout OUT;
-  int nQuality = GetShaderQuality();
+    pixout OUT;
+    float SpriteAlphaRef = (%_RT_NOZPASS) ? IN.Color.b : 0.1f;
 
-  float SpriteAlphaRef = 0.1;
+    float fSunContr, fAlpha;
+    half4 baseColor = tex2DBilinearSprites(BaseSampler, IN.baseTC.xy, SpriteAlphaRef, fSunContr, fAlpha);
+    baseColor.xyz  *= IN.Color.w * 10.0f;
 
-  #if %_RT_NOZPASS
-    SpriteAlphaRef = IN.Color.b;
-  #endif
+    half shadowOccl = (%_RT_AMBIENT) ? 1.0h : tex2Dproj(shadowOccludeMapSampler, IN.shadowTC.xyzw).x;
+    float3 vAORatios = 1.0f;
 
-  // load the base
-  float fSunContribution, fAlpha;
-  half4 baseColor = tex2DBilinearSprites(BaseSampler, IN.baseTC.xy, SpriteAlphaRef, fSunContribution, fAlpha);
+    if (GetShaderQuality() == QUALITY_HIGH || D3D10)
+    {
+        float4 vAO = tex2Dproj(sceneAOTargetForSprites, IN.shadowTC.xyzw);
+        vAORatios = vAO.x * vAO.y * vAO.w;
+    }
 
-  baseColor.xyz *= IN.Color.w*10.0f;    // LDR->HDR transformation, 10.0f allows 10x brightness
+    float3 vSun = baseColor.rgb * fSunContr;
+    float3 vAmb = baseColor.rgb * (1.0f - fSunContr);
 
-  #if %_RT_AMBIENT
-    half shadowOccl = 1;
-  #else
-    half shadowOccl = tex2Dproj(shadowOccludeMapSampler, IN.shadowTC.xyzw).x;
-  #endif
+    vSun *= (1.0f - shadowOccl) * vAORatios.y;
+    vAmb *= vAORatios.x;
 
-  float3 vAORatios = 1.f;
+    baseColor.rgb = vSun + vAmb;
 
-  bool bAO = false;
-  if( nQuality == QUALITY_HIGH )
-    bAO = true;
-
-#if D3D10
-  bAO = true;
+#if %_RT_BLEND_WITH_TERRAIN_COLOR && %_RT_QUALITY_HIGH
+    half4 terrCol = GetTerrainColor(TerrainInfoSampler0, IN.OutdoorAOInfo.xy, IN.Color.g, shadowOccl, 0.0h, vAORatios.x);
+    baseColor.rgb = lerp(terrCol.rgb, baseColor.rgb, 0.5f);
 #endif
 
-  if( bAO )
-  {
-    // apply screen space AO ambient AND partially to diffuse
-    float4 vAO = tex2Dproj(sceneAOTargetForSprites, IN.shadowTC.xyzw);
-    vAORatios = vAO.x * vAO.y * vAO.w;
-  }
+    clip(fAlpha - 0.5f);
+    OUT.Color.rgb = (%_RT_FOG) ? lerp(IN.localFogColor.rgb, baseColor.rgb, IN.localFogColor.w) : baseColor.rgb;
+    OUT.Color.a   = fAlpha;
 
-   // Debug output
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   DebugOutput(OUT.Color, IN.baseTC);
-   return OUT;
- #endif
-
-  // split sun and sky components
-  float3 vSun = baseColor*fSunContribution;
-  float3 vAmb = baseColor*(1-fSunContribution);
-
-  // apply real-time shadows
-  vSun *= (1-shadowOccl) * vAORatios.y;
-  vAmb *= vAORatios.x;
-
-  // combine final color
-  baseColor.rgb = vSun + vAmb;
-
-  if( nQuality > QUALITY_LOW )
-  {
-
-#ifdef %_RT_BLEND_WITH_TERRAIN_COLOR
-  half4 terrainColor = GetTerrainColor(TerrainInfoSampler0, IN.OutdoorAOInfo.xy, IN.Color.g, shadowOccl, 0, vAORatios.x);
-  baseColor.xyz = lerp(terrainColor.xyz, baseColor.xyz, 0.5f);
-#endif
-
-  }
-
-  half3 vFinalDif = baseColor.xyz;
-
-  clip(fAlpha - .5f);
-
-#if %_RT_FOG
-  OUT.Color.xyz = lerp(IN.localFogColor.xyz, vFinalDif.xyz, IN.localFogColor.w);
-#else
-  OUT.Color.xyz = vFinalDif.xyz;
-#endif
-  OUT.Color.w = fAlpha;
-
-  HDROutput(OUT, OUT.Color, 1);
-
-  //OUT.Color.rgb = float3(0,0,1);
-  //OUT.Color.a = 1;
-
-  return OUT;
+    HDROutput(OUT, OUT.Color, 1);
+    return OUT;
 }
 
 pixout SpritePS_Z(v2f_z IN)
 {
-  pixout OUT;
+    pixout OUT;
+    float fSun, fAlpha;
+    half4 baseCol = tex2DBilinearSprites(BaseSampler, IN.baseTC.xy, IN.baseTC.z, fSun, fAlpha);
 
-  half SpriteAlphaRef = IN.baseTC.z;
-
-  // load the base
-  float fSunContr, fAlpha;
-  half4 baseColor = tex2DBilinearSprites(BaseSampler, IN.baseTC.xy, SpriteAlphaRef, fSunContr, fAlpha);
-
-  float fZ = IN.ZInfo.w;
+    float fZ = IN.ZInfo.w;
 #if %_RT_NEAREST
-  fZ *= PS_NearFarClipDist.z;
+    fZ *= PS_NearFarClipDist.z;
 #endif
-  float4 ret = EncodeSceneDepthWithAlpha(fZ, fAlpha, 0.5f, IN.ZInfo.xyz);
-
-  OUT.Color = ret;
-
-  return OUT;
+    OUT.Color = EncodeSceneDepthWithAlpha(fZ, fAlpha, 0.5f, IN.ZInfo.xyz);
+    return OUT;
 }
-
-//////////////////////////////// technique ////////////////
 
 technique General
 <
-  string Script = 
-        "TechniqueZ=General_Z;"
+    string Script = "TechniqueZ=General_Z;";
 >
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto SpriteVS();
-
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = None;
-
-    PixelShader = compile ps_Auto SpritePS();
-  }
+    pass p0
+    {
+        VertexShader = compile vs_Auto SpriteVS();
+        ZEnable      = true;
+        ZWriteEnable = true;
+        CullMode     = None;
+        PixelShader  = compile ps_Auto SpritePS();
+    }
 }
 
 technique General_Z
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto SpriteVS_Z();
-
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = None;
-
-    PixelShader = compile ps_Auto SpritePS_Z();
-  }
+    pass p0
+    {
+        VertexShader = compile vs_Auto SpriteVS_Z();
+        ZEnable      = true;
+        ZWriteEnable = true;
+        CullMode     = None;
+        PixelShader  = compile ps_Auto SpritePS_Z();
+    }
 }
-
-v2f Sprite_DebugVS(a2v IN)
-{
-  v2f OUT;
-#ifndef OPENGL
-  OUT = (v2f)0;
-#endif
-
-  // Position in screen space.
-  float4 vPos = IN.Position;
-  OUT.Position = float4(
-      2.0f * (vPos.xy + 0.5f) / float2(64, 64) - 1.0f, vPos.zw);
-
-  OUT.baseTC.xy = IN.baseTC.xy;
-
-  float4 inColor = GetInputColor(IN.Color);
-  OUT.Color = inColor;
-
-  return OUT;
-}
-
-pixout Sprite_DebugPS(v2f IN)
-{
-  pixout OUT;
-  int nQuality = GetShaderQuality();
-
-  float SpriteAlphaRef = 0.1;
-
-  #if %_RT_NOZPASS
-    SpriteAlphaRef = IN.Color.b;
-  #endif
-
-  // load the base
-  float fSunContribution, fAlpha;
-  half4 baseColor = tex2DBilinearSprites(BaseSampler, IN.baseTC.xy, SpriteAlphaRef, fSunContribution, fAlpha);
-  half3 vFinalDif = baseColor.xyz;
-
-  //clip(fAlpha - .5f);
-
-  OUT.Color.xyz = vFinalDif.xyz;
-  OUT.Color.w = fAlpha;
-
-  HDROutput(OUT, OUT.Color, 1);
-
-  //OUT.Color.rgb = float3(0,0,1);
-  //OUT.Color.a = 1;
-
-  return OUT;
-}
-
-technique General_Debug
-{
-  pass p0
-  {
-    VertexShader = compile vs_Auto Sprite_DebugVS();
-
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = None;
-
-    PixelShader = compile ps_Auto Sprite_DebugPS();
-  }
-}
-
-#include "ShadowCommon.cfi"
-#include "CommonShadowPass.cfi"
-
-/////////////////////// eof ///

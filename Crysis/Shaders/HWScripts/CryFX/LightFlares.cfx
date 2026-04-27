@@ -1,309 +1,267 @@
 #include "Common.cfi"
-//#include "ModificatorVT.cfi"
 
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "NoPreview;"
            "ShaderDrawType = Custom;"
-           //"ForceTransPass;"
            "ShaderType = FX;"
 >;
-
-/// Common stuff  //////////////////////
 
 /// Un-Tweakables //////////////////////
 
 float4x4 CompMatrix : PI_Composite < register = c0; >;
-float4 cFlareColor;
+float4   cFlareColor;
 
-// Samplers /////////////////
-
-sampler2D baseMap : register(s0);
-sampler2D modMap : register(s1);
-sampler2D noiseMap : register(s1);
-
-/////////////////////////////
+sampler2D baseMap    : register(s0);
+sampler2D modMap     : register(s1);
+sampler2D noiseMap   : register(s1);
 
 struct a2v
 {
-  IN_P
-  float2 baseTC    : TEXCOORD0;
-  float4 Color     : COLOR0;
+    IN_P
+    float2 baseTC    : TEXCOORD0;
+    float4 Color     : COLOR0;
 };
 
 struct v2f
 {
-  float4 HPosition : POSITION;
-  float2 baseTC     : TEXCOORD0;
-  float4 Color     : COLOR0;
+    float4 HPosition : POSITION;
+    float2 baseTC    : TEXCOORD0;
+    float4 Color     : COLOR0;
 };
-
-///////////////// Shared vertex shader //////////////////
 
 v2f LightFlareVS(a2v IN)
 {
-  v2f OUT = (v2f)0;
-  float4 vPos = IN.Position;
+    v2f OUT = (v2f)0;
+    float4 vPos = IN.Position;
 
-  vPos.z = 0.0;
-  vPos.w = 0;
+    vPos.z = 0.0f;
+    vPos.w = 0.0f;
 
-  OUT.HPosition = mul(CompMatrix, vPos);
+    OUT.HPosition = mul(CompMatrix, vPos);
 
 #ifdef D3D10
-  OUT.HPosition = IN.Position;
-  OUT.HPosition.w = 1;
+    OUT.HPosition = IN.Position;
+    OUT.HPosition.w = 1.0f;
 
-  OUT.HPosition.xy /= g_VS_ScreenSize.xy;
-  OUT.HPosition.y = 1.0f - OUT.HPosition.y;
-  OUT.HPosition.xy = OUT.HPosition.xy*2-1;
+    OUT.HPosition.xy /= g_VS_ScreenSize.xy;
+    OUT.HPosition.y  = 1.0f - OUT.HPosition.y;
+    OUT.HPosition.xy = OUT.HPosition.xy * 2.0f - 1.0f;
 #endif
 
-  OUT.baseTC.xy = IN.baseTC.xy;
-  OUT.Color = GetInputColor(IN.Color);
+    OUT.baseTC.xy = IN.baseTC.xy;
+    OUT.Color     = GetInputColor(IN.Color);
 
-  return OUT;
+    return OUT;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Light-Flare technique //////////////////////////////////////////////////////////////////////////
 
 pixout LightFlarePS(v2f IN)
 {
-  pixout OUT;
+    pixout OUT;
 
-  half4 cFlareMap = tex2D(baseMap, IN.baseTC.xy);
+    half4 cFlareMap = tex2D(baseMap, IN.baseTC.xy);
 
-  half fAtten = saturate( 1-length(IN.baseTC.xy*2-1) );
+    float2 centerOffset = IN.baseTC.xy * 2.0f - 1.0f;
+    half   fAtten       = saturate(1.0f - length(centerOffset));
 
-  half4 flareColor =  fAtten * cFlareMap * 2.0;
-  HDROutput(OUT, float4( flareColor.xyz * cFlareColor.xyz, fAtten), 1);
-  return OUT;
+    half4 flareColor = fAtten * cFlareMap * 2.0f;
+
+    HDROutput(OUT, float4(flareColor.rgb * cFlareColor.rgb, fAtten), 1);
+
+    return OUT;
 }
 
-//////////////////////////////// technique ////////////////
-
-technique LightFlare
-{
-  pass p0
-  {
-    VertexShader = compile vs_Auto LightFlareVS();
-    PixelShader = compile ps_Auto LightFlarePS();
-
-    ZEnable = false;
-    ZWriteEnable = false;
-    ZFunc = LEqual;
-    CullMode = None;
-
-    SrcBlend = ONE;
-    DestBlend = ONE;
-    AlphaBlendEnable = true;
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Low-spec light-Beam technique //////////////////////////////////////////////////////////////////////////
 
 v2f LowSpecBeamVS(a2v IN)
 {
-  v2f OUT = (v2f)0;
-  float4 vPos = IN.Position;
+    v2f OUT = (v2f)0;
 
-  OUT.HPosition = IN.Position;
-  OUT.HPosition.w = 1;
+    OUT.HPosition = IN.Position;
+    OUT.HPosition.w = 1.0f;
 
 #ifdef D3D10
-  OUT.HPosition.xy /= g_VS_ScreenSize.xy;
-  OUT.HPosition.y = 1.0f - OUT.HPosition.y;
-  OUT.HPosition.xy = OUT.HPosition.xy*2-1;
+    OUT.HPosition.xy /= g_VS_ScreenSize.xy;
+    OUT.HPosition.y  = 1.0f - OUT.HPosition.y;
+    OUT.HPosition.xy = OUT.HPosition.xy * 2.0f - 1.0f;
 #endif
 
-  OUT.Color = GetInputColor(IN.Color);
-  OUT.baseTC.xy = IN.baseTC.xy;
+    OUT.Color     = GetInputColor(IN.Color);
+    OUT.baseTC.xy = IN.baseTC.xy;
 
-  return OUT;
+    return OUT;
 }
 
 pixout LowSpecBeamPS(v2f IN)
 {
-  pixout OUT;
+    pixout OUT;
 
-  half4 cFlareMap = (0.85+0.15*tex2Dbias(baseMap, float4(IN.baseTC.xy*2-1, 0,  saturate(cFlareColor.w*cFlareColor.w) * 2) ));
+    float2 centerOffset = IN.baseTC.xy * 2.0f - 1.0f;
 
-  //half2 tcJittter = tex2D(noiseMap, IN.baseTC.xy*2-1)*2-1;
+    // Pre-calculate bias to reduce register pressure
+    half  fBias     = saturate(cFlareColor.w * cFlareColor.w) * 2.0f;
+    half4 cFlareMap = 0.85f + 0.15f * tex2Dbias(baseMap, float4(centerOffset, 0.0f, fBias));
 
-  half fAtten = ( saturate( 1-length(IN.baseTC.xy *2-1)) );
-  //fAtten *= fAtten;
+    half fAtten = saturate(1.0f - length(centerOffset));
 
-  half4 flareColor =  cFlareColor * fAtten * cFlareMap * 2.0;
-  HDROutput(OUT, float4( flareColor.xyz, 1), 1);
-  return OUT;
+    half4 flareColor = cFlareColor * fAtten * cFlareMap * 2.0f;
+
+    HDROutput(OUT, float4(flareColor.rgb, 1.0f), 1);
+
+    return OUT;
 }
 
 technique LowSpecBeams
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto LowSpecBeamVS();
-    PixelShader = compile ps_Auto LowSpecBeamPS();
+    pass p0
+    {
+        VertexShader = compile vs_Auto LowSpecBeamVS();
+        PixelShader  = compile ps_Auto LowSpecBeamPS();
 
-    ZEnable = true;
-    ZWriteEnable = false;
-    ZFunc = LEqual;
-    CullMode = None;
+        ZEnable       = true;
+        ZWriteEnable  = false;
+        ZFunc         = LEqual;
+        CullMode      = None;
 
-    SrcBlend = ONE;
-    DestBlend = ONE;
-    AlphaBlendEnable = true;
-  }
+        SrcBlend      = ONE;
+        DestBlend     = ONE;
+        AlphaBlendEnable = true;
+    }
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Sun-Rays technique /////////////////////////////////////////////////////////////////////////////
-
-/// Constants ////////////////////////////
 
 float4 sunRaysParamsVS;
 float4 sunRaysParamsPS;
 
-///////////////// pixel shaders //////////////////
-
 pixout SunFlareGenPS(v2f IN)
 {
-  pixout OUT;
-  OUT.Color = cFlareColor;
-  return OUT;
+    pixout OUT;
+    OUT.Color = cFlareColor;
+    return OUT;
 }
 
 pixout SunFlareGenMaskPS(v2f IN)
 {
-  pixout OUT;
-  OUT.Color = 1-length(IN.baseTC.xy*2-1);
-  return OUT;
+    pixout OUT;
+    OUT.Color = 1.0f - length(IN.baseTC.xy * 2.0f - 1.0f);
+    return OUT;
 }
-
-// Improvements todo:
-//  - Optimize
 
 pixout SunFlareBlurPS(v2f IN)
 {
-  pixout OUT;
+    pixout OUT;
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////
-  // This should be done on vertex shader, but due to bug with vertex coordinates output on renderer,
-  // i have todo this from pixel shader...
-  ////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Optimized scale: 256/64 = 4.0
+    float2 scale    = float2(4.0f, 4.0f);
+    half4 noiseUV   = tex2D(noiseMap, IN.baseTC.xy * scale);
 
-  float2 scale=float2(256.0/64.0, 256.0/64.0);
-  half4 noiseUV = tex2D(noiseMap, (IN.baseTC.xy)*scale);
+    const int NUM_PASSES = 8;
 
-  const int NUM_PASSES= 8; // 6 seems to be the min value, less than this we see noise
+    half2 fScale = sunRaysParamsPS.ww;
+    half2 fStep  = fScale / (half)NUM_PASSES;
 
-  // Version with dithering (somehow, looks worse than withouth)
-  //half2 fScale= sunRaysParamsPS.ww * (1.0-2*0.5/NUM_PASSES+2*noiseUV.xy/NUM_PASSES);
-  //half2 fScale= sunRaysParamsPS.ww * (1.0-4*0.5/NUM_PASSES+4.0*noiseUV.xy/NUM_PASSES);
-  //half2 fScale= sunRaysParamsPS.ww * (1.0 + (noiseUV.xy*2-1)*2);
+    float2 uvCenter = IN.baseTC.xy - 0.5f;
+    half4  accum    = 0.0f;
 
-  half2 fScale= sunRaysParamsPS.ww;
+    for(int p = 0; p < NUM_PASSES; p++)
+    {
+        half2 uv = uvCenter * fScale + 0.5f;
+        accum   += tex2D(baseMap, uv);
+        fScale  -= fStep;
+    }
 
-  // Get accumulation step
-  half2 fStep= (fScale.xy)/(half) NUM_PASSES;
+    OUT.Color = accum / (half)NUM_PASSES;
 
-  half4 accum=0;
-  for(int p=0; p<NUM_PASSES; p++)
-  {
-    half2 uv=(IN.baseTC.xy-0.5)*fScale+0.5;
-
-    // Scale texture and accumulate result
-    accum += tex2D(baseMap, uv);
-    fScale -= fStep;
-  }
-
-  // Output color accumulation
-  OUT.Color = accum/(half) NUM_PASSES;
-
-  return OUT;
+    return OUT;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// Should do an extra radial-blur in here. But since there's a bug in renderer with texture coordinates
-// output, i can't do it...
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pixout SunFlarePS(v2f IN)
 {
-  pixout OUT;
+    pixout OUT;
 
-  // load the base
-  half4 sunColor = tex2D(baseMap, IN.baseTC.xy);
-  half4 modColor = tex2D(modMap, IN.baseTC.xy);
+    half4 sunColor = tex2D(baseMap, IN.baseTC.xy);
+    half4 modColor = tex2D(modMap, IN.baseTC.xy);
 
-  half fAtten = saturate(1-length(IN.baseTC.xy*2-1));
-  fAtten*=fAtten;
+    float2 centerOffset = IN.baseTC.xy * 2.0f - 1.0f;
+    half   fAtten       = saturate(1.0f - length(centerOffset));
 
-  half4 flareColor = 0;
-  flareColor= fAtten * modColor.w;
-  //sunColor
+    // Squaring for a sharper falloff
+    fAtten = fAtten * fAtten;
 
-  // Modulate by color and overbright stuff a litle
-  flareColor *= cFlareColor;
+    half4 flareColor = fAtten * modColor.w * cFlareColor;
 
-  HDROutput(OUT, flareColor, 1);
+    HDROutput(OUT, flareColor, 1);
 
-  return OUT;
+    return OUT;
 }
-
-//////////////////////////////// technique ////////////////
 
 technique SunRaysGen
 {
-  pass p0
-  {
-    VertexShader = compile vs_2_0 LightFlareVS();
-    PixelShader = compile ps_2_0 SunFlareGenPS();
-  }
+    pass p0
+    {
+        VertexShader = compile vs_2_0 LightFlareVS();
+        PixelShader  = compile ps_2_0 SunFlareGenPS();
+    }
 }
 
 technique SunRaysGenMask
 {
-  pass p0
-  {
-    VertexShader = compile vs_2_0 LightFlareVS();
-    PixelShader = compile ps_2_0 SunFlareGenMaskPS();
+    pass p0
+    {
+        VertexShader = compile vs_2_0 LightFlareVS();
+        PixelShader  = compile ps_2_0 SunFlareGenMaskPS();
 
-    SrcBlend = DST_COLOR;
-    DestBlend = ZERO;
-    AlphaBlendEnable = true;
-  }
+        SrcBlend      = DST_COLOR;
+        DestBlend     = ZERO;
+        AlphaBlendEnable = true;
+    }
 }
 
 technique SunRaysBlur
 {
-  pass p0
-  {
-    VertexShader = compile vs_2_0 LightFlareVS();
-    PixelShader = compile ps_2_0 SunFlareBlurPS();
-  }
+    pass p0
+    {
+        VertexShader = compile vs_2_0 LightFlareVS();
+        PixelShader  = compile ps_2_0 SunFlareBlurPS();
+    }
 }
 
 technique SunRays
 {
-  pass p0
-  {
-    VertexShader = compile vs_2_0 LightFlareVS();
-    PixelShader = compile ps_2_0 SunFlarePS();
+    pass p0
+    {
+        VertexShader = compile vs_2_0 LightFlareVS();
+        PixelShader  = compile ps_2_0 SunFlarePS();
 
-    ZEnable = false;
-    ZWriteEnable = false;
-    ZFunc = LEqual;
-    CullMode = None;
+        ZEnable       = false;
+        ZWriteEnable  = false;
+        ZFunc         = LEqual;
+        CullMode      = None;
 
-    SrcBlend = ONE;
-    DestBlend = ONE;
-    //AlphaBlendEnable = true;
-  }
+        SrcBlend      = ONE;
+        DestBlend     = ONE;
+    }
 }
 
-/////////////////////// eof ///
+technique LightFlare
+{
+    pass p0
+    {
+        VertexShader = compile vs_Auto LightFlareVS();
+        PixelShader  = compile ps_Auto LightFlarePS();
+
+        ZEnable       = false;
+        ZWriteEnable  = false;
+        ZFunc         = LEqual;
+        CullMode      = None;
+
+        SrcBlend      = ONE;
+        DestBlend     = ONE;
+        AlphaBlendEnable = true;
+    }
+}

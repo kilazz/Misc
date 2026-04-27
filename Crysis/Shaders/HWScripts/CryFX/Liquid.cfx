@@ -6,7 +6,7 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "NoPreview;"
            "ForceZpass;"
@@ -19,76 +19,51 @@ float Script : STANDARDSGLOBAL
 
 /// Un-Tweakables //////////////////////
 float4x4 mComposite  : PI_Composite; // View*Projection
-float4 ScrSize : PB_ScreenSize;
-float4 CameraFront          : PB_CameraFront;
+float4   ScrSize     : PB_ScreenSize;
+float4   CameraFront : PB_CameraFront;
 
 ENVIRONMENTMAP
 ENVIRONMENTCUBEMAP
 
-/*
-sampler2D envMapSamplerRefr
-<
-  string Script = 
-      "RenderOrder=PreDraw;"
-      "RenderCamera=Current;"
-      "RenderType=CurScene;"
-      "RenderTarget_IDPool = _RT2D_SCREEN_ID;"
-      "RenderTarget_Width=$ScreenSize;"
-      "RenderTarget_Height=$ScreenSize;"
-      "RenderTarget_UpdateType=Allways;"
-      "RenderDepthStencilTarget=DepthBuffer;";
->
-{
-  Texture = $RT_2D;
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = NONE;
-  AddressU = Clamp;
-  AddressV = Clamp;
-};
-*/
-
 sampler2D envMapSamplerRefr
 {
-  Texture = $SceneTarget;
-  MinFilter = POINT;
-  MagFilter = POINT;
-  MipFilter = POINT;
-  AddressU = Clamp;
-  AddressV = Clamp;
+    Texture   = $SceneTarget;
+    MinFilter = POINT;
+    MagFilter = POINT;
+    MipFilter = POINT;
+    AddressU  = Clamp;
+    AddressV  = Clamp;
 };
 
 sampler2D fringeMapSampler = sampler_state
 {
-  Texture = textures/defaults/fringe_map.dds;
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = LINEAR;
-  AddressU = Wrap;
-  AddressV = Clamp;
+    Texture   = textures/defaults/fringe_map.dds;
+    MinFilter = LINEAR;
+    MagFilter = LINEAR;
+    MipFilter = LINEAR;
+    AddressU  = Wrap;
+    AddressV  = Clamp;
 };
 
 sampler2D screenNoiseSampler = sampler_state
 {
-  Texture = textures/defaults/perlinNoiseNormal.dds;
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = POINT;
-  AddressU = Wrap;
-  AddressV = Wrap;
+    Texture   = textures/defaults/perlinNoiseNormal.dds;
+    MinFilter = LINEAR;
+    MagFilter = LINEAR;
+    MipFilter = POINT;
+    AddressU  = Wrap;
+    AddressV  = Wrap;
 };
 
 sampler2D sceneDepthSampler = sampler_state
 {
-  Texture = $ZTarget;
-  MinFilter = POINT;
-  MagFilter = POINT;
-  MipFilter = POINT;
-  AddressU = Clamp;
-  AddressV = Clamp;
+    Texture   = $ZTarget;
+    MinFilter = POINT;
+    MagFilter = POINT;
+    MipFilter = POINT;
+    AddressU  = Clamp;
+    AddressV  = Clamp;
 };
-
-// Tweakables /////////////////
 
 float IndexOfRefraction
 <
@@ -147,203 +122,180 @@ float4 LiquidColor
   string UIWidget = "color";
 > = {0.45, 0.62, 0.54, 1.0};
 
-////////////////////////////////////////////////////////
 //                GENERAL PASS
-////////////////////////////////////////////////////////
 
 ///////////////// vertex input/output //////////////////
 struct vtxOUT
 {
-  OUT_P
+    OUT_P
 
-  float4 baseTC    : TEXCOORDN;
-  float4 baseTC2 : TEXCOORDN;
+    float4 baseTC    : TEXCOORDN;
+    float4 baseTC2   : TEXCOORDN;
 
-  float4 vTangent : TEXCOORDN;
-  float4 vBinormal : TEXCOORDN;
-  float4 vNormal : TEXCOORDN;
-  float4 vView   : TEXCOORDN;
-  float4 vPos   : TEXCOORDN;
-  float4 screenPos : TEXCOORDN;
-
+    float4 vTangent  : TEXCOORDN;
+    float4 vBinormal : TEXCOORDN;
+    float4 vNormal   : TEXCOORDN;
+    float4 vView     : TEXCOORDN;
+    float4 vPos      : TEXCOORDN;
+    float4 screenPos : TEXCOORDN;
 };
 
-///////////////// vertex shader //////////////////
 vtxOUT LiquidVS(app2vertGeneral IN)
 {
-  vtxOUT OUT = (vtxOUT)0;
+    vtxOUT OUT = (vtxOUT)0;
 
-  streamPos vertPassPos = (streamPos)0;
-  streamPos_FromGeneral(IN, vertPassPos);
+    streamPos vertPassPos = (streamPos)0;
+    streamPos_FromGeneral(IN, vertPassPos);
 
-  OUT.baseTC = IN.baseTC.xyyx * FlowTilling;
-  OUT.baseTC2 = OUT.baseTC;
+    float  fAnimSpeed = g_VS_AnimGenParams.y * 0.1f * FlowSpeed;
+    float2 flowTiling = IN.baseTC.xy * FlowTilling;
 
-  float fAnimSpeed = g_VS_AnimGenParams.y * 0.1 * FlowSpeed;
+    OUT.baseTC   = float4(flowTiling, flowTiling);
+    OUT.baseTC2  = OUT.baseTC;
 
-  // pre-multiply/compute constants per-vertex (cheaper...)  . Store in wz format, to save 1 alu in pixel shader
-  OUT.baseTC.xy = OUT.baseTC.xy * 0.4 + float2(0, fAnimSpeed);
-  OUT.baseTC.wz = OUT.baseTC.wz * 0.42 - float2(0, fAnimSpeed);
+    // Optimized per-vertex animation coordinates
+    OUT.baseTC.xy = flowTiling * 0.4f + float2(0.0f, fAnimSpeed);
+    OUT.baseTC.wz = flowTiling * 0.42f - float2(0.0f, fAnimSpeed);
 
-  OUT.baseTC2.xy = OUT.baseTC.yx * 0.2 + float2(0, fAnimSpeed);
-  OUT.baseTC2.wz = OUT.baseTC.zw * 0.22 - float2(0, fAnimSpeed);
+    OUT.baseTC2.xy = float2(OUT.baseTC.y, OUT.baseTC.x) * 0.2f + float2(0.0f, fAnimSpeed);
+    OUT.baseTC2.wz = float2(OUT.baseTC.z, OUT.baseTC.w) * 0.22f - float2(0.0f, fAnimSpeed);
 
-  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+    OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
 
-  float3 worldTangentS = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]) );
-  float3 worldTangentT = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]) );
-  float3 worldTangentN = normalize(cross(worldTangentS, worldTangentT)) * IN.Tangent.w;
+    float3 worldTangentS = normalize(mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]));
+    float3 worldTangentT = normalize(mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]));
+    float3 worldTangentN = normalize(cross(worldTangentS, worldTangentT)) * IN.Tangent.w;
 
-  OUT.vTangent = float4(worldTangentS, IN.Tangent.w);
-  OUT.vBinormal.xyz = worldTangentT;
-  OUT.vNormal.xyz = worldTangentN;
+    OUT.vTangent   = float4(worldTangentS, IN.Tangent.w);
+    OUT.vBinormal.xyz = worldTangentT;
+    OUT.vNormal.xyz    = worldTangentN;
+    OUT.vView.xyz      = vertPassPos.WorldPos.xyz;
 
-  OUT.vView.xyz = vertPassPos.WorldPos.xyz;
-
-  vertPassPos.WorldPos.xyz += g_VS_WorldViewPos.xyz;
-  OUT.vPos = vertPassPos.WorldPos.xyzz;
-
-  // Output the screen-space texture coordinates
-  OUT.screenPos = HPosToScreenTC(OUT.HPosition);
+    vertPassPos.WorldPos.xyz += g_VS_WorldViewPos.xyz;
+    OUT.vPos                = vertPassPos.WorldPos.xyzz;
+    OUT.screenPos           = HPosToScreenTC(OUT.HPosition);
 
 #if %_RT_FOG
-  float4 fogColor = GetVolumetricFogColor(vertPassPos.WorldPos.xyz);
-  OUT.vView.w = fogColor.w;
+    float4 fogColor = GetVolumetricFogColor(vertPassPos.WorldPos.xyz);
+    OUT.vView.w     = fogColor.w;
 #endif
 
-  return OUT;
+    return OUT;
 }
-
-///////////////// pixel shader //////////////////
 
 pixout LiquidPS(vtxOUT IN)
 {
-  pixout OUT;
+    pixout OUT;
 
-   // Debug output
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   DebugOutput(OUT.Color, float4(IN.baseTC, 0, 1));
-   return OUT;
- #endif
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    DebugOutput(OUT.Color, float4(IN.baseTC, 0.0f, 1.0f));
+    return OUT;
+#endif
 
-  float3x3 mTangentToWS = float3x3(IN.vTangent.xyz, IN.vBinormal.xyz, IN.vNormal.xyz);
+    float3x3 mTangentToWS = float3x3(IN.vTangent.xyz, IN.vBinormal.xyz, IN.vNormal.xyz);
+    half3   eyeVec       = normalize(-IN.vView.xyz);
 
-  half3 eyeVec = normalize(-IN.vView.xyz);                                                         // 3 alu
+    // Procedural bump optimization: reduced 4 samples to 2 by using symmetry
+    half4 bump01 = tex2D(screenNoiseSampler, IN.baseTC.xy);
+    half4 bump02 = tex2D(screenNoiseSampler, IN.baseTC.wz);
 
-  // Make procedural bump
-  half4 bump01 = tex2D(screenNoiseSampler, IN.baseTC.xy);
-  half4 bump02 = tex2D(screenNoiseSampler, IN.baseTC.wz);
-  half4 bump03 = tex2D(screenNoiseSampler, IN.baseTC.xy);
-  half4 bump04 = tex2D(screenNoiseSampler, IN.baseTC.wz);
-  half3 vMergedBump = bump01.xyz + bump02.xyz + bump03.xyz + bump04.xyz;                           // 3 alu
-  vMergedBump = vMergedBump * 2.0 - 4.0;                                                            // 1 alu
+    // vMergedBump = (bump01 + bump02 + bump01 + bump02) * 2 - 4 -> 4 * (bump01 + bump02) - 4
+    half3 vMergedBump = (bump01.xyz + bump02.xyz) * 4.0f - 4.0f;
+    half3 vNormal     = normalize(mul(vMergedBump, mTangentToWS));
 
-  // Put in world space
-  half3 vNormal = normalize(mul(vMergedBump, mTangentToWS).xyz);                                   // 6 alu
+    float3 vRefr = refract(-eyeVec, vNormal, IndexOfRefraction);
 
-  // Compute refraction vector
-  float3 vRefr = refract(-eyeVec, vNormal, IndexOfRefraction);
+    // Project refraction into screen space
+    float4 vRefrPos = mul(mComposite, float4(IN.vPos.xyz + vRefr * 0.5f, 1.0f));
+    float4 vRefrVS  = vRefrPos;
 
-  // Project refraction into screen space
-  float4 vRefrPos = mul(mComposite, float4(IN.vPos.xyz + vRefr*0.5 , 1));                           // 4 alu
-  float4 vRefrVS = vRefrPos;
+    float4 vRefractTC = vRefrVS * 0.5f;
+    vRefrVS.xy = vRefractTC.w + vRefractTC.xy * float2(1.0f, -1.0f);
+    vRefrVS.xy += ScrSize.zw * vRefrVS.w;
 
-  float4 vRefractTC = vRefrVS * 0.5;
-  vRefrVS.xy = vRefractTC.ww + vRefractTC.xy * float2( 1 , -1 );
-  vRefrVS.xy += ScrSize.zw * vRefrVS.w;
+    // Depth-based refraction masking
+    float sceneDepth        = tex2Dproj(sceneDepthSampler, vRefrVS).x * PS_NearFarClipDist.y;
+    float fRefractionMask   = IN.screenPos.w < sceneDepth;
 
-  // Use refraction vector as texture lookup
-  float sceneDepth = tex2Dproj( sceneDepthSampler, vRefrVS ).x * PS_NearFarClipDist.y;
-  float fRefractionMask =  IN.screenPos.w < sceneDepth;
+    vRefrVS = fRefractionMask ? vRefrVS : IN.screenPos;
 
-  vRefrVS = fRefractionMask? vRefrVS : IN.screenPos;
+    sceneDepth = tex2Dproj(sceneDepthSampler, vRefrVS).x * PS_NearFarClipDist.y;
+    half4 refrColor = tex2Dproj(envMapSamplerRefr, vRefrVS);
 
-  sceneDepth = tex2Dproj( sceneDepthSampler, vRefrVS ).x * PS_NearFarClipDist.y;
-  half4 refrColor = tex2Dproj(envMapSamplerRefr, vRefrVS );
+    // Fog volume approximation
+    float fFrontDepth = IN.screenPos.w;
+    float fFogFactor  = saturate(1.0f - exp(-FogDensity * saturate(sceneDepth - fFrontDepth)));
 
-  // Aproximate fog volume
-  float fFrontDepth = IN.screenPos.w;
-  half3 finalColor = lerp(refrColor, (1 + HDRDynamic) * LiquidColor,
-                          saturate(1 - exp( - FogDensity * saturate(sceneDepth - fFrontDepth) )  ));
+    half3 finalColor = lerp(refrColor.rgb, (1.0f + HDRDynamic) * LiquidColor.rgb, fFogFactor);
 
-  HDROutput(OUT, half4(finalColor.xyz, 1), 1);
-  return OUT;
+    HDROutput(OUT, half4(finalColor, 1.0f), 1);
+    return OUT;
 }
-
-//////////////////////////////// technique ////////////////
 
 technique General
 <
-  string Script = 
-        "TechniqueZ=ZPass;"
+  string Script = "TechniqueZ=ZPass;"
 >
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto LiquidVS() GeneralVS;
-    PixelShader = compile ps_Auto LiquidPS() GeneralPS;
+    pass p0
+    {
+        VertexShader = compile vs_Auto LiquidVS() GeneralVS;
+        PixelShader  = compile ps_Auto LiquidPS() GeneralPS;
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = Back;
-  }
+        ZEnable       = true;
+        ZWriteEnable  = true;
+        CullMode      = Back;
+    }
 }
-//////////////////////////////// Common techniques ////////////////
 
 ///////////////// vertex input/output //////////////////
 struct vert2fragZ
 {
-  float4 HPosition : POSITION;
-  float4 ZInfo      : TEXCOORD0_centroid;
+    float4 HPosition : POSITION;
+    float4 ZInfo     : TEXCOORD0_centroid;
 };
 
-///////////////// vertex shaders //////////////////
 vert2fragZ ZPassVS(app2vertZGeneral IN)
 {
-  vert2fragZ OUT;
+    vert2fragZ OUT;
+
 #ifndef OPENGL
-  OUT = (vert2fragZ)0;
+    OUT = (vert2fragZ)0;
 #endif
 
-  streamPos vertPassPos = (streamPos)0;
-  streamPos_FromZ(IN, vertPassPos);
+    streamPos vertPassPos = (streamPos)0;
+    streamPos_FromZ(IN, vertPassPos);
 
-  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+    OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
 
 #if %_RT_FSAA
-  OUT.ZInfo.xyz = mul(vertPassPos.InstMatrix, vertPassPos.Position).xyz + g_VS_WorldViewPos.xyz;
+    OUT.ZInfo.xyz = mul(vertPassPos.InstMatrix, vertPassPos.Position).xyz + g_VS_WorldViewPos.xyz;
 #endif
 
-  OUT.ZInfo.w = OUT.HPosition.w * g_VS_NearFarClipDist.w;
+    OUT.ZInfo.w = OUT.HPosition.w * g_VS_NearFarClipDist.w;
 
-  return OUT;
+    return OUT;
 }
 
-///////////////// pixel shaders //////////////////
 pixout ZPassPS(vert2fragZ IN)
 {
-  pixout OUT = (pixout)0;
+    pixout OUT = (pixout)0;
+    float  fZ   = IN.ZInfo.w;
 
-  float fZ = IN.ZInfo.w;
+    OUT.Color = EncodeSceneDepthNoAlpha(fZ, 1.0f, IN.ZInfo.xyz);
 
-  OUT.Color = EncodeSceneDepthNoAlpha(fZ, 1, IN.ZInfo.xyz);
-
-  return OUT;
+    return OUT;
 }
-
-//////////////////////////////// technique ////////////////
 
 technique ZPass
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto ZPassVS() ZVS;
-    PixelShader = compile ps_Auto ZPassPS() ZPS;
+    pass p0
+    {
+        VertexShader = compile vs_Auto ZPassVS() ZVS;
+        PixelShader  = compile ps_Auto ZPassPS() ZPS;
 
-    ZEnable = true;
-    ZWriteEnable = false;
-    CullMode = Front;
-  }
+        ZEnable       = true;
+        ZWriteEnable  = false;
+        CullMode      = Front;
+    }
 }
-
-/////////////////////// eof ///

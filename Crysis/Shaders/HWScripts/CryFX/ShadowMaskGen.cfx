@@ -4,7 +4,7 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "NoPreview;"
            "LocalConstants;"
            "ShaderDrawType = Custom;"
@@ -61,7 +61,6 @@ sampler2D TerrainInfoSampler1  : register(s2);
 
 #include "ShadowCommon.cfi"
 
-//===========================================================================
 // Basic shadow maps support
 
 float4x4 CompMatrix        : PI_Composite;    // View*Projection
@@ -80,7 +79,6 @@ float4 vBasisMagnitudes  : PB_TempData[14];
 //clouds shadows
 float4 InvTerrainSize    : PB_TempData[9];
 
-/////////////////////////////
 // structs
 
 struct pixout_cl
@@ -454,7 +452,6 @@ half CalcShadow(float4 vShPos, float2 vNoisePos, int nChunk)
   return fInShadow;
 }
 
-///////////////// shadows pixel shader //////////////////
 pixout_cl DeferredShadowPS(fragInShadowDeferred IN)
 {
   pixout_cl OUT;
@@ -530,7 +527,6 @@ pixout_cl DeferredShadowPS(fragInShadowDeferred IN)
   return OUT;
 }
 
-//----------------------------------------------------------
 samplerCUBE DebugCM  : register(s0);
 sampler2D DebugSM  : register(s0);
 
@@ -574,7 +570,6 @@ pixout_cl DebugSMPS(v2fDebug IN)
   return OUT;
 }
 
-//////////////////////////////// technique ////////////////
 
 technique DebugCubeMap
 {

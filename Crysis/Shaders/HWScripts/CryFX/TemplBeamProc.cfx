@@ -6,7 +6,7 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "ShaderDrawType = General;"
            "ShaderType = FX;"
@@ -16,7 +16,6 @@ float Script : STANDARDSGLOBAL
 
 float Time = PB_Time;
 
-// Tweakables /////////////////
 
 float BeamLength
 <
@@ -146,7 +145,6 @@ sampler3D noiseMapSampler = sampler_state
   AddressW = Wrap;
 }
 
-/////////////////////////////
 
 struct v2f
 {
@@ -160,7 +158,6 @@ struct v2f
 
 };
 
-///////////////// vertex shader //////////////////
 
 v2f BeamVS(app2vertGeneral IN)
 {
@@ -218,7 +215,6 @@ v2f BeamVS(app2vertGeneral IN)
   return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 pixout BeamPS(v2f IN)
 {
@@ -250,7 +246,6 @@ pixout BeamPS(v2f IN)
 }
 
 // Default technique for beams rendering
-//////////////////////////////// technique ////////////////
 
 technique General
 {

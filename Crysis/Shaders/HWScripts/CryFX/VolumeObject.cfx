@@ -3,7 +3,7 @@
 
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "ShaderDrawType = General;"
            "ShaderType = FX;"
@@ -119,8 +119,6 @@ pixout PS( v2f IN )
    return OUT;
  #endif
 
-  ////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////
 
   float sceneDepth = DecodeSceneDepth( sceneDepthSampler, IN.hPosTexProj );
   //float3 noise = tex2Dproj(grainNoiseSampler, float4(IN.hPosTexProj.xy * 15, IN.hPosTexProj.zw));

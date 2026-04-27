@@ -1,334 +1,291 @@
+// Crytek Engine Shader — Cloak.cfx
+// Refraction + chromatic diffraction effect
+
 #include "Common.cfi"
 #include "ShadeLib.cfi"
 #include "ModificatorVT.cfi"
 #include "ModificatorTC.cfi"
 
-// Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
-           "Public;"
-           "NoPreview;"
-           "Refractive;"
-           "ShaderDrawType = General;"
-           "ShaderType = FX;"
+    string Script =
+        "Public;"
+        "NoPreview;"
+        "Refractive;"
+        "ShaderDrawType = General;"
+        "ShaderType = FX;"
 >;
 
-/// Un-Tweakables //////////////////////
-float2 ScrSize : PB_ScreenSize;
+// Un-tweakables
 
+float2   ScrSize    : PB_ScreenSize;
 float4x4 viewMatrixPS : PI_ViewProjection;
+float4x4 ObjectMatrix : PI_ObjMatrix;
 
 ENVIRONMENTMAP
 ENVIRONMENTCUBEMAP
 
 sampler2D envMapSamplerRefr
 {
-  Texture = $SceneTarget;
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = NONE;
-  AddressU = Clamp;
-  AddressV = Clamp;
+    Texture   = $SceneTarget;
+    MinFilter = LINEAR;
+    MagFilter = LINEAR;
+    MipFilter = NONE;
+    AddressU  = Clamp;
+    AddressV  = Clamp;
 };
 
 sampler2D fringeMapSampler = sampler_state
 {
-  Texture = textures/defaults/fringe_map.dds;
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = LINEAR;
-  AddressU = Wrap;
-  AddressV = Clamp;
+    Texture   = textures/defaults/fringe_map.dds;
+    MinFilter = LINEAR;
+    MagFilter = LINEAR;
+    MipFilter = LINEAR;
+    AddressU  = Wrap;
+    AddressV  = Clamp;
 };
 
 sampler2D screenNoiseSampler = sampler_state
 {
-  Texture = textures/defaults/interference.dds;
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = POINT;
-  AddressU = Wrap;
-  AddressV = Wrap;
+    Texture   = textures/defaults/interference.dds;
+    MinFilter = LINEAR;
+    MagFilter = LINEAR;
+    MipFilter = POINT;
+    AddressU  = Wrap;
+    AddressV  = Wrap;
 };
 
-float4x4 ObjectMatrix : PI_ObjMatrix;
-
-// Tweakables /////////////////
+// Tweakables
 
 float RefrBumpScale
 <
-  vsregister      = VS_REG_PM_4.y;
-  string UIHelp   = "Set refraction bump scale \nMin value = 0, Max value = 2.0 \nCorrect name - RefrBumpScale";
-  string UIName   = "Refraction Bump Scale";
-  string UIWidget = "slider";
-  float UIMin     = 0.0;
-  float UIMax     = 2.0;
-  float UIStep    = 0.1;
+    vsregister      = VS_REG_PM_4.y;
+    string UIName   = "Refraction Bump Scale";
+    string UIWidget = "slider";
+    float  UIMin    = 0.0;
+    float  UIMax    = 2.0;
+    float  UIStep   = 0.1;
 > = 0.1;
 
 float VertexDeformScale
 <
-  vsregister      = VS_REG_PM_4.z;
-  string UIHelp   = "Set vertex deformation amount scale \nMin value = 0, Max value = 1.0 \nCorrect name - VertexDeformScale";
-  string UIName   = "Vertex Deform Scale";
-  string UIWidget = "slider";
-  float UIMin     = 0.0;
-  float UIMax     = 1.0;
-  float UIStep    = 0.1;
+    vsregister      = VS_REG_PM_4.z;
+    string UIName   = "Vertex Deform Scale";
+    string UIWidget = "slider";
+    float  UIMin    = 0.0;
+    float  UIMax    = 1.0;
+    float  UIStep   = 0.1;
 > = 0.2;
 
 float DifractionAmount
 <
-  psregister      = PS_REG_PM_4.x;
-  string UIHelp   = "Set difraction amount  \nMin value = 0, Max value = 1.0 \nCorrect name - DifractionAmount";
-  string UIName   = "Difraction Amount";
-  string UIWidget = "slider";
-  float UIMin     = 0.0;
-  float UIMax     = 4.0;
-  float UIStep    = 0.1;
+    psregister      = PS_REG_PM_4.x;
+    string UIName   = "Difraction Amount";
+    string UIWidget = "slider";
+    float  UIMin    = 0.0;
+    float  UIMax    = 4.0;
+    float  UIStep   = 0.1;
 > = 2.0;
 
 float DifractionWrap
 <
-  psregister      = PS_REG_PM_4.y;
-  string UIHelp   = "Set difraction color wrapping \nMin value = 0, Max value = 1.0 \nCorrect name - DifractionWrap";
-  string UIName   = "Difraction Wrap";
-  string UIWidget = "slider";
-  float UIMin     = 0.0;
-  float UIMax     = 2.0;
-  float UIStep    = 0.1;
+    psregister      = PS_REG_PM_4.y;
+    string UIName   = "Difraction Wrap";
+    string UIWidget = "slider";
+    float  UIMin    = 0.0;
+    float  UIMax    = 2.0;
+    float  UIStep   = 0.1;
 > = 1.0;
 
 float InterferenceSpeedScale
 <
-  vsregister      = VS_REG_PM_4.w;
-  string UIHelp   = "Set interference speed scale \nMin value = 0, Max value = 1.0 \nCorrect name - InterferenceSpeedScale";
-  string UIName   = "Interference speed scale";
-  string UIWidget = "slider";
-  float UIMin     = 0.0;
-  float UIMax     = 10.0;
-  float UIStep    = 0.1;
+    vsregister      = VS_REG_PM_4.w;
+    string UIName   = "Interference Speed Scale";
+    string UIWidget = "slider";
+    float  UIMin    = 0.0;
+    float  UIMax    = 10.0;
+    float  UIStep   = 0.1;
 > = 1.0;
 
 float InterferenceSizeScale
 <
-  psregister      = PS_REG_PM_4.z;
-  string UIHelp   = "Set interference size scale \nMin value = 0, Max value = 1.0 \nCorrect name - InterferenceSizeScale";
-  string UIName   = "Interference size scale";
-  string UIWidget = "slider";
-  float UIMin     = 0.0;
-  float UIMax     = 10.0;
-  float UIStep    = 0.1;
+    psregister      = PS_REG_PM_4.z;
+    string UIName   = "Interference Size Scale";
+    string UIWidget = "slider";
+    float  UIMin    = 0.0;
+    float  UIMax    = 10.0;
+    float  UIStep   = 0.1;
 > = 0.9;
 
-////////////////////////////////////////////////////////
-//                GENERAL PASS
-////////////////////////////////////////////////////////
+// Structs
 
-///////////////// vertex input/output //////////////////
 struct vtxOUT
 {
-  OUT_P
-
-  float2 baseTC    : TEXCOORDN;
-  float4 viewVec   : TEXCOORDN;
-  float4 screenPos : TEXCOORDN;
-  float4 constsTbl : TEXCOORDN;
-  float4 AvgFogVolumeContrib : TEXCOORDN;
+    OUT_P
+    float2 baseTC              : TEXCOORDN;
+    float4 viewVec             : TEXCOORDN;
+    float4 screenPos           : TEXCOORDN;
+    float4 constsTbl           : TEXCOORDN;
+    float4 AvgFogVolumeContrib : TEXCOORDN;
 };
 
-///////////////// vertex shader //////////////////
+// Vertex shader
+
 vtxOUT CloakVS(app2vertGeneral IN)
 {
-  vtxOUT OUT = (vtxOUT)0;
+    vtxOUT OUT = (vtxOUT)0;
 
-  // Position in screen space.
-  streamPos vertPassPos = (streamPos)0;
-  streamPos_FromGeneral(IN, vertPassPos);
+    streamPos vertPassPos = (streamPos)0;
+    streamPos_FromGeneral(IN, vertPassPos);
 
-  _TCModify(IN.baseTC, OUT.baseTC, vertPassPos.Position, vertPassPos.ObjToTangentSpace[2], TS_DIFFUSE);
+    _TCModify(IN.baseTC, OUT.baseTC, vertPassPos.Position, vertPassPos.ObjToTangentSpace[2], TS_DIFFUSE);
 
-  // deformation should be scalable
-  vertPassPos.Position.xyz += sin(g_VS_AnimGenParams.x*length(vertPassPos.Position.xyz))*vertPassPos.ObjToTangentSpace[2].xyz*0.025 * VertexDeformScale;
+    // Vertex deformation along normal
+    vertPassPos.Position.xyz += sin(g_VS_AnimGenParams.x * length(vertPassPos.Position.xyz))
+                              * vertPassPos.ObjToTangentSpace[2].xyz * 0.025 * VertexDeformScale;
 
-  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+    OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+    OUT.screenPos = HPosToScreenTC(OUT.HPosition);
 
-  // Output the screen-space texture coordinates
-  OUT.screenPos = HPosToScreenTC(OUT.HPosition);
+    float3 vVec     = ViewPos.xyz - vertPassPos.Position.xyz;
+    OUT.viewVec.xyz = mul(vertPassPos.ObjToTangentSpace, vVec.xyz);
 
-  float3 vVec = ViewPos.xyz - vertPassPos.Position.xyz;
-  OUT.viewVec.xyz = (mul(vertPassPos.ObjToTangentSpace, vVec.xyz));
-
-  // Output fog into view-vector W component (to save interpolator)
 #if %_RT_FOG
- OUT.viewVec.w = GetVolumetricFogDensity(vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz);
-
- OUT.AvgFogVolumeContrib = AvgFogVolumeContrib;
-
-//if !%_RT_ALPHABLEND
-    // additive blending case
+    OUT.viewVec.w              = GetVolumetricFogDensity(vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz);
+    OUT.AvgFogVolumeContrib    = AvgFogVolumeContrib;
     OUT.AvgFogVolumeContrib.w *= OUT.viewVec.w;
     OUT.AvgFogVolumeContrib.xyz = 0.0;
- //endif
-
 #else
-  OUT.viewVec.w = vertPassPos.Position.w;
+    OUT.viewVec.w = vertPassPos.Position.w;
 #endif
 
-  // pre-multiply/compute constants per-vertex (cheaper...)
-  //OUT.constsTbl.xyz = FilterColor*BackLightScale;
+    OUT.constsTbl.xyz = g_VS_AnimGenParams.x * InterferenceSpeedScale;
+    OUT.constsTbl.w   = RefrBumpScale * 0.1;
 
-  OUT.constsTbl.xyz = g_VS_AnimGenParams.x * InterferenceSpeedScale;
-  OUT.constsTbl.w = RefrBumpScale*0.1;
-
-  return OUT;
+    return OUT;
 }
 
-///////////////// pixel shader //////////////////
+// Helper: compute interference pattern at screen UV
+
+half4 ComputeInterference(half2 refrTC, float animOffset, float sizeScale)
+{
+    half2 scaleA = half2(1.0, 1.1 * sizeScale) * (ScrSize.xy / 64.0);
+    half2 scaleB = half2(1.0,       sizeScale) * (ScrSize.xy / 64.0);
+    half4 colA   = tex2D(screenNoiseSampler, refrTC * scaleA + half2(0, animOffset));
+    half4 colB   = tex2D(screenNoiseSampler, refrTC * scaleB - half2(0, animOffset));
+    return colA * colB;
+}
+
+// Refraction pass — chromatic aberration via 3-channel fetch
 
 pixout CloakRefrationPS(vtxOUT IN)
 {
-  pixout OUT;
+    pixout OUT;
 
-   // Debug output
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   DebugOutput(OUT.Color, float4(IN.baseTC, 0, 1));
-   return OUT;
- #endif
-
-  half4 baseColor = tex2D(diffuseMapSampler, IN.baseTC.xy);
-
-  half4 normalVec=half4(0,0,1,1);
-  normalVec.xyz = GetNormalMap(bumpMapSampler, IN.baseTC.xy) * (1-saturate( 0.05 * IN.screenPos.w ) );
-
-  half3 eyeVec = normalize(IN.viewVec.xyz);
-  half NdotE = saturate(dot(eyeVec.xyz, normalVec.xyz));
-
-  // Get refraction color
-  half2 refrTC = (IN.screenPos.xy/IN.screenPos.ww) ;
-
-  // optimize this
-  half4 interferenceColA = tex2D(screenNoiseSampler, refrTC.xy * half2(1.0, 1.1 * InterferenceSizeScale) * (ScrSize.xy / 64.0) + half2(0, IN.constsTbl.z));
-  half4 interferenceColB = tex2D(screenNoiseSampler, refrTC.xy * half2(1.0, InterferenceSizeScale) * (ScrSize.xy / 64.0) - half2(0, IN.constsTbl.z));
-  half4 interferenceCol = interferenceColA * interferenceColB;
-
-  half4 refrColorR = tex2D(envMapSamplerRefr, refrTC.xy - (normalVec.xy * interferenceCol *(half) IN.constsTbl.w)*1.5);
-  half4 refrColorG = tex2D(envMapSamplerRefr, refrTC.xy - (normalVec.xy * interferenceCol *(half) IN.constsTbl.w)*1);
-  half4 refrColorB = tex2D(envMapSamplerRefr, refrTC.xy - (normalVec.xy * interferenceCol *(half) IN.constsTbl.w)*0.1);
-
-  half4 refrColor = half4(refrColorR.r, refrColorG.g, refrColorB.b, 1);
-
-  half3  fVis = saturate(1-NdotE*0.05);
-  half4 finalColor = 1;
-  finalColor.xyz = refrColor; //fVis.xyz;
-
-  half  fEdgeSmooth = saturate(dot(eyeVec.xyz, normalVec.xyz));
-  fEdgeSmooth = pow(saturate(fEdgeSmooth), 4);
-
-#if %_RT_FOG
-  //ComputeGlobalFogPS(finalColor.xyz, IN.viewVec.w);
-  //finalColor.xyz = IN.AvgFogVolumeContrib.xyz + finalColor.xyz * IN.AvgFogVolumeContrib.w;
-  //finalColor.w *= IN.viewVec.w;
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    DebugOutput(OUT.Color, float4(IN.baseTC, 0, 1));
+    return OUT;
 #endif
-  //finalColor.xyz refrColor.xyz*
 
-  finalColor.w *= 0.7;
+    half4 normalVec = half4(0, 0, 1, 1);
+    normalVec.xyz   = GetNormalMap(bumpMapSampler, IN.baseTC.xy) * (1 - saturate(0.05 * IN.screenPos.w));
 
-//  finalColor.xyz = 1-saturate( 0.05 * IN.screenPos.w );
-  //finalColor.w = 1;
+    half3 eyeVec = normalize(IN.viewVec.xyz);
+    half  NdotE  = saturate(dot(eyeVec, normalVec.xyz));
 
-  HDROutput(OUT, finalColor, 1);
-  return OUT;
+    half2 refrTC       = IN.screenPos.xy / IN.screenPos.ww;
+    half4 interference = ComputeInterference(refrTC, IN.constsTbl.z, InterferenceSizeScale);
+    half2 bumpOffset   = normalVec.xy * interference * (half)IN.constsTbl.w;
+
+    // Per-channel refraction offsets for chromatic aberration
+    half4 refrColorR = tex2D(envMapSamplerRefr, refrTC - bumpOffset * 1.5);
+    half4 refrColorG = tex2D(envMapSamplerRefr, refrTC - bumpOffset * 1.0);
+    half4 refrColorB = tex2D(envMapSamplerRefr, refrTC - bumpOffset * 0.1);
+    half4 refrColor  = half4(refrColorR.r, refrColorG.g, refrColorB.b, 1);
+
+    half4 finalColor;
+    finalColor.xyz = refrColor.xyz;
+    finalColor.w   = 0.7;
+
+    HDROutput(OUT, finalColor, 1);
+    return OUT;
 }
+
+// Diffraction pass — iridescent fringe overlay
 
 pixout CloakDifractionPS(vtxOUT IN)
 {
-  pixout OUT;
+    pixout OUT;
 
-   // Debug output
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   DebugOutput(OUT.Color, float4(IN.baseTC, 0, 1));
-   return OUT;
- #endif
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    DebugOutput(OUT.Color, float4(IN.baseTC, 0, 1));
+    return OUT;
+#endif
 
-  half4 baseColor = tex2D(diffuseMapSampler, IN.baseTC.xy);
+    half4 normalVec = half4(0, 0, 1, 1);
+    normalVec.xyz   = GetNormalMap(bumpMapSampler, IN.baseTC.xy);
 
-  half4 normalVec=half4(0,0,1,1);
-  normalVec.xyz = GetNormalMap(bumpMapSampler, IN.baseTC.xy);
-
-  half4 glossColor = normalVec.w;
+    half4 glossColor = normalVec.w;
 #ifdef %GLOSS_MAP
-  glossColor = tex2D(glossMapSampler, IN.baseTC.xy);
+    glossColor = tex2D(glossMapSampler, IN.baseTC.xy);
 #endif
 
-  half3 eyeVec = normalize(IN.viewVec.xyz);
-  half NdotE = saturate(dot(eyeVec.xyz, normalVec.xyz));
+    half3 eyeVec = normalize(IN.viewVec.xyz);
+    half  NdotE  = saturate(dot(eyeVec, normalVec.xyz));
 
-  // optimize this
+    half2 refrTC       = IN.screenPos.xy / IN.screenPos.ww;
+    half4 interference = ComputeInterference(refrTC, IN.constsTbl.z, InterferenceSizeScale);
 
-  half2 refrTC = (IN.screenPos.xy/IN.screenPos.ww);
-  half4 interferenceColA = tex2D(screenNoiseSampler, refrTC.xy * half2(1.0, 1.1 * InterferenceSizeScale) * (ScrSize.xy / 64.0) + half2(0, IN.constsTbl.z));
-  half4 interferenceColB = tex2D(screenNoiseSampler, refrTC.xy * half2(1.0, InterferenceSizeScale) * (ScrSize.xy / 64.0) - half2(0, IN.constsTbl.z));
-  half4 interferenceCol = interferenceColA * interferenceColB;
+    // Fringe lookup by grazing angle
+    half  fringeLookup = (1.0 / dot(normalize(normalVec.xyz * float3(0.1, 0.1, 1.0)), eyeVec)) * DifractionWrap;
+    half3 fringeColor  = tex2D(fringeMapSampler, fringeLookup.xx).xyz;
 
-  half4 finalColor=1;
+    half4 finalColor = 1;
+    finalColor.xyz   = interference * DifractionAmount
+                     * pow(saturate(NdotE), MatSpecColor.w)
+                     * glossColor.xyz * fringeColor
+                     * (1 - saturate(0.05 * IN.screenPos.w));
 
-  half3 eyeVecInf = normalize(ViewPos.xyz);
-  half fringeLookup = (1.0 / dot(normalize(normalVec.xyz*float3(0.1, 0.1, 1.0)), eyeVec.xyz)) * DifractionWrap;
-  half3 fringeColor = tex2D(fringeMapSampler, fringeLookup.xx).xyz;
-
-  finalColor.xyz = interferenceCol* DifractionAmount *(pow(saturate(NdotE), MatSpecColor.w)) * glossColor.xyz * fringeColor.xyz* (1-saturate( 0.05 * IN.screenPos.w ) );
-
-  //ComputeGlobalFogPS(finalColor.xyz, IN.viewVec.w);
 #if %_RT_FOG
-
-  finalColor.xyz = finalColor.xyz * IN.AvgFogVolumeContrib.w * IN.viewVec.w;
-
+    finalColor.xyz *= IN.AvgFogVolumeContrib.w * IN.viewVec.w;
 #endif
 
-  HDROutput(OUT, finalColor , 1);
-  return OUT;
+    HDROutput(OUT, finalColor, 1);
+    return OUT;
 }
 
-//////////////////////////////// technique ////////////////
+// Techniques
 
 technique General
 <
-  string Script = 
-        "TechniqueZ=ZPass;"
+    string Script = "TechniqueZ=ZPass;";
 >
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto CloakVS() GeneralVS;
-    PixelShader = compile ps_Auto CloakRefrationPS() GeneralPS;
+    // Refraction (alpha blend)
+    pass p0
+    {
+        VertexShader     = compile vs_Auto CloakVS() GeneralVS;
+        PixelShader      = compile ps_Auto CloakRefrationPS() GeneralPS;
+        ZEnable          = true;
+        ZWriteEnable     = false;
+        CullMode         = Back;
+        SrcBlend         = SRC_ALPHA;
+        DestBlend        = ONE_MINUS_SRC_ALPHA;
+        AlphaBlendEnable = true;
+    }
 
-    ZEnable = true;
-    ZWriteEnable = false;
-    CullMode = Back;
-
-    SrcBlend = SRC_ALPHA;
-    DestBlend = ONE_MINUS_SRC_ALPHA;
-    AlphaBlendEnable = true;
-  }
-
-  pass p1
-  {
-    VertexShader = compile vs_Auto CloakVS() GeneralVS;
-    PixelShader = compile ps_Auto CloakDifractionPS() GeneralPS;
-
-    ZEnable = true;
-    ZWriteEnable = false;
-    CullMode = Back;
-
-    SrcBlend = ONE;
-    DestBlend = ONE;
-    AlphaBlendEnable = true;
-  }
+    // Diffraction (additive)
+    pass p1
+    {
+        VertexShader     = compile vs_Auto CloakVS() GeneralVS;
+        PixelShader      = compile ps_Auto CloakDifractionPS() GeneralPS;
+        ZEnable          = true;
+        ZWriteEnable     = false;
+        CullMode         = Back;
+        SrcBlend         = ONE;
+        DestBlend        = ONE;
+        AlphaBlendEnable = true;
+    }
 }
-//////////////////////////////// Common techniques ////////////////
 
 #include "CommonZPass.cfi"
-
-/////////////////////// eof ///

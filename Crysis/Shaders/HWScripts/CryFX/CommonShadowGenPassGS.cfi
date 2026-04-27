@@ -1,256 +1,167 @@
-//===========================================================================
 // Basic shadow maps support
-
-/////////////////////////////
 
 struct V2F_Shadow
 {
-  float4 HPosition  : POSITION;  //in projection space
-  float2 baseTC    : TEXCOORD0;
+    float4 HPosition : POSITION;  // in projection space
+    float2 baseTC    : TEXCOORD0;
 #if D3D10
-  float4 GsmPos[4] : TEXCOORD1;
+    float4 GsmPos[4] : TEXCOORD1;
 #else
-  float4 depthTC   : TEXCOORD1;
+    float4 depthTC   : TEXCOORD1;
 #endif
 };
 
-//separate structure for dx10
+// separate structure for dx10
 struct VS2GS_Shadow
 {
-  float4 HPosition : POSITION;  //in projection space
-  float2 baseTC    : TEXCOORD0;
-  float4 GsmPos[4] : TEXCOORD1;
+    float4 HPosition : POSITION;  // in projection space
+    float2 baseTC    : TEXCOORD0;
+    float4 GsmPos[4] : TEXCOORD1;
 };
 
-///////////////// vertex shader //////////////////
 V2F_Shadow Common_ShadowGen_VS_DX10(app2vertSGGeneral IN)
 {
-  V2F_Shadow OUT = (V2F_Shadow)0;
+    V2F_Shadow OUT = (V2F_Shadow)0;
 
-  streamPos vertPassPos = (streamPos)0;
-  streamPos_FromSG(IN, vertPassPos);
+    streamPos vertPassPos = (streamPos)0;
+    streamPos_FromSG(IN, vertPassPos);
 
-  float4x4 mViewProjMatrix;
+    float4x4 mViewProjMatrix;
 #if D3D10
-  mViewProjMatrix[0] = float4(1,0,0,0);
-  mViewProjMatrix[1] = float4(0,1,0,0);
-  mViewProjMatrix[2] = float4(0,0,1,0);
-  mViewProjMatrix[3] = float4(0,0,0,1);
-  //mViewProjMatrix = mul(InstMatrix, TexGen0);
+    mViewProjMatrix[0] = float4(1, 0, 0, 0);
+    mViewProjMatrix[1] = float4(0, 1, 0, 0);
+    mViewProjMatrix[2] = float4(0, 0, 1, 0);
+    mViewProjMatrix[3] = float4(0, 0, 0, 1);
 #else
-  mViewProjMatrix = g_VS_ViewProjZeroMatr;
+    mViewProjMatrix = g_VS_ViewProjZeroMatr;
 #endif
 
 #if %TEMP_TERRAIN
-  OUT.HPosition = Pos_VS_Terrain(0, mViewProjMatrix, vertPassPos);
+    OUT.HPosition = Pos_VS_Terrain(0, mViewProjMatrix, vertPassPos);
 #else
-  OUT.HPosition = Pos_VS_General(mViewProjMatrix, vertPassPos);
+    OUT.HPosition = Pos_VS_General(mViewProjMatrix, vertPassPos);
 #endif
 
 #if D3D10
-  #ifndef %_RT_CUBEMAP0
-    //FIX: prepare 4 premultiplied vpMatrice in shadow space
-    //float4x4 mShadow = mul(TexGen0, vertPassPos.InstMatrix);
+    #ifndef %_RT_CUBEMAP0
+    // FIX: prepare 4 premultiplied vpMatrice in shadow space
     OUT.GsmPos[0] = mul(GSTexGen0, OUT.HPosition);
-    OUT.GsmPos[0].z *= OUT.GsmPos[0].w;
-    OUT.GsmPos[0].z *= fOneDivFarDist.x;
+    OUT.GsmPos[0].z *= OUT.GsmPos[0].w * fOneDivFarDist.x;
 
-    //mShadow = mul(TexGen1, InstMatrix);
     OUT.GsmPos[1] = mul(GSTexGen1, OUT.HPosition);
-    OUT.GsmPos[1].z *= OUT.GsmPos[1].w;
-    OUT.GsmPos[1].z *= fOneDivFarDist.y;
+    OUT.GsmPos[1].z *= OUT.GsmPos[1].w * fOneDivFarDist.y;
 
-    //mShadow = mul(TexGen2, InstMatrix);
     OUT.GsmPos[2] = mul(GSTexGen2, OUT.HPosition);
-    OUT.GsmPos[2].z *= OUT.GsmPos[2].w;
-    OUT.GsmPos[2].z *= fOneDivFarDist.z;
+    OUT.GsmPos[2].z *= OUT.GsmPos[2].w * fOneDivFarDist.z;
 
-    //mShadow = mul(TexGen3, InstMatrix);
     OUT.GsmPos[3] = mul(GSTexGen3, OUT.HPosition);
-    OUT.GsmPos[3].z *= OUT.GsmPos[3].w;
-    OUT.GsmPos[3].z *= fOneDivFarDist.w;
-  #endif
+    OUT.GsmPos[3].z *= OUT.GsmPos[3].w * fOneDivFarDist.w;
+    #endif
 #else
-  #ifndef %_RT_CUBEMAP0
-    //use linear z-buffer
-    OUT.HPosition.z *= OUT.HPosition.w;
-    OUT.HPosition.z /= FrustrumInfo.y;
-  #endif
+    #ifndef %_RT_CUBEMAP0
+    // use linear z-buffer
+    OUT.HPosition.z *= OUT.HPosition.w / FrustrumInfo.y;
+    #endif
 #endif
 
 #ifndef D3D10
-
-#ifdef %_RT_CUBEMAP0
-  float3 vLightPos = LPos.xyz;
- #if %_RT_INSTANCING_ATTR
-  vLightPos = IN.InstLPos;
- #endif
-  OUT.depthTC.xyz = (vLightPos.xyz - vertPassPos.Position.xyz) / (FrustrumInfo.y) * length(vertPassPos.InstMatrix[0]);
-  OUT.depthTC.w = 1;
-#else
-  float fZ = dot(mViewProjMatrix[2], vertPassPos.Position);
-  float fW = dot(mViewProjMatrix[3], vertPassPos.Position);
-  OUT.depthTC = ( (fZ / FrustrumInfo.y) - FrustrumInfo.z) * ( 1.f + FrustrumInfo.z*0.001f ); // normalize range
-  //OUT.depthTC.zw = fW;
-#endif
-
+    #ifdef %_RT_CUBEMAP0
+    float3 vLightPos = LPos.xyz;
+        #if %_RT_INSTANCING_ATTR
+    vLightPos = IN.InstLPos;
+        #endif
+    OUT.depthTC.xyz = (vLightPos.xyz - vertPassPos.Position.xyz) / FrustrumInfo.y * length(vertPassPos.InstMatrix[0]);
+    OUT.depthTC.w = 1;
+    #else
+    float fZ = dot(mViewProjMatrix[2], vertPassPos.Position);
+    // normalize range
+    OUT.depthTC = ((fZ / FrustrumInfo.y) - FrustrumInfo.z) * (1.f + FrustrumInfo.z * 0.001f);
+    #endif
 #endif
 
 #if %_RT_ALPHATEST || %_RT_ALPHABLEND
-  OUT.baseTC.xy = IN.baseTC.xy;
+    OUT.baseTC.xy = IN.baseTC.xy;
 #endif
 
-  return OUT;
+    return OUT;
 }
 
-///////////////// geometry shader //////////////////
 struct GS_ShadowGen_Out
 {
-  float4 HPosition  : POSITION;  //in projection space
-  float2 baseTC    : TEXCOORD0;
-  //float4 depthTC   : TEXCOORD1;
-
-  uint RTIndex : SV_RenderTargetArrayIndex;
+    float4 HPosition : POSITION;  // in projection space
+    float2 baseTC    : TEXCOORD0;
+    uint RTIndex     : SV_RenderTargetArrayIndex;
 };
 
-//number could be reduced in to 9(3 gsm) - but single gsm tex size has to be increased (can be better in performance for GS)
+// number could be reduced in to 9(3 gsm) - but single gsm tex size has to be increased (can be better in performance for GS)
 [maxvertexcount(12)]
-void Common_ShadowGen_GS( triangle V2F_Shadow InPos[3], inout TriangleStream<GS_ShadowGen_Out> ShadowGenStream )
+void Common_ShadowGen_GS(triangle V2F_Shadow InPos[3], inout TriangleStream<GS_ShadowGen_Out> ShadowGenStream)
 {
-  int nMaxLodNum = 4;
+    GS_ShadowGen_Out OUT;
 
-  GS_ShadowGen_Out OUT;
-
-  [unroll(4)] for( int gsmLod = 0; gsmLod < nMaxLodNum; gsmLod++ )
-  {
-    OUT.RTIndex = gsmLod;
-
-    bool bSkip = true;
-    float fOutside = 0;
-    float4 vClip;
-    float4 vOutside;
-    float2 P0;
-
-    [unroll(3)] for( int v = 0; v < 3; v++ )
+    [unroll(4)]
+    for (int gsmLod = 0; gsmLod < 4; gsmLod++)
     {
-      OUT.HPosition = InPos[v].GsmPos[gsmLod];
+        OUT.RTIndex = gsmLod;
 
-      //move out baseTC from gsm-loop
-      OUT.baseTC = InPos[v].baseTC;
+        [unroll(3)]
+        for (int v = 0; v < 3; v++)
+        {
+            OUT.HPosition = InPos[v].GsmPos[gsmLod];
 
-      ShadowGenStream.Append( OUT );
+            // move out baseTC from gsm-loop
+            OUT.baseTC = InPos[v].baseTC;
 
-      //check is it included in the current LOD completly
-      /*P0 = OUT.HPosition.xy / OUT.HPosition.w;//InPos[v].GsmPos[gsmLod].xy / InPos[v].GsmPos[gsmLod].w;
+            ShadowGenStream.Append(OUT);
+        }
 
-      vClip.xy = P0.xy;
-      vClip.zw = 1 - P0.xy;
-      vOutside = (vClip < 0.0);
+        ShadowGenStream.RestartStrip();
 
-      fOutside = saturate(dot(vOutside, float4(1,1,1,1)));
-
-      //mark as not included
-      //and then accamulate properly
-      if (fOutside>0)
-      {
-        bSkip = false;
-      } */
+        // todo: add another check is it triangle completly beyond this gsm frustum
     }
-
-    ShadowGenStream.RestartStrip();
-
-    //skip all other LODs if needed
-    //if (bSkip)
-    //  return;
-
-    /*//check is it included in the current LOD completly
-    bool bSkip = true;
-    float fOutside = 0;
-    float4 vClip;
-    float4 vOutside;
-    for( int v = 0; v < 3; v++ )
-    {
-
-      float2 P0 = InPos[v].GsmPos[gsmLod].xy / InPos[v].GsmPos[gsmLod].w;
-      vClip.xy = P0.xy;
-      vClip.zw = 1 - P0.xy;
-      vOutside = (vClip < 0.0);
-
-      fOutside = saturate(dot(vOutside, float4(1,1,1,1)));
-
-      //mark as not included
-      //and then accamulate properly
-      if (fOutside>0)
-      {
-        bSkip = false;
-        break;
-      }
-
-    }
-    //skip all other LODs if needed
-    if (bSkip)
-      return;*/
-
-    //todo add another check is it triangle completly beyond this gsm frustum
-
-  }
 }
 
 struct PS_Shadow_Out
 {
-  float4 Color  : COLOR0;
+    float4 Color : COLOR0;
 #if D3D10 && %_RT_CUBEMAP0
-  float Depth    : DEPTH0;
+    float Depth  : DEPTH0;
 #endif
 };
 
-///////////////// pixel shader //////////////////
-
 PS_Shadow_Out Common_ShadowGen_PS_DX10(GS_ShadowGen_Out IN)
 {
-  PS_Shadow_Out OUT;
+    PS_Shadow_Out OUT;
+    OUT.Color = 0;
 
-  OUT.Color = 0;
-
-  //TODO: remove texkill for native depth formats, output alpha instead
-  #if %_RT_ALPHATEST || %_RT_ALPHABLEND
+    // TODO: remove texkill for native depth formats, output alpha instead
+#if %_RT_ALPHATEST || %_RT_ALPHABLEND
     float4 baseColor = tex2D(diffuseMapSampler, IN.baseTC.xy);
     clip(baseColor.a - PBAlphaTest.w);
-  #endif
-
-#if D3D10
-  #ifndef %_RT_CUBEMAP0
-    //float fDist = 1;//IN.depthTC.x;
-  #else
-    //float fDist = 1;//length(IN.depthTC.xyz);
-  #endif
 #endif
-
-  //OUT.Color.rgba = fDist;
 
 #if D3D10 && %_RT_CUBEMAP0
-  //OUT.Depth = fDist;
-  OUT.Depth = 1.0;
+    OUT.Depth = 1.0;
 #endif
-  return OUT;
+
+    return OUT;
 }
 
-//======================================================================
-//TechniqueShadowGenDX10
+// TechniqueShadowGenDX10
 technique ShadowGenGS
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto Common_ShadowGen_VS_DX10() ShadowGenVS;
-    GeometryShader = compile gs_4_0 Common_ShadowGen_GS();
-    PixelShader = compile ps_Auto Common_ShadowGen_PS_DX10() ShadowGenPS;
+    pass p0
+    {
+        VertexShader = compile vs_Auto Common_ShadowGen_VS_DX10() ShadowGenVS;
+        GeometryShader = compile gs_4_0 Common_ShadowGen_GS();
+        PixelShader = compile ps_Auto Common_ShadowGen_PS_DX10() ShadowGenPS;
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = Back;
+        ZEnable = true;
+        ZWriteEnable = true;
+        CullMode = Back;
 
-    #if %GRASS || %LEAVES || %HAIR_PASS || %TEMP_TERRAIN
-      CullMode = None;
-    #endif
-  }
+#if %GRASS || %LEAVES || %HAIR_PASS || %TEMP_TERRAIN
+        CullMode = None;
+#endif
+    }
 }

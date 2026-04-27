@@ -7,38 +7,36 @@ float Script : STANDARDSGLOBAL
   string Script = "ShaderDrawType = Custom;";
 >;
 
-float4x4 CompMatrix        : PI_Composite;
+float4x4 CompMatrix : PI_Composite;
 
 struct a2v
 {
-  float4 Position : POSITION;
-  float2 baseTC   : TEXCOORD0;
+    float4 Position : POSITION;
+    float2 baseTC   : TEXCOORD0;
 };
 
 struct v2f
 {
-  float4 Position  : POSITION;
+    float4 Position : POSITION;
 };
-
-///////////////// vertex shader //////////////////
 
 v2f OcclusionTestVS(a2v IN)
 {
-  v2f OUT = (v2f)0;
-  OUT.Position = mul(CompMatrix, IN.Position);
-  return OUT;
-}
+    v2f OUT = (v2f)0;
 
-///////////////// pixel shader //////////////////
+    OUT.Position = mul(CompMatrix, IN.Position);
+
+    return OUT;
+}
 
 pixout OcclusionTestPS(v2f IN)
 {
-  pixout OUT = (pixout ) 0;
-  OUT.Color = half4(4,0,0,1);
-  return OUT;
-}
+    pixout OUT = (pixout)0;
 
-//////////////////////////////// technique ////////////////
+    OUT.Color = half4(4.0f, 0.0f, 0.0f, 1.0f);
+
+    return OUT;
+}
 
 technique General
 {
@@ -52,5 +50,3 @@ technique General
     CullMode = None;
   }
 }
-
-/////////////////////// eof ///

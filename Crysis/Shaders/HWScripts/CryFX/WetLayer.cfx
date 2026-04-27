@@ -14,7 +14,7 @@ float4 AmbientObjectCol : PI_ObjectAmbColComp;//x=Ambient.w, y=ObjColor.w, z = 0
 
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "NoPreview;"
            "ShaderDrawType = Light;"
@@ -55,7 +55,6 @@ sampler2D envMapSampler = sampler_state
   AddressV = Wrap;
 };
 
-// Tweakables /////////////////
 
 float WetMultiplier
 <
@@ -150,7 +149,6 @@ float VariationTileW
   float UIStep    = 0.005;
 > = 4.0;
 
-/////////// Common vertex shader ////////////////
 
 struct vtxCommonOut
 {
@@ -202,7 +200,6 @@ vtxCommonOut WetVS(app2vertGeneral IN)
   return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 pixout WetPS(vtxCommonOut IN)
 {
@@ -266,7 +263,6 @@ pixout WetPS(vtxCommonOut IN)
 
   return OUT;
 }
-//////////////////////////////// technique ////////////////
 
 technique General
 {
@@ -287,4 +283,3 @@ technique General
   }
 }
 
-/////////////////////// eof ///

@@ -1,4 +1,3 @@
-//===========================================================================
 // Validations
 // Removing of redundant and mutually exclusive flags to prevent generating
 // of the vertex/pixel shaders

@@ -3,208 +3,154 @@
 
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
-    "Public;"
-    "Decal;"
-    "ShaderDrawType = General;"
-        "ShaderType = FX;"
+    string Script =
+        "Public;"
+        "Decal;"
+        "ShaderDrawType = General;"
+        "ShaderType = FX;";
 >;
 
-float4 CameraRightVector      : PB_CameraRight;
-float4 CameraUpVector        : PB_CameraUp;
+float4 CameraRightVector : PB_CameraRight;
+float4 CameraUpVector    : PB_CameraUp;
 
-float3 ShadeColorFromSun      : PB_CloudShadingColorSun;
-float3 ShadeColorFromSky      : PB_CloudShadingColorSky;
+float3 ShadeColorFromSun : PB_CloudShadingColorSun;
+float3 ShadeColorFromSky : PB_CloudShadingColorSky;
 
 float Attenuation
 <
-  psregister      = PS_REG_PM_3.x;
-  string UIHelp   = "Attenuation of light scattered through cloud";
-  string UIName   = "Attenuation";
-  string UIWidget = "slider";
-  float UIMin     = 0.0;
-  float UIMax     = 5.0;
-  float UIStep    = 0.01;
-> = 0.6;
+    psregister      = PS_REG_PM_3.x;
+    string UIHelp   = "Attenuation of light scattered through cloud";
+    string UIName   = "Attenuation";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 5.0;
+    float UIStep    = 0.01;
+> = 0.6f;
 
 float StepSize
 <
-  psregister      = PS_REG_PM_3.y;
-  string UIHelp   = "Step size through cloud texture";
-  string UIName   = "StepSize";
-  string UIWidget = "slider";
-  float UIMin     = 0.0;
-  float UIMax     = 1.0;
-  float UIStep    = 0.001;
-> = 0.004;
+    psregister      = PS_REG_PM_3.y;
+    string UIHelp   = "Step size through cloud texture";
+    string UIName   = "StepSize";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 1.0;
+    float UIStep    = 0.001;
+> = 0.004f;
 
 float AlphaSaturation
 <
-  psregister      = PS_REG_PM_3.z;
-  string UIHelp   = "Alpha saturation of cloud texture";
-  string UIName   = "AlphaSaturation";
-  string UIWidget = "slider";
-  float UIMin     = 0.1;
-  float UIMax     = 10.0;
-  float UIStep    = 0.1;
-> = 2.0;
+    psregister      = PS_REG_PM_3.z;
+    string UIHelp   = "Alpha saturation of cloud texture";
+    string UIName   = "AlphaSaturation";
+    string UIWidget = "slider";
+    float UIMin     = 0.1;
+    float UIMax     = 10.0;
+    float UIStep    = 0.1;
+> = 2.0f;
 
 float SunColorMultiplier
 <
-  psregister      = PS_REG_PM_3.w;
-  string UIHelp   = "Sun color multiplier";
-  string UIName   = "SunColorMultiplier";
-  string UIWidget = "slider";
-  float UIMin     = 0.0;
-  float UIMax     = 16.0;
-  float UIStep    = 0.1;
-> = 4.0;
+    psregister      = PS_REG_PM_3.w;
+    string UIHelp   = "Sun color multiplier";
+    string UIName   = "SunColorMultiplier";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 16.0;
+    float UIStep    = 0.1;
+> = 4.0f;
 
 float SkyColorMultiplier
 <
-  psregister      = PS_REG_PM_4.x;
-  string UIHelp   = "Sky color multiplier";
-  string UIName   = "SkyColorMultiplier";
-  string UIWidget = "slider";
-  float UIMin     = 0.0;
-  float UIMax     = 16.0;
-  float UIStep    = 0.1;
-> = 1.5;
+    psregister      = PS_REG_PM_4.x;
+    string UIHelp   = "Sky color multiplier";
+    string UIName   = "SkyColorMultiplier";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 16.0;
+    float UIStep    = 0.1;
+> = 1.5f;
 
 sampler2D diffuseSampler = sampler_state
 {
-  Texture = $Diffuse;
+    Texture = $Diffuse;
 };
 
 struct a2v
 {
-  float4 Position  : POSITION;
-  float2 baseTC  : TEXCOORD0;
-  float4 color  : COLOR0;
-  float4 Tangent  : TANGENT;
-  float4 Binormal  : BINORMAL;
+    float4 Position : POSITION;
+    float2 baseTC   : TEXCOORD0;
+    float4 color    : COLOR0;
+    float4 Tangent  : TANGENT;
+    float4 Binormal : BINORMAL;
 };
 
 struct v2f
 {
-  float4 Position    : POSITION;
-  float2 baseTC    : TEXCOORD0;
-  float3 toSun    : TEXCOORD1;
+    float4 Position : POSITION;
+    float2 baseTC   : TEXCOORD0;
+    float3 toSun    : TEXCOORD1;
 };
 
 v2f DistanceCloudsVS(a2v IN)
 {
-  v2f OUT = (v2f)0;
+    v2f OUT = (v2f)0;
 
-  // Position in screen space
-  float4 vPos = IN.Position;
-  OUT.Position = mul(vpMatrix, vPos);
-  OUT.Position.z = OUT.Position.w;
+    OUT.Position = mul(vpMatrix, IN.Position);
+    OUT.Position.z = OUT.Position.w;
+    OUT.baseTC.xy = IN.baseTC.xy;
 
-  OUT.baseTC.xy = IN.baseTC.xy;
+    TANG_MATR
+    OUT.toSun = mul(objToTangentSpace, g_VS_SunLightDir.xyz);
 
-  TANG_MATR
-  OUT.toSun = mul( objToTangentSpace, g_VS_SunLightDir.xyz );
-
-  return OUT;
+    return OUT;
 }
 
 pixout DistanceCloudsPS(v2f IN)
 {
-  pixout OUT;
+    pixout OUT;
 
-   // Debug output
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   DebugOutput(OUT.Color, float4(IN.baseTC, 0, 1));
-   return OUT;
- #endif
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    DebugOutput(OUT.Color, float4(IN.baseTC, 0.0f, 1.0f));
+    return OUT;
+#endif
 
-  const int c_numSamples = 8;
+    const int c_numSamples = 8;
 
-  float3 toSun = normalize( IN.toSun.xyz );
-  float2 sampleDir = toSun.xy * StepSize;
-  float2 uv = IN.baseTC.xy;
+    float3 toSun = normalize(IN.toSun.xyz);
+    float2 sampleDir = toSun.xy * StepSize;
+    float2 uv = IN.baseTC.xy;
 
-  float opacity = tex2D( diffuseSampler, uv ).x;
-  float density = 0;
+    float opacity = tex2D(diffuseSampler, uv).x;
+    float density = 0.0f;
 
-  //float height = -opacity;
-  //toSun *= 2.0 / (float) c_numSamples;
+    [unroll]
+    for (int i = 0; i < c_numSamples; i++)
+    {
+        density += tex2D(diffuseSampler, uv + (i * sampleDir)).x;
+    }
 
-  for( int i = 0; i < c_numSamples; i++ )
-  {
-    float t = tex2D( diffuseSampler, uv + i * sampleDir ).x;
-    density += t /** step( abs( height ), t )*/;
-    //height += toSun.z;
-  }
+    float c = exp2(-Attenuation * density);
+    float a = pow(opacity, AlphaSaturation);
+    float3 col = lerp(SkyColorMultiplier * ShadeColorFromSky.xyz, SunColorMultiplier * ShadeColorFromSun.xyz, c);
 
-  float c = exp2( -Attenuation * density );
-  float a = pow( opacity, AlphaSaturation );
-  float3 col = lerp( SkyColorMultiplier * ShadeColorFromSky.xyz, SunColorMultiplier * ShadeColorFromSun.xyz, c );
-
-  half4 Color = half4( col, a );
-  HDROutput(OUT, Color, 1);
-
-  return OUT;
+    HDROutput(OUT, half4(col, a), 1.0h);
+    return OUT;
 }
-
-/*
-pixout DistanceCloudsPS(v2f IN)
-{
-  pixout OUT;
-
-  const int c_numSamples = 32;
-  const float c_stepSize = 32.0 / (float) c_numSamples;
-  const float c_cloudTexRes = 1024.0;
-  const float c_atten = c_stepSize * 0.15;
-
-  float3 toSun = normalize( IN.toSun.xyz );
-
-  float2 sampleDir = toSun.xy * ( c_stepSize / c_cloudTexRes );
-  float2 uv = IN.baseTC.xy;
-
-  float opacity = tex2D( diffuseSampler, uv ).x;
-  float density = 0;
-
-  //float height = -opacity;
-  //toSun *= 2.0 / (float) c_numSamples;
-
-  for( int i = 0; i < c_numSamples; i++ )
-  {
-    float t = tex2D( diffuseSampler, uv + i * sampleDir ).x;
-    density += t /** step( abs( height ), t )*/;
-    //height += toSun.z;
-  }
-
-  float c = exp2( -c_atten * density );
-  //float a = opacity; //pow( opacity, 1.2 );
-  //float a = smoothstep( 0.25, 0.75, opacity );
-  float a = pow( opacity, 2.0 );
-  //a = smoothstep( 0.0, 0.75, a );
-
-  float3 col = lerp( 1.5 * g_PS_SkyColor.xyz, 4 * g_PS_SunColor.xyz, c );
-  //a *= saturate( 1-2*dot( IN.viewDir.xy, IN.viewDir.xy ));
-
-  half4 Color = half4( col, a );
-
-  HDROutput(OUT, Color, 1);
-
-  return OUT;
-}
-*/
 
 technique General
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto DistanceCloudsVS();
-    ZEnable = true;
-    ZWriteEnable = false;
-    CullMode = None;
+    pass p0
+    {
+        VertexShader = compile vs_Auto DistanceCloudsVS();
+        PixelShader  = compile ps_Auto DistanceCloudsPS();
 
-    AlphaBlendEnable = true;
-    SrcBlend = SrcAlpha;
-    DestBlend = InvSrcAlpha;
-    PixelShader = compile ps_Auto DistanceCloudsPS();
-  }
+        ZEnable        = true;
+        ZWriteEnable   = false;
+        CullMode       = None;
+
+        AlphaBlendEnable = true;
+        SrcBlend         = SrcAlpha;
+        DestBlend        = InvSrcAlpha;
+    }
 }

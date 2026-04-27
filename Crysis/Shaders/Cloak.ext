@@ -2,26 +2,28 @@
 // File: Cloak.ext
 // Created: 06/07/2005 by Tiago Sousa
 
+// clang-format off
 Version (1.00)
 
 Property
 {
-  Name            = %BUMP_MAP
-  Mask            = 0x1
-  Property        (Bump map)
-  Description     (Use bump-map texture)
-  DependencySet   = $TEX_Bump
-  DependencyReset = $TEX_Bump
-  Hidden
+	Name            = %BUMP_MAP
+	Mask            = 0x1
+	Property        (Bump map)
+	Description     (Use bump-map texture)
+	DependencySet   = $TEX_Bump
+	DependencyReset = $TEX_Bump
+	Hidden
 }
 
 Property
 {
-  Name            = %GLOSS_MAP
-  Mask            = 0x2
-  Property        (Gloss map)
-  Description     (Use gloss map as separate texture)
-  DependencySet   = $TEX_Gloss
-  DependencyReset = $TEX_Gloss
-  Hidden
+	Name            = %GLOSS_MAP
+	Mask            = 0x2
+	Property        (Gloss map)
+	Description     (Use gloss map as separate texture)
+	DependencySet   = $TEX_Gloss
+	DependencyReset = $TEX_Gloss
+	Hidden
 }
+// clang-format on

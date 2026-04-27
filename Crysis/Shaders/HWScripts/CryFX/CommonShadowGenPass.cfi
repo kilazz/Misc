@@ -1,113 +1,130 @@
+// Crytek Engine Shader — Common ShadowGen Pass
+// Basic shadow maps support (directional, cubemaps, variance SM).
+
 //===========================================================================
-// Basic shadow maps support
-/////////////////////////////
+// Vertex input/output
 
 struct v2f_sh
 {
-  float4 HPosition  : POSITION;
+    float4 HPosition : POSITION;
 
 #if %_RT_ALPHATEST || %_RT_ALPHABLEND
-  float2 baseTC : TEXCOORD0;
+    float2 baseTC    : TEXCOORD0;
 #endif
 
 #if !%_RT_HW_PCF_COMPARE || (!D3D10 && %_RT_CUBEMAP0)
-  float Depth  : TEXCOORD1;
+    float  Depth     : TEXCOORD1;
 #endif
 };
 
-///////////////// vertex shader //////////////////
+//===========================================================================
+// Vertex Shader
+
 v2f_sh Common_SG_VS(app2vertSGGeneral IN)
 {
-  v2f_sh OUT = (v2f_sh)0;
+    v2f_sh OUT = (v2f_sh)0;
 
-  streamPos vertPassPos = (streamPos)0;
-  streamPos_FromSG(IN, vertPassPos);
+    streamPos vertPassPos = (streamPos)0;
+    streamPos_FromSG(IN, vertPassPos);
 
 #if %TEMP_TERRAIN
-  OUT.HPosition = Pos_VS_Terrain(0, g_VS_ViewProjMatr, vertPassPos, true);
+    OUT.HPosition = Pos_VS_Terrain(0, g_VS_ViewProjMatr, vertPassPos, true);
 #else
-  OUT.HPosition = Pos_VS_General(g_VS_ViewProjMatr, vertPassPos, false);
+    OUT.HPosition = Pos_VS_General(g_VS_ViewProjMatr, vertPassPos, false);
 #endif
 
 #if !%_RT_CUBEMAP0
-  OUT.HPosition.z /= GS_VS_FrustrumInfo.y;  //use linear z-buffer
-  #if !%_RT_HW_PCF_COMPARE
-    //perspective interpolation is not needed here
-    OUT.Depth = OUT.HPosition.z - GS_VS_FrustrumInfo.z; //increase precision around camera
-  #endif
-  OUT.HPosition.z *= OUT.HPosition.w;   //HPosition.z is linearized already
+    // Use linear Z-buffer
+    OUT.HPosition.z /= GS_VS_FrustrumInfo.y;
+
+    #if !%_RT_HW_PCF_COMPARE
+    // Perspective interpolation is not needed here; increase precision around camera
+    OUT.Depth        = OUT.HPosition.z - GS_VS_FrustrumInfo.z;
+    #endif
+
+    // HPosition.z is linearized already
+    OUT.HPosition.z *= OUT.HPosition.w;
 #else
-  #if D3D10
-    OUT.HPosition.z += fDepthTestBias.x; //TD: adjust perspective bias
-  #else
-    OUT.Depth = (OUT.HPosition.z/GS_VS_FrustrumInfo.y);
-    OUT.Depth += fDepthTestBias.x;
-  #endif
-//_RT_DIRECTLIGHT
+    #if D3D10
+    // TODO: Adjust perspective bias
+    OUT.HPosition.z += fDepthTestBias.x;
+    #else
+    OUT.Depth        = OUT.HPosition.z / GS_VS_FrustrumInfo.y;
+    OUT.Depth       += fDepthTestBias.x;
+    #endif
 #endif
 
 #if !%TEMP_TERRAIN
- #if %_RT_ALPHATEST || %_RT_ALPHABLEND
-  OUT.baseTC.xy = IN.baseTC.xy;
- #endif
+    #if %_RT_ALPHATEST || %_RT_ALPHABLEND
+    OUT.baseTC.xy = IN.baseTC.xy;
+    #endif
 #endif
 
-  return OUT;
+    return OUT;
 }
+
+//===========================================================================
+// Pixel Shader output
 
 struct pixout_shadow
 {
-  float4 Color  : COLOR0;
+    float4 Color : COLOR0;
+
 #if !D3D10 && %_RT_HW_PCF_COMPARE && %_RT_CUBEMAP0
-  float Depth    : DEPTH;
+    float  Depth : DEPTH;
 #endif
 };
 
-///////////////// pixel shader //////////////////
+//===========================================================================
+// Pixel Shader
+
 pixout_shadow Common_SG_PS(v2f_sh IN)
 {
-  pixout_shadow OUT;
-  OUT.Color = half4(0,0,0,0);
+    pixout_shadow OUT;
+    OUT.Color = half4(0.0f, 0.0f, 0.0f, 0.0f);
 
 #if !%_RT_HW_PCF_COMPARE
-  OUT.Color.rgba = IN.Depth; //FIX: depth output should be here for precision
-  #if %_RT_VARIANCE_SM
-    OUT.Color.g *= IN.Depth; //square for variance shadow maps
-  #endif
+    OUT.Color.rgba = IN.Depth; // Depth output here for precision
+
+    #if %_RT_VARIANCE_SM
+    OUT.Color.g   *= IN.Depth; // Square for variance shadow maps
+    #endif
 #else
-  #if %_RT_CUBEMAP0 && !D3D10
-    //output linear depth
+    #if %_RT_CUBEMAP0 && !D3D10
+    // Output linear depth
     OUT.Depth = IN.Depth;
-  #endif
+    #endif
 #endif
 
 #if %_RT_ALPHATEST || %_RT_ALPHABLEND
-  half4 baseColor = tex2D(diffuseMapSampler, IN.baseTC.xy);
-  #if %_RT_HW_PCF_COMPARE && !D3D10
+    half4 baseColor = tex2D(diffuseMapSampler, IN.baseTC.xy);
+
+    #if %_RT_HW_PCF_COMPARE && !D3D10
     OUT.Color.a = baseColor.a;
-  #else
+    #else
     clip(baseColor.a - PBAlphaTest.w);
-  #endif
+    #endif
 #endif
 
-  return OUT;
+    return OUT;
 }
 
-//======================================================================
+//===========================================================================
+// Technique
 
 technique ShadowGen
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto Common_SG_VS() ShadowGenVS;
-    PixelShader = compile ps_Auto Common_SG_PS() ShadowGenPS;
+    pass p0
+    {
+        VertexShader = compile vs_Auto Common_SG_VS() ShadowGenVS;
+        PixelShader  = compile ps_Auto Common_SG_PS() ShadowGenPS;
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = Back;
+        ZEnable      = true;
+        ZWriteEnable = true;
+        CullMode     = Back;
 
-    #if %GRASS || %LEAVES || %HAIR_PASS
-      CullMode = None;
-    #endif
-  }
+#if %GRASS || %LEAVES || %HAIR_PASS
+        CullMode     = None;
+#endif
+    }
 }

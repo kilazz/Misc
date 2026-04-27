@@ -1,16 +1,6 @@
-////////////////////////////////////////////////////////////////////////////
-//
-//  Crytek Engine Shader Source File
-//  Copyright (C), Crytek Studios, 2001-2007
-// -------------------------------------------------------------------------
-//  File name:   AmbientOcclusion.cfx
-//  Version:     v1.00
-//  Created:     04/12/2006 by Vladimir Kajalin
-//  Description: Implementation of SSAO, TerrainAO (2.5 D maps), Fill lights
-// -------------------------------------------------------------------------
-//  History:
-//
-////////////////////////////////////////////////////////////////////////////
+// Crytek Engine Shader Source File - AmbientOcclusion.cfx
+// Created:      04/12/2006 by Vladimir Kajalin
+// Description:  Implementation of SSAO, TerrainAO (2.5 D maps), Fill lights
 
 #include "Common.cfi"
 #include "ModificatorVT.cfi"
@@ -18,7 +8,7 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "NoPreview;"
            "LocalConstants;"
            "ShaderDrawType = Custom;"
@@ -28,23 +18,23 @@ float Script : STANDARDSGLOBAL
 // original depth target
 sampler2D sceneDepthSampler = sampler_state
 {
- Texture = $ZTarget;
- MinFilter = POINT;
- MagFilter = POINT;
- MipFilter = POINT;
- AddressU = Clamp;
- AddressV = Clamp;
+    Texture   = $ZTarget;
+    MinFilter = POINT;
+    MagFilter = POINT;
+    MipFilter = POINT;
+    AddressU  = Clamp;
+    AddressV  = Clamp;
 };
 
 // downscaled depth target
 sampler2D sceneDepthSamplerAO = sampler_state
 {
- Texture = $ZTargetScaled;
- MinFilter = POINT;
- MagFilter = POINT;
- MipFilter = POINT;
- AddressU = Clamp;
- AddressV = Clamp;
+    Texture   = $ZTargetScaled;
+    MinFilter = POINT;
+    MagFilter = POINT;
+    MipFilter = POINT;
+    AddressU  = Clamp;
+    AddressV  = Clamp;
 };
 
 sampler2D depthTargetSampler   : register(s0);
@@ -55,11 +45,11 @@ sampler2D TerrainInfoSampler1  : register(s2);
 
 //===========================================================================
 
-float4 AOSectorRange;
-float4 TerrainAOInfo;
-float4 FillLightPos;
-float4 FillLightColor;
-float4 SSAO_params
+float4   AOSectorRange;
+float4   TerrainAOInfo;
+float4   FillLightPos;
+float4   FillLightColor;
+float4   SSAO_params;
 float4x4 CompMatrix : PI_Composite;
 
 /////////////////////////////
@@ -67,640 +57,250 @@ float4x4 CompMatrix : PI_Composite;
 
 struct pixout_cl
 {
-  float4 Color  : COLOR0;
+    float4 Color : COLOR0;
 };
 
 struct vert2fragSSAO
 {
-  float4 HPosition  :  POSITION;
-  float4 ScreenTC    :  TEXCOORD0;
-  float3 WS_ViewVect:  TEXCOORD1;
+    float4 HPosition    : POSITION;
+    float4 ScreenTC     : TEXCOORD0;
+    float3 WS_ViewVect  : TEXCOORD1;
 };
 
 struct app2vertShadow
 {
-  IN_P
-  IN_TBASE
-  float3 viewDir : TEXCOORD1;
+    IN_P
+    IN_TBASE
+    float3 viewDir : TEXCOORD1;
 };
 
 vert2fragSSAO Deferred_SSAO_Pass_VS(app2vertShadow IN)
 {
-  vert2fragSSAO OUT;
+    vert2fragSSAO OUT;
+
 #ifndef OPENGL
-  OUT = (vert2fragSSAO)0;
+    OUT = (vert2fragSSAO)0;
 #endif
 
-  OUT.HPosition = mul(CompMatrix, IN.Position);
-  OUT.ScreenTC.xy = IN.baseTC.xy;
-  OUT.ScreenTC.zw = IN.baseTC.xy*g_VS_ScreenSize.xy/4;
-  OUT.WS_ViewVect = IN.viewDir;
+    OUT.HPosition    = mul(CompMatrix, IN.Position);
+    OUT.ScreenTC.xy  = IN.baseTC.xy;
+    OUT.ScreenTC.zw  = IN.baseTC.xy * g_VS_ScreenSize.xy / 4.0f;
+    OUT.WS_ViewVect  = IN.viewDir;
 
-  return OUT;
+    return OUT;
 }
 
-///////////////// shadows pixel shader //////////////////
-/*pixout_cl AmbientShadowMaskPS(vert2fragShadowNew IN)
-{
-  pixout_cl OUT;
-
-  float SceneDepth = tex2D( sceneDepthSampler, IN.ScreenTC.xy ).r;
-
-  float2 randTC;
-  randTC.xy = IN.ScreenTC.xy*256;
-  float3 rotSample = tex2D(sRotSampler AO, randTC+float2(SceneDepth,SceneDepth)).rgb;
-  rotSample = 2.0 * rotSample - 1.0;
-  rotSample.xyz = normalize(rotSample.xyz);
-
-  // define kernel
-  float scale = 0.02;
-  float3 irreg_kernel[8] =
-  {
-    float3(0.527837, -0.085868 ,0.527837)  * scale,
-    float3(-0.040088, 0.536087, -0.040088)  * scale,
-    float3(-0.670445, -0.179949, -0.670445)  * scale,
-    float3(-0.419418, -0.616039, -0.419418)  * scale,
-    float3(0.440453, -0.639399, 0.440453) * scale,
-    float3(-0.757088, 0.349334, -0.757088) * scale,
-    float3(0.574619, 0.685879,0.574619) * scale,
-    float3(0.03851, -0.939059, 0.03851) * scale
-  };
-
-  // get rotatiojn matrix
-  float3x3 rotMat;
-  GetRotationV0Terrain(rotSample, rotMat);
-
-  float fDistScale = 0.5 / saturate(SceneDepth);
-
-  // sample
-  float fSkyAccess = 0;
-  for(float i=0; i<8; i++)
-  {
-    float3 irregSample = mul(irreg_kernel[i], rotMat);
-    float2 ScreenTC2 = IN.ScreenTC.xy + irregSample.xy * fDistScale;
-    float SceneDepth2 = tex2D( sceneDepthSampler, ScreenTC2 ).r;
-    float fRange = abs(SceneDepth2-SceneDepth)*12;
-    fSkyAccess += lerp(saturate(SceneDepth2>(SceneDepth+irregSample.z)), .75, saturate(fRange));
-  }
-
-  OUT.Color = saturate(fSkyAccess*0.25);
-  return OUT;
-}*/
+///////////////// helpers //////////////////
 
 sampler2D sRotSampler4x4_16 = sampler_state
 {
-  Texture = $16PointsOnSphere;
-  MinFilter = POINT;
-  MagFilter = POINT;
-  MipFilter = NONE;
-  AddressU = Wrap;
-  AddressV = Wrap;
+    Texture   = $16PointsOnSphere;
+    MinFilter = POINT;
+    MagFilter = POINT;
+    MipFilter = NONE;
+    AddressU  = Wrap;
+    AddressV  = Wrap;
 };
-/*
-sampler2D sRotSampler4x4 = sampler_state
-{
-  Texture = Textures/Defaults/noise4x4.dds;
-  MinFilter = POINT;
-  MagFilter = POINT;
-  MipFilter = NONE;
-  AddressU = Wrap;
-  AddressV = Wrap;
-};
-*/
+
 // vPlane should be normalized
 // the returned vector has the same length as vDir
-float3 mirror( float3 vDir, float3 vPlane )
+float3 mirror(float3 vDir, float3 vPlane)
 {
-  return vDir - 2 * vPlane * dot(vPlane,vDir);
-}
-/*
-float GetVarianceAO(sampler2D depthMap, float3 p)
-{
-  float2 moments = tex2D( depthMap, p.xy ).xy;
-
-  // Variance shadow mapping
-  float M = moments.r; //mean
-
-  //TD invesigate: we calculate variance in non-shifted by 0.5 space here
-  //is it correct
-  float E_x2 = moments.g;
-  float Ex_2 = M * M;
-  float variance = (E_x2 - Ex_2);//decrease range of variance to increase precision for 16-bit formats
-
-  float m_d = M - p.z;
-  float p_max = variance / (variance + m_d * m_d);
-
-  // Standard shadow map comparison
-  float lit_factor = m_d > -0.001;
-
-  //select properly shadow region because of one-tailed version of inequality
-  float shadow = max(lit_factor, p_max);
-  return shadow;
-}
-*/
-/*
-
-sampler2D SSAO_Sampler_0  : register(s4);
-{
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = NONE;
-  AddressU = Wrap;
-  AddressV = Wrap;
-};
-
-sampler2D SSAO_Sampler_1  : register(s5);
-{
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = NONE;
-  AddressU = Wrap;
-  AddressV = Wrap;
-};
-
-sampler2D SSAO_Sampler_2  : register(s6);
-{
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = NONE;
-  AddressU = Wrap;
-  AddressV = Wrap;
-};
-
-sampler2D SSAO_Sampler_3  : register(s7);
-{
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = NONE;
-  AddressU = Wrap;
-  AddressV = Wrap;
-};
-
-sampler2D SSAO_Sampler_4  : register(s8);
-{
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = NONE;
-  AddressU = Wrap;
-  AddressV = Wrap;
-};
-
-sampler2D SSAO_Sampler_5  : register(s9);
-{
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = NONE;
-  AddressU = Wrap;
-  AddressV = Wrap;
-};
-
-sampler2D SSAO_Sampler_6  : register(s10);
-{
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = NONE;
-  AddressU = Wrap;
-  AddressV = Wrap;
-};
-
-sampler2D SSAO_Sampler_7  : register(s11);
-{
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = NONE;
-  AddressU = Wrap;
-  AddressV = Wrap;
-};
-
-pixout_cl Deferred_SSAO_Pass_PS_DepthBlurBased(vert2fragSSAO IN)
-{
-  pixout_cl OUT;
-
-//  float3 p = float3( IN.ScreenTC.xy, tex2D( sceneDepthSampler, IN.ScreenTC.xy ).r );
-  //OUT.Color = GetVarianceAO( SSAO_Sampler_3, p );
-
-  float fSceneDepth = tex2D( sceneDepthSampler, IN.ScreenTC.xy ).r;
-
-  float4 arrSceneDepthBlur[8];
-  arrSceneDepthBlur[0] = tex2D( SSAO_Sampler_0, IN.ScreenTC.xy );
-  arrSceneDepthBlur[1] = tex2D( SSAO_Sampler_1, IN.ScreenTC.xy );
-  arrSceneDepthBlur[2] = tex2D( SSAO_Sampler_2, IN.ScreenTC.xy );
-  arrSceneDepthBlur[3] = tex2D( SSAO_Sampler_3, IN.ScreenTC.xy );
-  arrSceneDepthBlur[4] = tex2D( SSAO_Sampler_4, IN.ScreenTC.xy );
-  arrSceneDepthBlur[5] = tex2D( SSAO_Sampler_5, IN.ScreenTC.xy );
-  arrSceneDepthBlur[6] = tex2D( SSAO_Sampler_6, IN.ScreenTC.xy );
-  arrSceneDepthBlur[7] = tex2D( SSAO_Sampler_7, IN.ScreenTC.xy );
-
-  OUT.Color = 0;
-
-  int nSamples = 3;
-  int nStart = 0;
-
-  for(int t=nStart; t<nStart+nSamples; t++)
-  {
-    float2 blurredDepth = arrSceneDepthBlur[t].xy;
-    float fFix = saturate((fSceneDepth-blurredDepth.g-0.01)*(146.f / (1.f+t*2.f)));
-    float fRes = 0;
-    fRes += fFix;
-    fRes += saturate(1-(fSceneDepth*0.999f - blurredDepth.r)*400.f*saturate(1.f-blurredDepth.g));
-    fRes = saturate(fRes);
-
-    OUT.Color += fRes/nSamples;
-  }
-
-  return OUT;
+    return vDir - 2.0f * vPlane * dot(vPlane, vDir);
 }
 
-technique Deferred_SSAO_Pass_DepthBlurBased
-{
-  //Shadow pass
-  pass p0
-  {
-    VertexShader = compile vs_2_0 Deferred_SSAO_Pass_VS();
-
-    ZEnable = false;
-    ZWriteEnable = false;
-    CullMode = None;
-
-    PixelShader = compile ps_2_x Deferred_SSAO_Pass_PS_DepthBlurBased();
-  }
-}
-*/
-
-/* SSIL test by Vlad
-pixout_cl Deferred_SSIL_Pass_PS(vert2fragSSAO IN)
-{
-  pixout_cl OUT;
-
-  // define kernelw
-  const half step = 1.4;//(1.f - 1.f/8.f);
-  float n = .1;
-  const half fScale = 0.025f/2;
-
-  const int nCount = 16;
-
-  const half3 arrKernel[nCount] =
-  {
-    float3(0.527837, -0.085868 ,0.527837)  *fScale*(n*=step),
-    float3(-0.040088, 0.536087, -0.040088)  *fScale*(n*=step),
-    float3(-0.670445, -0.179949, -0.670445)  *fScale*(n*=step),
-    float3(-0.419418, -0.616039, -0.419418)  *fScale*(n*=step),
-    float3(0.440453, -0.639399, 0.440453) *fScale*(n*=step),
-    float3(-0.757088, 0.349334, -0.757088) *fScale*(n*=step),
-    float3(0.574619, 0.685879,0.574619) *fScale*(n*=step),
-    float3(0.03851, -0.939059, 0.03851) *fScale*(n*=step),
-    float3(0.527837, -0.085868 ,0.527837)  *fScale*(n*=step),
-    float3(-0.040088, 0.536087, -0.040088)  *fScale*(n*=step),
-    float3(-0.670445, -0.179949, -0.670445)  *fScale*(n*=step),
-    float3(-0.419418, -0.616039, -0.419418)  *fScale*(n*=step),
-    float3(0.440453, -0.639399, 0.440453) *fScale*(n*=step),
-    float3(-0.757088, 0.349334, -0.757088) *fScale*(n*=step),
-    float3(0.574619, 0.685879,0.574619) *fScale*(n*=step),
-    float3(0.03851, -0.939059, 0.03851) *fScale*(n*=step),
-  };
-
-  // create random rot matrix
-  half3 rotSample = tex2D(sRotSampler4x4_16, IN.ScreenTC.zw).rgb;
-  rotSample = normalize((2.0 * rotSample - 1.0));
-
-  // read actual RGB and depth
-  float4 vRootNNND = tex2D( sceneDepthSampler, IN.ScreenTC.xy ).yzwx;
-  half fSceneDepth = vRootNNND.w;
-
-  // get root pixel normal
-//  float fNormScale = 256; // same as in TexToTexPS
-  //half3 WSPos = float3(IN.ScreenTC.xy, fSceneDepth*fNormScale);
-  float3 vNorm = vRootNNND.xyz;//normalize(cross(ddx(WSPos),ddy(WSPos)));
-
-  // range/scale conversions
-  half fSceneDepthM = fSceneDepth * PS_NearFarClipDist.y;
-  half3 vSampleScale = SSAO_params.zzw*2;
-  float fDepthRangeScale = PS_NearFarClipDist.y / vSampleScale.z * 0.85f;
-  vSampleScale.xy *= 1.0f / fSceneDepthM;
-  vSampleScale.z  *= 2.0f / PS_NearFarClipDist.y;
-
-  float fDepthTestSoftness = 8.f/vSampleScale.z;
-
-  half4 vIndLight = 0.f;
-
-  float3 vRGB0 = tex2D( sceneBackBufferSampler, IN.ScreenTC.xy );
-
-  for(int i=0; i<nCount; i++)
-  {
-    half3 vIrrSample = mirror(arrKernel[i], rotSample) * vSampleScale;
-
-    float2 tc = IN.ScreenTC.xy + vIrrSample.xy;
-
-    float3 vRGB = tex2D( sceneBackBufferSampler, tc );
-
-    float4 vNNND = tex2D( sceneDepthSampler, tc ).yzwx;
-
-    vNNND.a += vIrrSample.z;
-
-    float fDepthTest = 1-saturate(0.75*abs(vNNND.a-fSceneDepth)*fDepthTestSoftness + 0.25*(vNNND.a-fSceneDepth)*fDepthTestSoftness);
-
-    half fDistance = fSceneDepth - vNNND.a;
-
-    float fDot = saturate((dot(-vNorm,vNNND.xyz)+1.0f));
-
-    float fDistanceScaled = fDistance * fDepthRangeScale * 2;
-
-    float fRangeIsValid = 1;//1-saturate( abs(fDistanceScaled) );
-
-    {
-      float fSceneDepth2 = vNNND.a;
-      float fRangeIsInvalid = saturate( abs(fSceneDepth-fSceneDepth2) * fDepthRangeScale );
-      fRangeIsInvalid = (saturate( abs(fDistanceScaled) ) + saturate( fDistanceScaled ))/2;
-      vIndLight.a += lerp(saturate((fSceneDepth2-fSceneDepth)*fDepthTestSoftness*16), 1, fRangeIsInvalid);
-    }
-
-//    vIndLight.rgb += lerp(1.f,vRGB*2-1,sqrt(fRangeIsValid*fDepthTest*fDot));
-    vIndLight.rgb += lerp(1,vRGB-0.33,sqrt(fDepthTest*fDot*4));
-  }
-
-  vIndLight.rgb = 3*(vIndLight.rgb - (vIndLight.rgb.x+vIndLight.rgb.y+vIndLight.rgb.z)*0.3333f)
-    + (vIndLight.rgb.x+vIndLight.rgb.y+vIndLight.rgb.z)*0.3333f;
-
-  vIndLight = vIndLight / nCount;
-
-  OUT.Color.rgb = lerp(saturate(vIndLight.xyz), 1, saturate(vIndLight.a*6-2));
-//  OUT.Color.rgb = saturate(vIndLight.a*4-1.3);
-//  OUT.Color.rgb = saturate(vIndLight.rgb);
-  OUT.Color.a = 1;
-
-  return OUT;
-}*/
+///////////////// pixel shaders //////////////////
 
 pixout_cl Deferred_SSAO_Pass_PS(vert2fragSSAO IN)
 {
-  pixout_cl OUT;
+    pixout_cl OUT;
 
-  // Extract Scene Depth
-  half fSceneDepth = tex2D( sceneDepthSampler, IN.ScreenTC.xy ).r;
-  half fSceneDepthM = fSceneDepth * PS_NearFarClipDist.y;
+    // Pre-calculated normalized kernel vectors to save ALU and avoid dynamic initialization
+    const float3 arrKernel[8] =
+    {
+        float3( 0.577f,  0.577f,  0.577f),
+        float3(-0.577f, -0.577f, -0.577f),
+        float3(-0.577f, -0.577f,  0.577f),
+        float3(-0.577f,  0.577f, -0.577f),
+        float3(-0.577f,  0.577f,  0.577f),
+        float3( 0.577f, -0.577f, -0.577f),
+        float3( 0.577f, -0.577f,  0.577f),
+        float3( 0.577f,  0.577f, -0.577f)
+    };
 
-  // Compute View-Space position approximation
-  float3 vPos = IN.WS_ViewVect * fSceneDepthM;
+    const float fScale = 0.025f;
 
-  // Reconstruct Normal dynamically using depth gradients
-  // Using absolute depth gradient to get accurate world space normal
-  float3 dPdx = ddx(vPos);
-  float3 dPdy = ddy(vPos);
-  float3 vNormal = normalize(cross(dPdy, dPdx));
+    // Create random rotation vector
+    float3 rotSample = tex2D(sRotSampler4x4_16, IN.ScreenTC.zw).rgb;
+    rotSample        = 2.0f * rotSample - 1.0f;
 
-  // Force normal to point towards camera
-  if (dot(vNormal, IN.WS_ViewVect) > 0.0) vNormal = -vNormal;
+    float fSceneDepth = tex2D(sceneDepthSampler, IN.ScreenTC.xy).r;
 
-  // Determine scaled radius and softness parameters
-  float fRadiusScale = SSAO_params.z * saturate(fSceneDepthM / 5.3f) * (1.f + fSceneDepthM / 8.f);
-  fRadiusScale = max(fRadiusScale, 0.05); // Prevent micro-radius division by zero
-  float fInvRadius2 = 1.0 / (fRadiusScale * fRadiusScale);
+    // Range conversions
+    float fSceneDepthM = fSceneDepth * PS_NearFarClipDist.y;
 
-  // Setup Pseudo-random rotation
-  half3 rotSample = tex2D(sRotSampler4x4_16, IN.ScreenTC.zw).rgb;
-  rotSample = (2.0 * rotSample - 1.0);
+    float3 vSampleScale = SSAO_params.zzw
+        * saturate(fSceneDepthM / 5.3f)
+        * (1.0f + fSceneDepthM / 8.0f);
 
-  // Optimized hemispherical Alchemy kernels
-  const half step = 1.f / 8.f;
-  half n = 0;
-  const half fScale = 0.15f; // Increased spread scale to actually cover the hemisphere
+    float fDepthRangeScale = PS_NearFarClipDist.y / vSampleScale.z * 0.85f;
 
-  const half3 arrKernel[8] =
-  {
-    normalize(half3( 1, 1, 1))*fScale*(n+=step),
-    normalize(half3(-1,-1,-1))*fScale*(n+=step),
-    normalize(half3(-1,-1, 1))*fScale*(n+=step),
-    normalize(half3(-1, 1,-1))*fScale*(n+=step),
-    normalize(half3(-1, 1 ,1))*fScale*(n+=step),
-    normalize(half3( 1,-1,-1))*fScale*(n+=step),
-    normalize(half3( 1,-1, 1))*fScale*(n+=step),
-    normalize(half3( 1, 1,-1))*fScale*(n+=step),
-  };
+    // Convert from meters into SS units
+    vSampleScale.xy = vSampleScale.xy / fSceneDepthM;
+    vSampleScale.z  = vSampleScale.z * (2.0f / PS_NearFarClipDist.y);
 
-  float occlusion = 0.0;
-  const half bHQ = (GetShaderQuality()==QUALITY_HIGH);
-  int sampleCount = bHQ ? 16 : 8;
-  float bias = 0.02 * fRadiusScale;
+    float fDepthTestSoftness = 64.0f / vSampleScale.z;
 
-  for(int i=0; i<8; i++)
-  {
-    // Mirror sample and calculate fetch coordinate
-    float3 vSampleOffsets = mirror(arrKernel[i], rotSample) * fRadiusScale;
-    float2 offsetUV = IN.ScreenTC.xy + (vSampleOffsets.xy / max(fSceneDepthM, 0.1));
+    // Sample accumulation
+    float4 vSkyAccess     = 0.0f;
+    float4 arrSceneDepth2[2];
+    float3 vIrrSample;
+    float4 vDistance;
+    float4 fRangeIsInvalid;
 
-    // Fetch depth at sample location
-    half sampleDepth = tex2D(sceneDepthSamplerAO, offsetUV).r;
-    float sampleDepthM = sampleDepth * PS_NearFarClipDist.y;
+    const float bHQ = (float)(GetShaderQuality() == QUALITY_HIGH);
+    const float fHQScale = 0.5f;
 
-    // Determine sample WS pos
-    float3 vSamplePos = IN.WS_ViewVect * sampleDepthM;
-    vSamplePos.xy += vSampleOffsets.xy;
+    [unroll]
+    for(int i = 0; i < 2; i++)
+    {
+        // Optimized kernel processing
+        [unroll]
+        for(int k = 0; k < 4; k++)
+        {
+            int idx = i * 4 + k;
+            vIrrSample = mirror(arrKernel[idx] * fScale, rotSample) * vSampleScale;
 
-    float3 v = vSamplePos - vPos;
-    float vv = dot(v, v);
-    float vn = dot(v, vNormal);
+            arrSceneDepth2[0][k] = tex2D(sceneDepthSamplerAO, IN.ScreenTC.xy + vIrrSample.xy).r + vIrrSample.z;
 
-    // Alchemy AO formula properly normalized: max(0, vn - bias) / (vv + eps) * R
-    float falloff = saturate(1.0 - vv * fInvRadius2);
-    occlusion += max(0.0, vn - bias) / (vv + 0.001) * fRadiusScale * falloff;
+            if (bHQ > 0.5f)
+            {
+                vIrrSample   *= fHQScale;
+                arrSceneDepth2[1][k] = tex2D(sceneDepthSamplerAO, IN.ScreenTC.xy + vIrrSample.xy).r + vIrrSample.z;
+            }
+        }
 
-    if (bHQ) {
-        float3 vSampleOffsets_HQ = vSampleOffsets * 0.45f;
-        float2 offsetUV_HQ = IN.ScreenTC.xy + (vSampleOffsets_HQ.xy / max(fSceneDepthM, 0.1));
-        half sampleDepth_HQ = tex2D(sceneDepthSamplerAO, offsetUV_HQ).r;
-        float sampleDepthM_HQ = sampleDepth_HQ * PS_NearFarClipDist.y;
+        const float fDefVal = 0.55f;
 
-        float3 vSamplePos_HQ = IN.WS_ViewVect * sampleDepthM_HQ;
-        vSamplePos_HQ.xy += vSampleOffsets_HQ.xy;
-
-        float3 v_HQ = vSamplePos_HQ - vPos;
-        float vv_HQ = dot(v_HQ, v_HQ);
-        float vn_HQ = dot(v_HQ, vNormal);
-        float falloff_HQ = saturate(1.0 - vv_HQ * fInvRadius2);
-
-        occlusion += max(0.0, vn_HQ - bias) / (vv_HQ + 0.001) * fRadiusScale * falloff_HQ;
+        for(int s = 0; s < (int)(bHQ > 0.5f ? 2 : 1); s++)
+        {
+            vDistance = fSceneDepth - arrSceneDepth2[s];
+            float4 vDistanceScaled = vDistance * fDepthRangeScale;
+            fRangeIsInvalid = (saturate(abs(vDistanceScaled)) + saturate(vDistanceScaled)) * 0.5f;
+            vSkyAccess     += lerp(saturate(-vDistance * fDepthTestSoftness), fDefVal, fRangeIsInvalid);
+        }
     }
-  }
 
-  // Normalize by sample count. Tune intensity explicitly.
-  occlusion = (occlusion / float(sampleCount)) * 4.0;
+    float fFinalAO = dot(vSkyAccess, (bHQ > 0.5f ? 0.125f : 0.25f)) - SSAO_params.y;
+    OUT.Color      = saturate(lerp(0.9f, fFinalAO, SSAO_params.x));
 
-  // Apply original parameters logic (global brightness + intensity lerp)
-  float ao = saturate(1.0 - occlusion * SSAO_params.x) - SSAO_params.y; // 0.075f
-  OUT.Color = saturate(lerp( 0.9f, ao, SSAO_params.x ));
-
-  return OUT;
+    return OUT;
 }
-
-/*pixout_cl Deferred_SSAO_Pass_PS_Ref(vert2fragSSAO IN)
-{
-  pixout_cl OUT;
-
-  // define kernel
-  const half step = 1.f - 1.f/8.f;
-  half n = 0;
-  const half fScale = 0.025f;
-  const half3 arrKernel[8] =
-  {
-    normalize(half3( 1, 1, 1))*fScale*(n+=step),
-    normalize(half3(-1,-1,-1))*fScale*(n+=step),
-    normalize(half3(-1,-1, 1))*fScale*(n+=step),
-    normalize(half3(-1, 1,-1))*fScale*(n+=step),
-    normalize(half3(-1, 1 ,1))*fScale*(n+=step),
-    normalize(half3( 1,-1,-1))*fScale*(n+=step),
-    normalize(half3( 1,-1, 1))*fScale*(n+=step),
-    normalize(half3( 1, 1,-1))*fScale*(n+=step),
-  };
-
-  // create random rot matrix
-  half3 rotSample = tex2D(sRotSampler4x4_16, IN.ScreenTC.zw).rgb;
-  rotSample = normalize(2.0 * rotSample - 1.0);
-  half3x3 rotMat;
-  GetRotationV0(rotSample, rotMat);
-
-  half fSceneDepth = tex2D( sceneDepthSampler, IN.ScreenTC.xy ).r;
-
-  // range conversions
-  half fSceneDepthM = fSceneDepth * PS_NearFarClipDist.y;
-
-  // define sampling area size
-  half3 vSampleScale = SSAO_params.zzw
-    * saturate(fSceneDepthM / 5.3f) // make area smaller if distance less than 5 meters
-    * (1.f + fSceneDepthM / 8.f ); // make area bigger if distance more than 32 meters
-
-  float fDepthRangeScale = PS_NearFarClipDist.y / vSampleScale.z * 0.75f;
-
-  // convert from meters into SS units
-  vSampleScale.xy *= 1.0f / fSceneDepthM;
-  vSampleScale.z  *= 2.0f / PS_NearFarClipDist.y;
-
-  // sample
-  half fSkyAccess = 0.f;
-  float fDepthTestSoftness = 32.f/vSampleScale.z;
-  half3 irregSample;
-  half fSceneDepth2;
-  float fRangeIsInvalid;
-  for(int i=0; i<8; i++)
-  {
-    irregSample = mul(arrKernel[i], rotMat) * vSampleScale;
-    fSceneDepth2 = tex2D(sceneDepthSamplerAO, IN.ScreenTC.xy + irregSample.xy ).r-irregSample.z;
-    fRangeIsInvalid = saturate( abs(fSceneDepth-fSceneDepth2) * fDepthRangeScale );
-    fSkyAccess += lerp(saturate((fSceneDepth2-fSceneDepth)*fDepthTestSoftness), 0.6f, fRangeIsInvalid);
-  }
-
-  OUT.Color = saturate(1.3f+((SSAO_params.x-1.f)*0.35)-pow(1.f-fSkyAccess/7.0f,3)*2.5f*SSAO_params.x);
-
-  return OUT;
-}*/
-
-//////////////////////////////// technique ////////////////
 
 pixout_cl Deferred_FillLight_Pass_PS(vert2fragSSAO IN)
 {
-  pixout_cl OUT;
+    pixout_cl OUT;
 
-  // reconstruct WS position
-  half SceneDepth = tex2D( depthTargetSampler, IN.ScreenTC.xy ).r;
-  half3 WSPos = vfViewPos.xyz + IN.WS_ViewVect * SceneDepth;
+    // Reconstruct WS position
+    float SceneDepth = tex2D(depthTargetSampler, IN.ScreenTC.xy).r;
+    float3 WSPos     = vfViewPos.xyz + IN.WS_ViewVect * SceneDepth;
 
-  // simple lighting
-  half3 vLightDir = FillLightPos.xyz-WSPos.xyz;
-  OUT.Color = saturate(1.f-length(vLightDir) / FillLightPos.w);
+    // Simple lighting
+    float3 vLightDir = FillLightPos.xyz - WSPos;
+    float  fAtten    = saturate(1.0f - length(vLightDir) / FillLightPos.w);
 
 #if %USE_SM30
-  float NdotL = saturate(dot(normalize(vLightDir),normalize(cross(ddy(WSPos),ddx(WSPos)))));
-  OUT.Color *= (NdotL*0.6666f+0.3333f);
+    float NdotL = saturate(dot(normalize(vLightDir), normalize(cross(ddy(WSPos), ddx(WSPos)))));
+    OUT.Color   = fAtten * (NdotL * 0.6666f + 0.3333f);
 #else
-  OUT.Color = pow(OUT.Color,2);
+    OUT.Color   = pow(fAtten, 2.0f);
 #endif
 
-  // range scale
-  OUT.Color *= FillLightColor.x / 8.f;
+    // Range scale
+    OUT.Color *= FillLightColor.x / 8.0f;
 
-  return OUT;
+    return OUT;
 }
 
 pixout_cl Deferred_TerrainAO_Pass_PS(vert2fragSSAO IN)
 {
-  pixout_cl OUT;
+    pixout_cl OUT;
 
-  // reconstruct pixel world position
-  half SceneDepth = tex2D( depthTargetSampler, IN.ScreenTC.xy ).r;
-  float3 vWSPos = vfViewPos.xyz + IN.WS_ViewVect * SceneDepth;
+    // Reconstruct pixel world position
+    float SceneDepth = tex2D(depthTargetSampler, IN.ScreenTC.xy).r;
+    float3 vWSPos    = vfViewPos.xyz + IN.WS_ViewVect * SceneDepth;
 
-  // find terrain texture coordinates
-  float2 texCoord = float2((vWSPos.y-AOSectorRange.y), (vWSPos.x-AOSectorRange.x)) * TerrainAOInfo.w;
+    // Find terrain texture coordinates
+    float2 texCoord = float2((vWSPos.y - AOSectorRange.y), (vWSPos.x - AOSectorRange.x)) * TerrainAOInfo.w;
 
-  // get terrain and vegetation elevations
-  half4 dataS0 = tex2D( TerrainInfoSampler0, texCoord );
-  half4 dataS1 = tex2D( TerrainInfoSampler1, texCoord );
-  half fTerrainZ = dataS1.a*(AOSectorRange.w-AOSectorRange.z)+AOSectorRange.z;
-  half fVegetZMax = fTerrainZ + dataS1.g*32.f;
+    // Get terrain and vegetation elevations
+    float4 dataS0    = tex2D(TerrainInfoSampler0, texCoord);
+    float4 dataS1    = tex2D(TerrainInfoSampler1, texCoord);
+    float fTerrainZ  = dataS1.a * (AOSectorRange.w - AOSectorRange.z) + AOSectorRange.z;
+    float fVegetZMax = fTerrainZ + dataS1.g * 32.0f;
 
-  // get initial sky amount, TODO: try pow() here
-  OUT.Color = saturate(1.f-TerrainAOInfo.g*(fVegetZMax-vWSPos.z));
+    // Get initial sky amount
+    OUT.Color = saturate(1.0f - TerrainAOInfo.g * (fVegetZMax - vWSPos.z));
 
-  // scale based on sky amount precomputed for terrain
-  half fTerrainSkyAmount = dataS0.a * saturate(1.f - (fTerrainZ-vWSPos.z)*0.025f);
-  OUT.Color = lerp(OUT.Color,1.f,fTerrainSkyAmount);
+    // Scale based on sky amount precomputed for terrain
+    float fTerrainSkyAmount = dataS0.a * saturate(1.0f - (fTerrainZ - vWSPos.z) * 0.025f);
+    OUT.Color               = lerp(OUT.Color, 1.0f, fTerrainSkyAmount);
 
-  // lerp into pure terrain sky amount near the ground
-  half fHeightFactor = saturate((vWSPos.z-fTerrainZ)*0.5f);
-  OUT.Color = lerp(fTerrainSkyAmount,OUT.Color,fHeightFactor);
+    // Lerp into pure terrain sky amount near the ground
+    float fHeightFactor = saturate((vWSPos.z - fTerrainZ) * 0.5f);
+    OUT.Color           = lerp(fTerrainSkyAmount, OUT.Color, fHeightFactor);
 
-  // apply sky brightening and fade on distance
-  half fDistAtt = saturate(pow(SceneDepth*PS_NearFarClipDist.y/1024.f,3));
-  OUT.Color = lerp(1.f, OUT.Color, (1.f - TerrainAOInfo.r)*(1.f - fDistAtt));
+    // Apply sky brightening and fade on distance
+    float fDistAtt = saturate(pow(SceneDepth * PS_NearFarClipDist.y / 1024.0f, 3.0f));
+    OUT.Color      = lerp(1.0f, OUT.Color, (1.0f - TerrainAOInfo.r) * (1.0f - fDistAtt));
 
-  return OUT;
+    return OUT;
 }
+
+//////////////////////////////// techniques ////////////////
 
 technique Deferred_SSAO_Pass
 {
-  //Shadow pass
-  pass p0
-  {
-    VertexShader = compile vs_2_0 Deferred_SSAO_Pass_VS();
+    pass p0
+    {
+        VertexShader = compile vs_2_0 Deferred_SSAO_Pass_VS();
 
-    ZEnable = false;
-    ZWriteEnable = false;
-    CullMode = None;
+        ZEnable      = false;
+        ZWriteEnable = false;
+        CullMode     = None;
 
-    PixelShader = compile ps_2_x Deferred_SSAO_Pass_PS();
-  }
+        PixelShader  = compile ps_2_x Deferred_SSAO_Pass_PS();
+    }
 }
 
 technique Deferred_TerrainAO_Pass
 {
-  //Shadow pass
-  pass p0
-  {
-    VertexShader = compile vs_2_0 Deferred_SSAO_Pass_VS();
+    pass p0
+    {
+        VertexShader = compile vs_2_0 Deferred_SSAO_Pass_VS();
 
-    ZEnable = false;
-    ZWriteEnable = false;
-    CullMode = None;
+        ZEnable      = false;
+        ZWriteEnable = false;
+        CullMode     = None;
 
-    PixelShader = compile ps_2_0 Deferred_TerrainAO_Pass_PS();
-  }
+        PixelShader  = compile ps_2_0 Deferred_TerrainAO_Pass_PS();
+    }
 }
 
 technique Deferred_FillLight_Pass
 {
-  //Shadow pass
-  pass p0
-  {
-    VertexShader = compile vs_2_0 Deferred_SSAO_Pass_VS();
+    pass p0
+    {
+        VertexShader = compile vs_2_0 Deferred_SSAO_Pass_VS();
 
-    ZEnable = false;
-    ZWriteEnable = false;
-    CullMode = None;
+        ZEnable      = false;
+        ZWriteEnable = false;
+        CullMode     = None;
 
-  #if %USE_SM30
-    PixelShader = compile ps_3_0 Deferred_FillLight_Pass_PS();
-  #else
-    PixelShader = compile ps_2_x Deferred_FillLight_Pass_PS();
-  #endif
-
-  }
+#if %USE_SM30
+        PixelShader  = compile ps_3_0 Deferred_FillLight_Pass_PS();
+#else
+        PixelShader  = compile ps_2_x Deferred_FillLight_Pass_PS();
+#endif
+    }
 }

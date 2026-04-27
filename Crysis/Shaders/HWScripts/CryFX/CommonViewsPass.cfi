@@ -1,111 +1,89 @@
-////////////////////////////////////////////////////////////////////////////
-//
-//  Crytek Engine Source File.
-//  Shader extension
-//  Copyright (C), Crytek Studios, 2001-2004.
-// -------------------------------------------------------------------------
-//  File name:   CommonViewsPass.cfi
-//  Version:     v1.00
-//  Created:     19/07/2007 by Tiago Sousa
-//  Compilers:
-//  Description: Common/Shared passes bettwen shaders. Should be included after
-//    main shader technique
-//
-//  NOTE: ALWAYS MAKE SURE VERTEX INPUTS MATCH CORRECTLY BEFORE INCLUDING THIS!
-//  TODO: Add support for texture modifiers, since Illum and others require it
-//  "Common_" name convention - for shader sharing in cache files
-//
-//
-// -------------------------------------------------------------------------
-////////////////////////////////////////////////////////////////////////////
-
-/// Un-Tweakables //////////////////////
+// Crytek Engine Source File.
+// Description: Common/Shared passes between shaders. Should be included after main shader technique.
+// NOTE: ALWAYS MAKE SURE VERTEX INPUTS MATCH CORRECTLY BEFORE INCLUDING THIS!
+// TODO: Add support for texture modifiers, since Illum and others require it.
+// "Common_" name convention - for shader sharing in cache files
 
 float4 VisionParams : PI_VisionParams;
 
-///////////////// vertex input/output //////////////////
 struct vert2fragCustomRender
 {
-  float4 HPosition : POSITION;
-  float4 baseTC     : TEXCOORDN;
-  float4 screenProj : TEXCOORDN_centroid;   //z used for instanced alpha test value
-  float4 cVision : TEXCOORDN;
+    float4 HPosition  : POSITION;
+    float4 baseTC     : TEXCOORDN;
+    float4 screenProj : TEXCOORDN_centroid; // z used for instanced alpha test value
+    float4 cVision    : TEXCOORDN;
 };
 
-///////////////// vertex shaders //////////////////
 vert2fragCustomRender Common_CustomRenderPassVS(app2vertCustomViews IN)
 {
-  vert2fragCustomRender OUT;
+    vert2fragCustomRender OUT;
+
 #ifndef OPENGL
-  OUT = (vert2fragCustomRender)0;
+    OUT = (vert2fragCustomRender)0;
 #endif
 
-  streamPos vertPassPos = (streamPos)0;
-  streamPos_FromCustomViews(IN, vertPassPos);
+    streamPos vertPassPos = (streamPos)0;
+    streamPos_FromCustomViews(IN, vertPassPos);
 
 #if %_RT_INSTANCING_ATTR
-  OUT.cVision = vertPassPos.InstVisionParams;
+    OUT.cVision = vertPassPos.InstVisionParams;
 #else
-  OUT.cVision = VisionParams;
+    OUT.cVision = VisionParams;
 #endif
 
-  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+    OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
 
-  // reminder for Andrey, texture modifiers should work on all cases
-  _TCModify(IN.baseTC, OUT.baseTC, vertPassPos.Position, vertPassPos.ObjToTangentSpace[2], TS_DIFFUSE);
+    // reminder for Andrey, texture modifiers should work on all cases
+    _TCModify(IN.baseTC, OUT.baseTC, vertPassPos.Position, vertPassPos.ObjToTangentSpace[2], TS_DIFFUSE);
 
-  OUT.baseTC.z = OUT.HPosition.w;
+    OUT.baseTC.z = OUT.HPosition.w;
 
-  float3 worldPos = float3(vertPassPos.InstMatrix[0].w, vertPassPos.InstMatrix[1].w, vertPassPos.InstMatrix[2].w);
-  OUT.baseTC.w = frac( length( worldPos.xyz + g_VS_WorldViewPos.xyz) ) + 0.01;
+    float3 worldPos = float3(vertPassPos.InstMatrix[0].w, vertPassPos.InstMatrix[1].w, vertPassPos.InstMatrix[2].w);
+    OUT.baseTC.w = frac(length(worldPos.xyz + g_VS_WorldViewPos.xyz)) + 0.01f;
 
-  // Output the screen-space texture coordinates - for shadows and general projections
-  OUT.screenProj = HPosToScreenTC(OUT.HPosition);
+    // Output the screen-space texture coordinates - for shadows and general projections
+    OUT.screenProj = HPosToScreenTC(OUT.HPosition);
 
-  return OUT;
+    return OUT;
 }
 
 sampler2D depthMapSampler = sampler_state
 {
-  Texture = $ZTarget;
-  MinFilter = POINT;
-  MagFilter = POINT;
-  MipFilter = POINT;
-  AddressU = Clamp;
-  AddressV = Clamp;
+    Texture = $ZTarget;
+    MinFilter = POINT;
+    MagFilter = POINT;
+    MipFilter = POINT;
+    AddressU = Clamp;
+    AddressV = Clamp;
 };
 
-///////////////// pixel shaders //////////////////
 pixout Common_CustomRenderPassPS(vert2fragCustomRender IN)
 {
-  pixout OUT = (pixout)0;
+    pixout OUT = (pixout)0;
 
-  float fDepth = DecodeSceneDepth(depthMapSampler, IN.screenProj) ;
+    float fDepth = DecodeSceneDepth(depthMapSampler, IN.screenProj);
+    half fMask = 1.0h;
 
-  half fMask = 1.0f;
 #if !%TEMP_EYES
-  fMask =  saturate( 1 - abs(IN.baseTC.z - fDepth )*0.333 ) ;
+    fMask = saturate(1.0h - abs(IN.baseTC.z - fDepth) * 0.333h);
 #endif
 
-  OUT.Color = half4(fMask.xxx * IN.cVision , IN.baseTC.w) ;
+    OUT.Color = half4(fMask.xxx * IN.cVision, IN.baseTC.w);
 
-  return OUT;
+    return OUT;
 }
-
-//////////////////////////////// technique ////////////////
 
 technique CustomRenderPass
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto Common_CustomRenderPassVS() CustomRenderVS;
-    PixelShader = compile ps_Auto Common_CustomRenderPassPS() CustomRenderPS;
+    pass p0
+    {
+        VertexShader = compile vs_Auto Common_CustomRenderPassVS() CustomRenderVS;
+        PixelShader = compile ps_Auto Common_CustomRenderPassPS() CustomRenderPS;
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = Back;
-    ZFunc = LEqual;
-
-    IgnoreMaterialState = true;
-  }
+        ZEnable = true;
+        ZWriteEnable = true;
+        CullMode = Back;
+        ZFunc = LEqual;
+        IgnoreMaterialState = true;
+    }
 }

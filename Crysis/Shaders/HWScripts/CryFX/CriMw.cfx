@@ -1,152 +1,113 @@
 #include "common.cfi"
 
-//////////////////////////////////////////////////
-// shader constants
-
-// VS
+// VS Constants
 float4x4 compMatrix : PI_Composite;
 
-// PS
-
-//////////////////////////////////////////////////
-// samplers
-
-sampler2D  ySampler : register(s0);
+// PS Samplers
+sampler2D ySampler  : register(s0);
 sampler2D cbSampler : register(s1);
 sampler2D crSampler : register(s2);
-sampler2D  aSampler : register(s3);
+sampler2D aSampler  : register(s3);
 
-//////////////////////////////////////////////////
-// input signatures
-
-// VS
 struct a2v
 {
-  float4 pos : POSITION;
-  float2 tex : TEXCOORD;
+    float4 pos : POSITION;
+    float2 tex : TEXCOORD;
 };
 
-// PS
 struct v2f
 {
-  float4 pos : POSITION;
-  float2 tex : TEXCOORD0;
+    float4 pos : POSITION;
+    float2 tex : TEXCOORD0;
 };
 
-//////////////////////////////////////////////////
-// Vertex shader
-
-v2f VS( a2v IN )
+v2f VS(a2v IN)
 {
-  v2f OUT = (v2f) 0;
-  OUT.pos = mul( compMatrix, IN.pos );
-  OUT.tex = IN.tex;
-  return OUT;
+    v2f OUT = (v2f)0;
+
+    OUT.pos = mul(compMatrix, IN.pos);
+    OUT.tex = IN.tex;
+
+    return OUT;
 }
 
-//////////////////////////////////////////////////
-// Pixel shader
-
-half4 PS_CCIR601( v2f IN ) : COLOR
+half4 PS_CCIR601(v2f IN) : COLOR
 {
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   half4 ret = 0;
-   DebugOutput(ret, float4(0, 0, 0, 1));
-   return ret;
- #endif
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    half4 ret = 0.0h;
+    DebugOutput(ret, float4(0.0f, 0.0f, 0.0f, 1.0f));
+    return ret;
+#endif
 
-/*
-  half3 YCbCr;
-  YCbCr.x = tex2D(ySampler, IN.tex.xy).x;
-  YCbCr.y = tex2D(cbSampler, IN.tex.xy).x;
-  YCbCr.z = tex2D(crSampler, IN.tex.xy).x;
-//  YCbCr -= half3(16.0/255.0, 128.0/255.0, 128.0/255.0);
+    half Y  = tex2D(ySampler,  IN.tex.xy).a;
+    half Cb = tex2D(cbSampler, IN.tex.xy).a;
+    half Cr = tex2D(crSampler, IN.tex.xy).a;
 
-  half3 col;
-  col.x = dot(YCbCr, half3(1.164383,  0.000000,  1.596027));
-  col.y = dot(YCbCr, half3(1.164383, -0.391762, -0.812968));
-  col.z = dot(YCbCr, half3(1.164383,  2.017232,  0.000000));
-  col += half3(-0.874202, 0.531668, -1.085631);
-*/
+    half3 col = half3( 1.164383h,  1.164383h,  1.164383h) * Y  +
+                half3( 0.000000h, -0.391762h,  2.017232h) * Cb +
+                half3( 1.596027h, -0.812968h,  0.000000h) * Cr +
+                half3(-0.874202h,  0.531668h, -1.085631h);
 
-  half  Y = tex2D( ySampler, IN.tex.xy).a;
-  half Cb = tex2D(cbSampler, IN.tex.xy).a;
-  half Cr = tex2D(crSampler, IN.tex.xy).a;
-
-  half3 col = half3( 1.164383,  1.164383,  1.164383) *  Y +
-         half3( 0.000000, -0.391762,  2.017232) * Cb +
-         half3( 1.596027, -0.812968,  0.000000) * Cr +
-         half3(-0.874202,  0.531668, -1.085631);
-
-  return half4(saturate(col), 1);
+    return half4(saturate(col), 1.0h);
 }
 
-half4 PS_CCIR601_ColAlpha( v2f IN ) : COLOR
+half4 PS_CCIR601_ColAlpha(v2f IN) : COLOR
 {
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   half4 ret = 0;
-   DebugOutput(ret, float4(0, 0, 0, 1));
-   return ret;
- #endif
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    half4 ret = 0.0h;
+    DebugOutput(ret, float4(0.0f, 0.0f, 0.0f, 1.0f));
+    return ret;
+#endif
 
-  half  Y = tex2D( ySampler, IN.tex.xy).a;
-  half Cb = tex2D(cbSampler, IN.tex.xy).a;
-  half Cr = tex2D(crSampler, IN.tex.xy).a;
-  half  A = tex2D( aSampler, IN.tex.xy).a;
+    half Y  = tex2D(ySampler,  IN.tex.xy).a;
+    half Cb = tex2D(cbSampler, IN.tex.xy).a;
+    half Cr = tex2D(crSampler, IN.tex.xy).a;
+    half A  = tex2D(aSampler,  IN.tex.xy).a;
 
-  half3 col = half3( 1.164383,  1.164383,  1.164383) *  Y +
-         half3( 0.000000, -0.391762,  2.017232) * Cb +
-         half3( 1.596027, -0.812968,  0.000000) * Cr +
-         half3(-0.874202,  0.531668, -1.085631);
+    half3 col = half3( 1.164383h,  1.164383h,  1.164383h) * Y  +
+                half3( 0.000000h, -0.391762h,  2.017232h) * Cb +
+                half3( 1.596027h, -0.812968h,  0.000000h) * Cr +
+                half3(-0.874202h,  0.531668h, -1.085631h);
 
-  half alpha = 1.164383 * A - 0.073059;
+    half alpha = 1.164383h * A - 0.073059h;
 
-  return saturate(half4(col, alpha));
+    return saturate(half4(col, alpha));
 }
 
-half4 PS_Fallback( v2f IN ) : COLOR
+half4 PS_Fallback(v2f IN) : COLOR
 {
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   half4 ret = 0;
-   DebugOutput(ret, float4(0, 0, 0, 1));
-   return ret;
- #endif
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    half4 ret = 0.0h;
+    DebugOutput(ret, float4(0.0f, 0.0f, 0.0f, 1.0f));
+    return ret;
+#endif
 
-  return half4(0, 0, 0, 1);
+    return half4(0.0h, 0.0h, 0.0h, 1.0h);
 }
-
-//////////////////////////////////////////////////
-// Technique "CCIR601"
 
 technique CCIR601
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto VS();
-    PixelShader = compile ps_Auto PS_CCIR601();
-  }
+    pass p0
+    {
+        VertexShader = compile vs_Auto VS();
+        PixelShader  = compile ps_Auto PS_CCIR601();
+    }
 }
-
-//////////////////////////////////////////////////
-// Technique "CCIR601_ColAlpha"
 
 technique CCIR601_ColAlpha
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto VS();
-    PixelShader = compile ps_Auto PS_CCIR601_ColAlpha();
-  }
+    pass p0
+    {
+        VertexShader = compile vs_Auto VS();
+        PixelShader  = compile ps_Auto PS_CCIR601_ColAlpha();
+    }
 }
-
-//////////////////////////////////////////////////
-// Technique "Fallback"
 
 technique Fallback
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto VS();
-    PixelShader = compile ps_Auto PS_Fallback();
-  }
+    pass p0
+    {
+        VertexShader = compile vs_Auto VS();
+        PixelShader  = compile ps_Auto PS_Fallback();
+    }
 }

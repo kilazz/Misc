@@ -4,88 +4,68 @@
 
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
-           "ShaderDrawType = Light;"
+    string Script = "ShaderDrawType = Light;";
 >;
-
-// Non-Tweakables
 
 float4 objColor : PI_ObjColor;
 
-// Structs
-
 struct SDebugLightApp2VS
 {
-  float4 pos : POSITION0;
+    float4 pos : POSITION0;
 };
 
 struct SDebugLightVS2PS
 {
-  float4 pos : POSITION0;
-  float4 col : COLOR0;
+    float4 pos : POSITION0;
+    float4 col : COLOR0;
 };
 
-// General pass
-
-SDebugLightVS2PS
-DebugLightVS( SDebugLightApp2VS IN )
+SDebugLightVS2PS DebugLightVS(SDebugLightApp2VS IN)
 {
-  SDebugLightVS2PS OUT = (SDebugLightVS2PS) 0;
-  OUT.pos = mul( vpMatrix, IN.pos );
-  OUT.col = objColor;
-  return OUT;
+    SDebugLightVS2PS OUT = (SDebugLightVS2PS)0;
+
+    OUT.pos = mul(vpMatrix, IN.pos);
+    OUT.col = objColor;
+
+    return OUT;
 }
 
-float4
-DebugLightPS( SDebugLightVS2PS IN ) : COLOR0
+float4 DebugLightPS(SDebugLightVS2PS IN) : COLOR0
 {
-  return IN.col;
+    return IN.col;
 }
 
 technique General
 <
-  string Script = 
-        "TechniqueZ=DebugLightZPass;"
+    string Script = "TechniqueZ=DebugLightZPass;";
 >
 {
-  pass p0
-  {
-    //ZEnable = true;
-    //ZWriteEnable = true;
-    //ZFunc = Equal;
-    //CullMode = Back;
-
-    VertexShader = compile vs_1_1 DebugLightVS();
-    PixelShader = compile ps_1_1 DebugLightPS();
-  }
+    pass p0
+    {
+        VertexShader = compile vs_1_1 DebugLightVS();
+        PixelShader  = compile ps_1_1 DebugLightPS();
+    }
 }
 
-// Z pass
-
-SDebugLightVS2PS
-DebugLightZVS( SDebugLightApp2VS IN )
+SDebugLightVS2PS DebugLightZVS(SDebugLightApp2VS IN)
 {
-  SDebugLightVS2PS OUT = (SDebugLightVS2PS) 0;
-  OUT.pos = mul( vpMatrix, IN.pos );
-  return OUT;
+    SDebugLightVS2PS OUT = (SDebugLightVS2PS)0;
+
+    OUT.pos = mul(vpMatrix, IN.pos);
+
+    return OUT;
 }
 
-float4
-DebugLightZPS( SDebugLightVS2PS IN ) : COLOR0
+float4 DebugLightZPS(SDebugLightVS2PS IN) : COLOR0
 {
-  return 0.001;
+    return 0.001f;
 }
 
 technique DebugLightZPass
 {
-  pass p0
-  {
-    //ZEnable = true;
-    //ZWriteEnable = true;
-    //ZFunc = LEqual;
-    //CullMode = Back;
-
-    VertexShader = compile vs_1_1 DebugLightZVS();
-    PixelShader = compile ps_1_1 DebugLightZPS();
-  }
+    pass p0
+    {
+        VertexShader = compile vs_1_1 DebugLightZVS();
+        PixelShader  = compile ps_1_1 DebugLightZPS();
+    }
 }

@@ -4,7 +4,7 @@
 
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "NoPreview;"
            "ShaderType = Particle;";
@@ -18,7 +18,6 @@ sampler2D diffuseSampler = sampler_state
   MipFilter = LINEAR;
 };
 
-////////////////////////////////////////////////
 // structs
 
 struct v2f
@@ -28,7 +27,6 @@ struct v2f
   float4 Color     : COLOR0;
 };
 
-/////////////////////////////////////////////////
 // shader code
 
 v2f ParticleTransform(in app2vertParticleGeneral IN)
@@ -38,7 +36,6 @@ v2f ParticleTransform(in app2vertParticleGeneral IN)
   OUT = (v2f)0;
 #endif
 
-  //////////////////////////////////////////////////////
   // Setup particle
 
   vert2FragParticleGeneral outParticle;
@@ -51,7 +48,6 @@ v2f ParticleTransform(in app2vertParticleGeneral IN)
   OUT.baseTC.xy = IN.baseTC.xy;
   OUT.Color = GetInputColor(IN.Color);
 
-  //////////////////////////////////////////////////////////////////////
 
   return OUT;
 }
@@ -84,7 +80,6 @@ pixout ParticlePS(v2f IN)
   return OUT;
 }
 
-/////////////////////////////////
 // technique
 
 technique SketchParticles

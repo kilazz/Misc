@@ -3,313 +3,221 @@
 
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
-           "ShaderDrawType = General;"
-           "ShaderType = PostProcess;"
+    string Script =
+        "ShaderDrawType = Custom;"
+        "ShaderType = PostProcess;"
+        "PreprType = GenerateSprites;";
 >;
 
-float4x4 objMatrix        : PI_TransObjMatrix;
-float3 cameraFrontVector  : PB_CameraFront;
+float4x4 objMatrix         : PI_TransObjMatrix;
+float3   cameraFrontVector : PB_CameraFront;
 
-float3x4  invObjSpaceMatrix;
-float4    globalDensity;
-float4    outsideSoftEdgesLerp;
-float3    eyePosInOS;
-float3    eyePosInOSx2 < psregister = PS_REG_PM_0; >;
-float4    eyePosInWS   < psregister = PS_REG_PM_1; vsregister = VS_REG_PM_0; >;
-float3    fogColor     < psregister = PS_REG_PM_2; >;
-float3    heightFallOffBasePoint < psregister = PS_REG_PM_3; >;
-float3    heightFallOffDirScaled < psregister = PS_REG_PM_4; >;
+float3x4 invObjSpaceMatrix;
+float4   globalDensity;
+float4   outsideSoftEdgesLerp;
+float3   eyePosInOS;
+float3   eyePosInOSx2           < psregister = PS_REG_PM_0; >;
+float4   eyePosInWS             < psregister = PS_REG_PM_1; vsregister = VS_REG_PM_0; >;
+float3   fogColor               < psregister = PS_REG_PM_2; >;
+float3   heightFallOffBasePoint < psregister = PS_REG_PM_3; >;
+float3   heightFallOffDirScaled < psregister = PS_REG_PM_4; >;
 
 sampler2D sceneDepthSampler = sampler_state
 {
-  Texture = $ZTarget;
-  MinFilter = POINT;
-  MagFilter = POINT;
-  MipFilter = POINT;
-  AddressU = Clamp;
-  AddressV = Clamp;
+    Texture   = $ZTarget;
+    MinFilter = POINT;
+    MagFilter = POINT;
+    MipFilter = POINT;
+    AddressU  = Clamp;
+    AddressV  = Clamp;
 };
 
 struct a2v
 {
-  float4 Position : POSITION;
+    float4 Position : POSITION;
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Ellipsoid
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// --- Ellipsoid Implementation ---
 
 struct v2f_ellipsoid
 {
-  float4 hPos          : POSITION;
-  float3 eyeDirInWS    : TEXCOORDN;
-  float3 eyeDirInOS    : TEXCOORDN;
-  float4 hPosTexProj  : TEXCOORDN;
+    float4 hPos        : POSITION;
+    float3 eyeDirInWS  : TEXCOORDN;
+    float3 eyeDirInOS  : TEXCOORDN;
+    float4 hPosTexProj : TEXCOORDN;
 };
 
-v2f_ellipsoid FogVolumeEllipsoidVS( a2v IN )
+v2f_ellipsoid FogVolumeEllipsoidVS(a2v IN)
 {
-  v2f_ellipsoid OUT = (v2f_ellipsoid) 0;
+    v2f_ellipsoid OUT = (v2f_ellipsoid)0;
 
-  float4 vPos = IN.Position;
-  float4 hPos = mul( vpMatrix, vPos );
+    float4 vPos = IN.Position;
+    float4 hPos = mul(vpMatrix, vPos);
 
-  OUT.hPos = hPos;
-  // multiply homogeneous z by either zero (inside) or one (outside) to prevent far clipping plane artifacts if we're inside a huge fog volume
-  OUT.hPos.z *= eyePosInWS.w;
+    OUT.hPos   = hPos;
+    OUT.hPos.z *= eyePosInWS.w;
 
-  OUT.hPosTexProj = hPos;
-  OUT.hPosTexProj.x = (  OUT.hPosTexProj.x + OUT.hPosTexProj.w ) * 0.5;
-  OUT.hPosTexProj.y = ( -OUT.hPosTexProj.y + OUT.hPosTexProj.w ) * 0.5;
+    OUT.hPosTexProj.x = (hPos.x + hPos.w) * 0.5f;
+    OUT.hPosTexProj.y = (-hPos.y + hPos.w) * 0.5f;
+    OUT.hPosTexProj.zw = hPos.zw;
 #ifndef D3D10
-  // compiler bug in fxc10 incorrecly compiles the following line "add half a texel", put it back in once compiler is fixed
-  OUT.hPosTexProj.xy += g_VS_ScreenSize.zw * OUT.hPosTexProj.w;
+    OUT.hPosTexProj.xy += g_VS_ScreenSize.zw * hPos.w;
 #endif
-  OUT.eyeDirInWS = mul( (float3x4) objMatrix, vPos ) - eyePosInWS.xyz;
-  OUT.eyeDirInOS = mul( (float3x3) invObjSpaceMatrix, OUT.eyeDirInWS.xyz );
 
-  return OUT;
+    OUT.eyeDirInWS = mul((float3x4)objMatrix, vPos) - eyePosInWS.xyz;
+    OUT.eyeDirInOS = mul((float3x3)invObjSpaceMatrix, OUT.eyeDirInWS.xyz);
+
+    return OUT;
 }
 
-pixout FogVolumeEllipsoidPS( v2f_ellipsoid IN )
+pixout FogVolumeEllipsoidPS(v2f_ellipsoid IN)
 {
-  pixout OUT = (pixout) 0;
+    pixout OUT = (pixout)0;
 
-  // Debug output
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   DebugOutput(OUT.Color, float4(0, 0, 0, 1));
-   return OUT;
- #endif
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    DebugOutput(OUT.Color, float4(0.0f, 0.0f, 0.0f, 1.0f));
+    return OUT;
+#endif
 
-  // setup ray tracing in OS
-  float3 cameraPosInOSx2 = eyePosInOSx2;
-  float3 cameraLookDirInOS = IN.eyeDirInOS; //mul( (float3x3) invObjSpaceMatrix, IN.eyeDirInWS.xyz );
+    float3 lookDirOS  = IN.eyeDirInOS;
+    float  invCamLen  = rsqrt(dot(lookDirOS, lookDirOS));
+    lookDirOS        *= invCamLen;
 
-  float invOfScaledCamDirLength = rsqrt( dot( cameraLookDirInOS, cameraLookDirInOS ) );
-  cameraLookDirInOS *= invOfScaledCamDirLength;
+    float B    = dot(eyePosInOSx2, lookDirOS);
+    float disc = (B * B) - (dot(eyePosInOSx2, eyePosInOSx2) - 4.0f);
+    clip(disc);
 
-  // calc coefficients for ellipsoid parametrization (just a simple unit-sphere in its own space)
-  float B = dot( cameraPosInOSx2, cameraLookDirInOS );
-  float Bsq = B * B;
-  float C = dot( cameraPosInOSx2, cameraPosInOSx2 ) - 4.0;
+    float discSqrt = sqrt(disc);
+    float2 t       = max(0.0f, 0.5f * float2(-B - discSqrt, -B + discSqrt));
 
-  // solve quadratic equation
-  float discr = Bsq - C;
-  clip( discr ); // if( discr >= 0.0 ) then ray hit
-  //clip( discr - Bsq );
-  float discrSqrt = sqrt( discr );
-  //clip( discrSqrt - B ); // now handled by "tE = max( ... );" below
+    float sceneDepth = DecodeSceneDepth(sceneDepthSampler, IN.hPosTexProj / IN.hPosTexProj.w);
+    float tI         = max(t.x, min(sceneDepth / dot(IN.eyeDirInWS * invCamLen, -cameraFrontVector), t.y));
 
-  // ray hit
-  float3 cameraPosInWS = eyePosInWS.xyz;
-  float3 cameraLookDirInWS = IN.eyeDirInWS.xyz * invOfScaledCamDirLength;
+    float3 front  = t.x * (IN.eyeDirInWS * invCamLen) + eyePosInWS.xyz;
+    float3 dist   = (tI - t.x) * (IN.eyeDirInWS * invCamLen);
+    float  fogInt = length(dist) * exp(-dot(front - heightFallOffBasePoint, heightFallOffDirScaled));
 
-  ////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////
-/*
-  float tS = max( 0.5 * ( -B - discrSqrt ), 0.0 );
-  float3 front = cameraPosInWS + tS * cameraLookDirInWS;
+    float heightDiff = dot(dist, heightFallOffDirScaled);
+    if (abs(heightDiff) > 0.001f)
+    {
+        fogInt *= (1.0f - exp(-heightDiff)) / heightDiff;
+    }
 
-  float tE = max( 0.5 * ( -B + discrSqrt ), 0.0 );
-  float3 back = cameraPosInWS + tE * cameraLookDirInWS;
+    if (GetShaderQuality() > QUALITY_LOW)
+    {
+        float soft = saturate(disc * outsideSoftEdgesLerp.x + outsideSoftEdgesLerp.y);
+        fogInt *= soft * (2.0f - soft);
+    }
 
-  float d = dot( cameraPosInWS, -cameraFrontVector );
-  float t0 = dot( front, -cameraFrontVector );
-  float t1 = dot( back, -cameraFrontVector );
-
-  float sceneDepth = DecodeSceneDepth( sceneDepthSampler, IN.hPosTexProj ) + d;
-  sceneDepth = min( sceneDepth, t1 );
-  back = lerp( front, back, saturate( ( sceneDepth - t0 ) / ( t1 - t0 ) ) );
-
-  float3 dist = back - front;
-  float fogInt = length( dist ) * exp( -dot( front - heightFallOffBasePoint, heightFallOffDirScaled ) );
-*/
-  ////////////////////////////////////////////////////////////////////////
-
-  //float tS = max( 0.5 * ( -B - discrSqrt ), 0.0 ); // clamp to zero so front ray-ellipsoid intersection is NOT behind camera
-  //float tE = max( 0.5 * ( -B + discrSqrt ), 0.0 ); // clamp to zero so back ray-ellipsoid intersection is NOT behind camera
-
-  float2 t = max( 0, 0.5 * float2( -B - discrSqrt, -B + discrSqrt ) );
-  float tS = t.x;
-  float tE = t.y;
-
-  float sceneDepth = DecodeSceneDepth( sceneDepthSampler, IN.hPosTexProj );
-  float tI = sceneDepth / dot( cameraLookDirInWS, -cameraFrontVector );
-  tI = max( tS, min( tI, tE ) ); // clamp to range [tS, tE]
-
-  float3 front = tS * cameraLookDirInWS + cameraPosInWS;
-  //float3 back = tI * cameraLookDirInWS + cameraPosInWS;
-
-  float3 dist = ( tI - tS ) * cameraLookDirInWS;
-  float distLength = length( dist );
-  float fogInt = distLength * exp( -dot( front - heightFallOffBasePoint, heightFallOffDirScaled ) );
-
-  ////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////
-
-  float heightDiff = dot( dist, heightFallOffDirScaled );
-  if( abs( heightDiff ) > 0.001 )
-    fogInt *= ( 1.0 - exp( -heightDiff ) ) / heightDiff;
-
-  if (GetShaderQuality() > QUALITY_LOW)
-  {
-    float softArg = saturate( discr * outsideSoftEdgesLerp.x + outsideSoftEdgesLerp.y );
-    //fogInt *= softArg;
-    fogInt *= softArg * ( 2 - softArg );
-    //fogInt *= smoothstep( 0.0, 1.0, softArg );
-  }
-
-  float fog = 1 - exp2( -globalDensity.y * fogInt );
-  OUT.Color = float4( fogColor.xyz, fog );
-
-  return OUT;
+    OUT.Color = float4(fogColor.xyz, 1.0f - exp2(-globalDensity.y * fogInt));
+    return OUT;
 }
 
-technique Ellipsoid
-{
-  pass p0
-  {
-    VertexShader = compile vs_Auto FogVolumeEllipsoidVS();
-
-    ZEnable = false;
-    ZWriteEnable = false;
-    CullMode = Front;
-
-    SrcBlend = SrcAlpha;
-    DestBlend = InvSrcAlpha;
-    AlphaBlendEnable = true;
-    ColorWriteEnable = RED|GREEN|BLUE;
-
-    PixelShader = compile ps_Auto FogVolumeEllipsoidPS();
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Box
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// --- Box Implementation ---
 
 struct v2f_box
 {
-  float4 hPos          : POSITION;
-  float3 eyeDirInWS    : TEXCOORDN;
-  float3 eyeDirInOS    : TEXCOORDN;
-  float4 hPosTexProj  : TEXCOORDN;
-  float3 tPosPlane    : TEXCOORDN;
-  float3 tNegPlane    : TEXCOORDN;
+    float4 hPos        : POSITION;
+    float3 eyeDirInWS  : TEXCOORDN;
+    float3 eyeDirInOS  : TEXCOORDN;
+    float4 hPosTexProj : TEXCOORDN;
+    float3 tPosPlane   : TEXCOORDN;
+    float3 tNegPlane   : TEXCOORDN;
 };
 
-v2f_box FogVolumeBoxVS( a2v IN )
+v2f_box FogVolumeBoxVS(a2v IN)
 {
-  v2f_box OUT = (v2f_box) 0;
+    v2f_box OUT = (v2f_box)0;
 
-  float4 vPos = IN.Position;
-  float4 hPos = mul( vpMatrix, vPos );
+    float4 vPos = IN.Position;
+    float4 hPos = mul(vpMatrix, vPos);
 
-  OUT.hPos = hPos;
-  // multiply homogeneous z by either zero (inside) or one (outside) to prevent far clipping plane artifacts if we're inside a huge fog volume
-  OUT.hPos.z *= eyePosInWS.w;
+    OUT.hPos   = hPos;
+    OUT.hPos.z *= eyePosInWS.w;
 
-  OUT.hPosTexProj = hPos;
-  OUT.hPosTexProj.x = (  OUT.hPosTexProj.x + OUT.hPosTexProj.w ) * 0.5;
-  OUT.hPosTexProj.y = ( -OUT.hPosTexProj.y + OUT.hPosTexProj.w ) * 0.5;
+    OUT.hPosTexProj.x = (hPos.x + hPos.w) * 0.5f;
+    OUT.hPosTexProj.y = (-hPos.y + hPos.w) * 0.5f;
+    OUT.hPosTexProj.zw = hPos.zw;
 #ifndef D3D10
-  // compiler bug in fxc10 incorrecly compiles the following line "add half a texel", put it back in once compiler is fixed
-  OUT.hPosTexProj.xy += g_VS_ScreenSize.zw * OUT.hPosTexProj.w;
+    OUT.hPosTexProj.xy += g_VS_ScreenSize.zw * hPos.w;
 #endif
-  OUT.eyeDirInWS = mul( (float3x4) objMatrix, vPos ) - eyePosInWS.xyz;
-  OUT.eyeDirInOS = mul( (float3x3) invObjSpaceMatrix, OUT.eyeDirInWS.xyz );
 
-  OUT.tPosPlane =  1 - eyePosInOS;
-  OUT.tNegPlane = -1 - eyePosInOS;
+    OUT.eyeDirInWS = mul((float3x4)objMatrix, vPos) - eyePosInWS.xyz;
+    OUT.eyeDirInOS = mul((float3x3)invObjSpaceMatrix, OUT.eyeDirInWS.xyz);
+    OUT.tPosPlane  = 1.0f - eyePosInOS;
+    OUT.tNegPlane  = -1.0f - eyePosInOS;
 
-  return OUT;
+    return OUT;
 }
 
-pixout FogVolumeBoxPS( v2f_box IN )
+pixout FogVolumeBoxPS(v2f_box IN)
 {
-  pixout OUT = (pixout) 0;
+    pixout OUT = (pixout)0;
 
-  // Debug output
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   DebugOutput(OUT.Color, float4(0, 0, 0, 1));
-   return OUT;
- #endif
+    float3 lookDirOS  = IN.eyeDirInOS;
+    float  invCamLen  = rsqrt(dot(lookDirOS, lookDirOS));
+    lookDirOS        *= invCamLen;
 
-  // setup ray tracing in OS
-  float3 cameraLookDirInOS = IN.eyeDirInOS;
+    float3 invLookDir = 1.0f / lookDirOS;
+    float3 tPos       = IN.tPosPlane * invLookDir;
+    float3 tNeg       = IN.tNegPlane * invLookDir;
 
-  float invOfScaledCamDirLength = rsqrt( dot( cameraLookDirInOS, cameraLookDirInOS ) );
-  cameraLookDirInOS *= invOfScaledCamDirLength;
+    float3 tFrontFace = (lookDirOS > 0.0f) ? tNeg : tPos;
+    float3 tBackFace  = (lookDirOS > 0.0f) ? tPos : tNeg;
 
-  float3 invCameraLookDirInOS = 1 / cameraLookDirInOS;
-  float3 tPosPlane = IN.tPosPlane * invCameraLookDirInOS;
-  float3 tNegPlane = IN.tNegPlane * invCameraLookDirInOS;
+    tFrontFace = clamp(tFrontFace, -1000000.0f, 1000000.0f);
+    tBackFace  = clamp(tBackFace, -1000000.0f, 1000000.0f);
 
-  float3 tFrontFace = cameraLookDirInOS > 0 ? tNegPlane : tPosPlane;
-  float3 tBackFace = cameraLookDirInOS > 0 ? tPosPlane : tNegPlane;
+    float tS = max(0.0f, max(tFrontFace.x, max(tFrontFace.y, tFrontFace.z)));
+    float tE = max(0.0f, min(tBackFace.x, min(tBackFace.y, tBackFace.z)));
 
-  // filter any NAN introduced by division above in case cameraLookDirInOS is parallel to front/back planes of fog volume box
-  tFrontFace = max( min( tFrontFace, (float3)10000000 ), (float3)-10000000 ); //tFrontFace = tFrontFace > 10000000 ? 0 : tFrontFace;
-  tBackFace = max( min( tBackFace, (float3)10000000 ), (float3)-10000000 ); //tBackFace = tBackFace > 10000000 ? 0 : tBackFace;
+    float sceneDepth = DecodeSceneDepth(sceneDepthSampler, IN.hPosTexProj / IN.hPosTexProj.w);
+    float tI         = max(tS, min(sceneDepth / dot(IN.eyeDirInWS * invCamLen, -cameraFrontVector), tE));
 
-  //float tS = max( 0, max( tFrontFace.x, max( tFrontFace.y, tFrontFace.z ) ) );
-  //float tE = max( 0, min( tBackFace.x, min( tBackFace.y, tBackFace.z ) ) );
+    float3 front  = tS * (IN.eyeDirInWS * invCamLen) + eyePosInWS.xyz;
+    float3 dist   = (tI - tS) * (IN.eyeDirInWS * invCamLen);
+    float  fogInt = length(dist) * exp(-dot(front - heightFallOffBasePoint, heightFallOffDirScaled));
 
-  float2 t = max( 0, float2( max( tFrontFace.x, max( tFrontFace.y, tFrontFace.z ) ),
-    min( tBackFace.x, min( tBackFace.y, tBackFace.z ) ) ) );
+    float heightDiff = dot(dist, heightFallOffDirScaled);
+    if (abs(heightDiff) > 0.001f)
+    {
+        fogInt *= (1.0f - exp(-heightDiff)) / heightDiff;
+    }
 
-  float tS = t.x;
-  float tE = t.y;
-
-  float3 cameraPosInWS = eyePosInWS.xyz;
-  float3 cameraLookDirInWS = IN.eyeDirInWS.xyz * invOfScaledCamDirLength;
-
-  ////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////
-
-  float sceneDepth = DecodeSceneDepth( sceneDepthSampler, IN.hPosTexProj );
-  float tI = sceneDepth / dot( cameraLookDirInWS, -cameraFrontVector );
-  tI = max( tS, min( tI, tE ) ); // clamp to range [tS, tE]
-
-  float3 front = tS * cameraLookDirInWS + cameraPosInWS;
-  //float3 back = tI * cameraLookDirInWS + cameraPosInWS;
-
-  float3 dist = ( tI - tS ) * cameraLookDirInWS;
-  float distLength = length( dist );
-  float fogInt = distLength * exp( -dot( front - heightFallOffBasePoint, heightFallOffDirScaled ) );
-
-  ////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////
-
-  float heightDiff = dot( dist, heightFallOffDirScaled );
-  if( abs( heightDiff ) > 0.001 )
-    fogInt *= ( 1.0 - exp( -heightDiff ) ) / heightDiff;
-
-  float fog = 1 - exp2( -globalDensity.y * fogInt );
-  OUT.Color = float4( fogColor.xyz, fog );
-
-  return( OUT );
+    OUT.Color = float4(fogColor.xyz, 1.0f - exp2(-globalDensity.y * fogInt));
+    return OUT;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// --- Techniques ---
+
+technique Ellipsoid
+{
+    pass p0
+    {
+        VertexShader     = compile vs_Auto FogVolumeEllipsoidVS();
+        PixelShader      = compile ps_Auto FogVolumeEllipsoidPS();
+        ZEnable          = false;
+        ZWriteEnable     = false;
+        CullMode         = Front;
+        SrcBlend         = SrcAlpha;
+        DestBlend        = InvSrcAlpha;
+        AlphaBlendEnable = true;
+        ColorWriteEnable = RED | GREEN | BLUE;
+    }
+}
 
 technique Box
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto FogVolumeBoxVS();
-
-    ZEnable = false;
-    ZWriteEnable = false;
-    CullMode = Front;
-
-    SrcBlend = SrcAlpha;
-    DestBlend = InvSrcAlpha;
-    AlphaBlendEnable = true;
-
-    ColorWriteEnable = RED|GREEN|BLUE;
-
-    PixelShader = compile ps_Auto FogVolumeBoxPS();
-  }
+    pass p0
+    {
+        VertexShader     = compile vs_Auto FogVolumeBoxVS();
+        PixelShader      = compile ps_Auto FogVolumeBoxPS();
+        ZEnable          = false;
+        ZWriteEnable     = false;
+        CullMode         = Front;
+        SrcBlend         = SrcAlpha;
+        DestBlend        = InvSrcAlpha;
+        AlphaBlendEnable = true;
+        ColorWriteEnable = RED | GREEN | BLUE;
+    }
 }

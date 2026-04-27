@@ -2,620 +2,556 @@
 #include "ModificatorVT.cfi"
 
 // Shader global descriptions
+
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
-           "ShaderDrawType = Custom;"
-           "ShaderType = FX;"
-           "LocalConstants;"
+    string Script =
+        "ShaderDrawType = Custom;"
+        "ShaderType = FX;"
+        "LocalConstants;";
 >;
 
-/// Un-Tweakables //////////////////////
-float4x4 CompMatrix  : PI_Composite;    // View*Projection
-float4 CameraFrontVector : PB_CameraFront;
+// Un-Tweakables
 
-float4 LightningPos;
-float4 LightningColSize;
+float4x4 CompMatrix          : PI_Composite;      // View*Projection
+float4   CameraFrontVector   : PB_CameraFront;
 
-float4 ImposterCameraPos;
-float4 ImposterCameraFront;
-float4 ImposterCameraUp;
-float4 vCloudWSPos;          // VS constant
-float4 g_CloudColorScale;    // PS constant, .x=Final Cloud Color Multiplier
+float4   LightningPos;
+float4   LightningColSize;
 
-float4 RTRect : PB_RTRect;
+float4   ImposterCameraPos;
+float4   ImposterCameraFront;
+float4   ImposterCameraUp;
+float4   vCloudWSPos;                             // VS constant
+float4   g_CloudColorScale;                       // PS constant, .x=Final Cloud Color Multiplier
 
-sampler2D baseMap : register(s0);
+float4   RTRect              : PB_RTRect;
+float4   ScreenSize          : PB_ScreenSize;
+
+// Samplers
+
+sampler2D baseMap  : register(s0);
 sampler2D depthMap : register(s1);
-sampler2D hdrMap : register(s2);
+sampler2D hdrMap   : register(s2);
 
 sampler2D imposterMap
 <
-  string Script = 
-      "RenderOrder=PreProcess;"
-      "ProcessOrder=Panorama;";
+    string Script =
+        "RenderOrder=PreProcess;"
+        "ProcessOrder=Panorama;";
 >;
 
-float4 ScreenSize  : PB_ScreenSize;
+// Structs
 
 struct pixout_cl
 {
-  float4 Color  : COLOR0;
-};
-
-struct app2vertCS
-{
-  IN_P
-  IN_TBASE
-  float3 viewDir : TEXCOORD1;
-};
-
-struct vert2frag
-{
-  float4 HPosition  : POSITION;
-  float2 baseTC     : TEXCOORD0_centroid;
-  float3 vCamToPixel : TEXCOORD1;
-  float3 vCamPosDiff : TEXCOORD2;
-  float3 ImposterCameraFront : TEXCOORD3;
-  float3 ImposterCameraUp : TEXCOORD4;
-  float4 NearFar     : TEXCOORD5;
-};
-
-struct vert2fragImp
-{
-  float4 HPosition  : POSITION;
-  float2 baseTC     : TEXCOORD0_centroid;
-  float3 posTC      : TEXCOORD1;
-  float  distOpac   : TEXCOORD2_centroid;
-
-  float4 hPosTexProj : TEXCOORD3;
-  float4 Color       : COLOR0;
-  float3 Lightning   : TEXCOORD4;
-};
-
-struct vert2fragCSImp
-{
-  float4 HPosition  : POSITION;
-  float2 baseTC     : TEXCOORDN;
-  float4 viewDir    : TEXCOORDN;
-  float4 fogColor   : TEXCOORDN;
-  float2 sceneDepthTC : TEXCOORDN;
-  float  linearDepth : TEXCOORDN;
-  float3 Lightning   : TEXCOORDN;
-  float4 NearFar     : TEXCOORDN;
-};
-
-struct app2vertCloud
-{
-  IN_P
-  IN_TBASE
-  IN_C0
-};
-
-struct vert2fragCloud
-{
-  float4 HPosition  : POSITION;
-  OUT_C0
-  float2 baseTC     : TEXCOORD0;
+    float4 Color               : COLOR0;
 };
 
 struct pixout2
 {
-  float4 Color  : COLOR0;
-  float  Depth  : DEPTH;
+    float4 Color               : COLOR0;
+    float  Depth               : DEPTH;
 };
+
+struct app2vertCS
+{
+    IN_P
+    IN_TBASE
+    float3 viewDir             : TEXCOORD1;
+};
+
+struct app2vertCloud
+{
+    IN_P
+    IN_TBASE
+    IN_C0
+};
+
+struct vert2frag
+{
+    float4 HPosition           : POSITION;
+    float2 baseTC              : TEXCOORD0_centroid;
+    float3 vCamToPixel         : TEXCOORD1;
+    float3 vCamPosDiff         : TEXCOORD2;
+    float3 ImposterCameraFront : TEXCOORD3;
+    float3 ImposterCameraUp    : TEXCOORD4;
+    float4 NearFar             : TEXCOORD5;
+};
+
+struct vert2fragImp
+{
+    float4 HPosition           : POSITION;
+    float2 baseTC              : TEXCOORD0_centroid;
+    float3 posTC               : TEXCOORD1;
+    float  distOpac            : TEXCOORD2_centroid;
+    float4 hPosTexProj         : TEXCOORD3;
+    float4 Color               : COLOR0;
+    float3 Lightning           : TEXCOORD4;
+};
+
+struct vert2fragCSImp
+{
+    float4 HPosition           : POSITION;
+    float2 baseTC              : TEXCOORDN;
+    float4 viewDir             : TEXCOORDN;
+    float4 fogColor            : TEXCOORDN;
+    float2 sceneDepthTC        : TEXCOORDN;
+    float  linearDepth         : TEXCOORDN;
+    float3 Lightning           : TEXCOORDN;
+    float4 NearFar             : TEXCOORDN;
+};
+
+struct vert2fragCloud
+{
+    float4 HPosition           : POSITION;
+    OUT_C0
+    float2 baseTC              : TEXCOORD0;
+};
+
+// Vertex Shaders
 
 vert2frag ImposterVS(app2vertCloud IN)
 {
-  vert2frag OUT = (vert2frag)0;
+    vert2frag OUT = (vert2frag)0;
 
-  // Position in screen space.
-  float4 vPos = IN.Position;
-  OUT.HPosition = mul(CompMatrix, vPos);
-  OUT.NearFar = g_VS_NearFarClipDist;
+    OUT.HPosition = mul(CompMatrix, IN.Position);
+    OUT.NearFar   = g_VS_NearFarClipDist;
+    OUT.baseTC.xy = IN.baseTC.xy;
 
-  OUT.baseTC.xy = IN.baseTC.xy;
-
-  return OUT;
+    return OUT;
 }
 
 vert2fragCloud TransformedClearVS(app2vertCloud IN)
 {
-  vert2fragCloud OUT = (vert2fragCloud)0;
+    vert2fragCloud OUT = (vert2fragCloud)0;
 
-  // Position in screen space.
-  float4 vPos = IN.Position;
-  OUT.HPosition = float4(2.0f * (vPos.xy + 0.5f) / IN.baseTC.xy - 1.0f, vPos.zw);
-  OUT.baseTC = IN.baseTC;
+    OUT.HPosition = float4(2.0 * (IN.Position.xy + 0.5) / IN.baseTC.xy - 1.0, IN.Position.zw);
+    OUT.baseTC    = IN.baseTC;
+    OUT.Color     = GetInputColor(IN.Color);
 
-  OUT.Color = GetInputColor(IN.Color);
-
-  return OUT;
-}
-
-pixout ClearPS(vert2fragCloud IN)
-{
-  pixout OUT;
-
-  OUT.Color = IN.Color;
-
-  return OUT;
+    return OUT;
 }
 
 vert2frag PanoramaClusterVS(app2vertCloud IN)
 {
-  vert2frag OUT = (vert2frag)0;
+    vert2frag OUT = (vert2frag)0;
 
-  OUT.baseTC = IN.baseTC;
+    OUT.baseTC    = IN.baseTC;
+    OUT.HPosition = mul(CompMatrix, IN.Position);
 
-  // get position in screen space.
-  float4 vPos = IN.Position;
-  OUT.HPosition = mul(CompMatrix, vPos);
+    OUT.vCamToPixel         = normalize(IN.Position - ImposterCameraPos).xyz;
+    OUT.vCamPosDiff         = ViewPos.xyz - ImposterCameraPos.xyz;
+    OUT.ImposterCameraFront = ImposterCameraFront.xyz;
+    OUT.ImposterCameraUp    = ImposterCameraUp.xyz;
 
-  // get view direction
-  OUT.vCamToPixel = normalize(vPos - ImposterCameraPos).xyz;
-
-  // get camera positions difference in tangent space
-  OUT.vCamPosDiff = ViewPos.xyz - ImposterCameraPos.xyz;
-
-  OUT.ImposterCameraFront = ImposterCameraFront.xyz;
-  OUT.ImposterCameraUp = ImposterCameraUp.xyz;
-
-  return OUT;
+    return OUT;
 }
 
 vert2fragCloud TransformCloudVS(app2vertCloud IN)
 {
-  vert2fragCloud OUT = (vert2fragCloud)0;
+    vert2fragCloud OUT = (vert2fragCloud)0;
 
-  // Position in screen space.
-  float4 vPos = IN.Position;
-  OUT.HPosition = mul(CompMatrix, vPos);
+    OUT.HPosition = mul(CompMatrix, IN.Position);
+    OUT.baseTC.xy = IN.baseTC.xy;
+    OUT.Color     = GetInputColor(IN.Color);
 
-  OUT.baseTC.xy = IN.baseTC.xy;
-  OUT.Color = GetInputColor(IN.Color);
-
-  // Fade out at near clipping plane.
-  // Zero opacity at near clipping plane AND "full opacity" when >= 1 meter away from near clipping plane
-  //OUT.Color *= smoothstep( OUT.HPosition.w - g_VS_NearFarClipDist.x, 0.0, 1.0 );
-
-  return OUT;
+    return OUT;
 }
 
 vert2fragImp TransformImposterVS(app2vertCloud IN)
 {
-  vert2fragImp OUT = (vert2fragImp)0;
+    vert2fragImp OUT = (vert2fragImp)0;
 
-  // Position in screen space.
-  float4 vPos = IN.Position;
-  OUT.HPosition = mul(CompMatrix, vPos);
+    OUT.HPosition   = mul(CompMatrix, IN.Position);
+    OUT.baseTC.xy   = (IN.baseTC.xy * RTRect.zw) + RTRect.xy;
+    OUT.posTC.xyz   = IN.Position.xyz;
+    OUT.distOpac    = 1.0 - pow(OUT.HPosition.w * g_VS_NearFarClipDist.w, 10.0);
+    OUT.hPosTexProj = HPosToScreenTC(OUT.HPosition);
+    OUT.Color       = GetInputColor(IN.Color);
 
-  OUT.baseTC.xy = (IN.baseTC.xy * RTRect.zw) + RTRect.xy;
-  OUT.posTC.xyz = vPos.xyz;
+    float3 attenDist = 0.05 * LightningColSize.w * (IN.Position.xyz - LightningPos.xyz);
+    float  lightning = 1.0 / (1.0 + dot(attenDist, attenDist));
 
-  // DO NOT SATURATE!!! We need per-pixel zero opacity at the far distance clipping plane
-  //OUT.distOpac = 1 - pow( saturate( OUT.HPosition.w * g_VS_NearFarClipDist.w ), 10 );
-  OUT.distOpac = 1 - pow( OUT.HPosition.w * g_VS_NearFarClipDist.w, 10 );
+    OUT.Lightning = LightningColSize.xyz * lightning;
 
-  OUT.hPosTexProj = HPosToScreenTC(OUT.HPosition);
-
-  OUT.Color = GetInputColor(IN.Color);
-
-  // Fade out at near clipping plane.
-  // Zero opacity at near clipping plane AND "full opacity" when >= 1 meter away from near clipping plane
-  //OUT.Color *= smoothstep( OUT.HPosition.w - g_VS_NearFarClipDist.x, 0.0, 1.0 );
-
-  float3 attenDist = 0.05 * LightningColSize.w * ( vPos.xyz - LightningPos.xyz );
-  float lightning = 1 / ( 1 + dot( attenDist, attenDist ) );
-  OUT.Lightning = LightningColSize.xyz * lightning;
-
-  return OUT;
+    return OUT;
 }
 
 vert2fragCSImp TransformCSImposterVS(app2vertCS IN)
 {
-  vert2fragCSImp OUT = (vert2fragCSImp)0;
+    vert2fragCSImp OUT = (vert2fragCSImp)0;
 
-  // Position in screen space.
-  float4 vPos = IN.Position;
-  OUT.HPosition = mul(CompMatrix, vPos);
-  OUT.baseTC.xy = (IN.baseTC.xy * RTRect.zw) + RTRect.xy;
-  OUT.viewDir.xyz = IN.viewDir.xyz;
-  OUT.fogColor = GetVolumetricFogColor( vCloudWSPos.xyz );
-  OUT.viewDir.a = LightningPos.a;
+    OUT.HPosition   = mul(CompMatrix, IN.Position);
+    OUT.baseTC.xy   = (IN.baseTC.xy * RTRect.zw) + RTRect.xy;
+    OUT.viewDir.xyz = IN.viewDir.xyz;
+    OUT.fogColor    = GetVolumetricFogColor(vCloudWSPos.xyz);
+    OUT.viewDir.a   = LightningPos.a;
+    OUT.NearFar     = g_VS_NearFarClipDist;
 
-  #define zNear    g_VS_NearFarClipDist.x
-  #define zFar    g_VS_NearFarClipDist.y
-  #define zPersp  OUT.HPosition.z
+    float zNear   = g_VS_NearFarClipDist.x;
+    float zFar    = g_VS_NearFarClipDist.y;
+    float zPersp  = OUT.HPosition.z;
+    float a       = zFar / (zFar - zNear);
+    float b       = zNear * -a;
 
-  OUT.NearFar = g_VS_NearFarClipDist;
+    OUT.sceneDepthTC = HPosToScreenTC(OUT.HPosition);
+    OUT.linearDepth  = b / (zPersp - a);
 
-  float a = zFar / ( zFar - zNear );
-  float b = zNear * -a;
-  float zLinear = b / ( zPersp - a );
+    float3 attenDist = 0.05 * LightningColSize.w * (vfViewPos.xyz - LightningPos.xyz);
+    float  lightning = 1.0 / (1.0 + dot(attenDist, attenDist));
 
-  OUT.sceneDepthTC = HPosToScreenTC(OUT.HPosition);
-  //OUT.sceneDepthTC.xy = IN.baseTC.xy; // copying input texture uv's doesn't work with high res screenshot option...
-  //OUT.sceneDepthTC.x = (  OUT.HPosition.x + OUT.HPosition.w ) * 0.5; // ... instead, map to screen using homogenous position and perform clamped texture lookup
-  //OUT.sceneDepthTC.y = ( -OUT.HPosition.y + OUT.HPosition.w ) * 0.5;
-  //OUT.sceneDepthTC.xy += 0.5 * OUT.HPosition.w;  // no need to add half a texel since we're drawing a full screen quad
-  //OUT.sceneDepthTC.xy /= OUT.HPosition.w; // no need for perspective divide as w=1, always
+    OUT.Lightning = LightningColSize.xyz * lightning;
 
-  OUT.linearDepth = zLinear;
-
-  float3 attenDist = 0.05 * LightningColSize.w * ( vfViewPos.xyz - LightningPos.xyz );
-  float lightning = 1 / ( 1 + dot( attenDist, attenDist ) );
-  OUT.Lightning = LightningColSize.xyz * lightning;
-
-  return OUT;
-}
-
-pixout ImposterPS(vert2frag IN)
-{
-  pixout OUT;
-
-  half4 vTex = tex2D(imposterMap, IN.baseTC.xy);
-  half4 vDepth = tex2D(depthMap, IN.baseTC.xy);
-  float fDepth = lerp(PS_ZRange.x, PS_ZRange.y, vTex.a);
-  OUT.Color = vTex;
-  float fLinearZ = (PS_ZRange.w / (fDepth - PS_ZRange.z)) * IN.NearFar.w;
-//  OUT.Color1 = (vDepth.a == 0) ? 1 : max(fLinearZ, 0.0001);
-//  OUT.Depth  = (vDepth.a == 0) ? 1 : fDepth;
-
-  return OUT;
-}
-
-pixout2 PanoramaClusterPS(vert2frag IN)
-{
-  // make world to tangent space matrix
-  float3 v0 = -normalize(IN.vCamToPixel);
-  float3 v1 = -cross(v0,IN.ImposterCameraUp);
-  float3 v2 = cross(v1,v0);
-  float3x3 matTangent =
-  {
-  v1[0], v1[1], v1[2],
-  v2[0], v2[1], v2[2],
-  v0[0], v0[1], v0[2],
-  };
-
-  // get camera positions difference in tangent space
-  float3 vCamPosDiff = mul(matTangent,IN.vCamPosDiff);
-
-  // do parallax mapping
-  half fDepth01 = tex2D(imposterMap, IN.baseTC).a;
-  float fDepthMeters = lerp(PS_ZRange.x, PS_ZRange.y, fDepth01);
-  IN.baseTC.xy += vCamPosDiff.xy / max(1, fDepthMeters);
-
-  // read texel from new position
-  half4 vTex = tex2D(imposterMap, IN.baseTC);
-
-  // get linear distance for fog
-  float fLinearZ_Meters_WS = lerp(PS_ZRange.x, PS_ZRange.y, vTex.a);
-  float3 vCamRelPos = normalize(IN.vCamToPixel) * fLinearZ_Meters_WS;
-  float NearPlaneLinearDist = dot(CameraFrontVector.xyz, vCamRelPos);
-  float fRange = PS_ZRange.w - PS_ZRange.z;
-  float fLinearZ_01_OrigCamera = NearPlaneLinearDist / fRange;
-
-  // get non linear dist
-  float fNonLinarDist =  (PS_ZRange.z - NearPlaneLinearDist) * PS_ZRange.w / (-fRange * NearPlaneLinearDist);
-
-  pixout2 OUT;
-
-  OUT.Color = vTex; // RGB
-
-  OUT.Depth = (vTex.a == 1) ? 1 : min(fNonLinarDist+0.005f,.9999f); // depth
-
-  return OUT;
-}
-
-pixout_cl CloudPS(vert2fragCloud IN)
-{
-  pixout_cl OUT;
-
-  half4 vTex = tex2D(baseMap, IN.baseTC.xy);
-  OUT.Color =  half4( vTex.xyz * IN.Color.xyz, vTex.w ) * IN.Color.w;
-
-  return OUT;
-}
-
-float CloudAngularAtten
-<
-  psregister      = PS_REG_PM_4.x;
-  string UIHelp   = "Angular attenuation factor for cloud back lighting";
-  string UIName   = "CloudAngularAtten";
-  string UIWidget = "slider";
-  float UIMin     = 1.0;
-  float UIMax     = 100.0;
-  float UIStep    = 0.25;
-> = 30.0;
-
-float CloudOutlineThreshold
-<
-  psregister      = PS_REG_PM_4.y;
-  string UIHelp   = "Opacity threshold to generate cloud outline for back lighting";
-  string UIName   = "CloudOutlineThreshold";
-  string UIWidget = "slider";
-  float UIMin     = 0.0;
-  float UIMax     = 1.0;
-  float UIStep    = 0.01;
-> = 0.4;
-
-float CloudOutlineSlope
-<
-  psregister      = PS_REG_PM_4.z;
-  string UIHelp   = "Slope to generate cloud outline for back lighting";
-  string UIName   = "CloudOutlineSlope";
-  string UIWidget = "slider";
-  float UIMin     = 0.0;
-  float UIMax     = 20.0;
-  float UIStep    = 0.1;
-> = 1.0;
-
-float CloudBacklightingScale
-<
-  psregister      = PS_REG_PM_4.w;
-  string UIHelp   = "Scale back lighting result";
-  string UIName   = "CloudBacklightingScale";
-  string UIWidget = "slider";
-  float UIMin     = 0.0;
-  float UIMax     = 5.0;
-  float UIStep    = 0.1;
-> = 1.0;
-
-half3 ApplyBackLighting( in half4 cloudColor, in half3 viewDir )
-{
-/*
-  half mask = ( 1.1 - 0.9 * cloudColor.w );
-  float spec = pow( saturate( dot( normalize( viewDir  ), g_PS_SunLightDir.xyz ) ), CloudAngularAtten );
-  half3 col = cloudColor.xyz + 1.5 * cloudColor.w * mask * mask * spec * g_PS_SunColor;
-*/
-  half arg = 0.5 + ( -cloudColor.w + CloudOutlineThreshold ) * CloudOutlineSlope;
-  half mask = saturate( arg );
-  float spec = CloudBacklightingScale * pow( saturate( dot( normalize( viewDir  ), g_PS_SunLightDir.xyz ) ), CloudAngularAtten );
-  half3 col = cloudColor.xyz + cloudColor.w * mask * spec * g_PS_SunColor.xyz;
-  //half3 col = mask;
-
-  return( col );
-}
-
-float HDRBrightnessAdjust
-<
-  psregister      = PS_REG_PM_3.x;
-  string UIHelp   = "Controls brightness of clouds on HDR (relative to LDR)";
-  string UIName   = "HDRBrightnessAdjust";
-  string UIWidget = "slider";
-  float UIMin     = 0.0;
-  float UIMax     = 5.0;
-  float UIStep    = 0.1;
-> = 1.0;
-
-pixout CloudImposterPS(vert2fragImp IN)
-{
-  pixout OUT;
-
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   DebugOutput(OUT.Color, float4(IN.baseTC.xy, 0, 0));
-   return OUT;
- #endif
-
-  half4 vTex = tex2D(baseMap, IN.baseTC.xy) * saturate( IN.distOpac );
-  half4 vFog = GetVolumetricFogColor(IN.posTC);
-  half alpha = vTex.w;
-  half3 vFinalCol = ApplyBackLighting( vTex, IN.posTC - vfViewPos.xyz );
-
-  vFinalCol.xyz *= g_CloudColorScale.x;    // needed for HDR
-#ifdef %_RT_HDR_MODE
-  vFinalCol.xyz *= HDRBrightnessAdjust;
-#endif
-  vFinalCol.xyz += IN.Lightning.xyz * alpha;
-
-  half4 vRes = half4( lerp( vFog.xyz * alpha, vFinalCol.xyz, vFog.w ).xyz, alpha );
-  vRes.xyz = lerp( AvgFogVolumeContrib.xyz * vRes.w, vRes.xyz, AvgFogVolumeContrib.w );
-  float sceneDepth = DecodeSceneDepth( depthMap, IN.hPosTexProj );
-  float scale = saturate( ( sceneDepth - IN.hPosTexProj.w ) * 0.05 );
-
-  vRes *= scale * IN.Color.a;
-
-  HDROutput( OUT, vRes, 1);
-
-  return OUT;
-}
-
-pixout Cloud_RecursivePS(vert2fragImp IN)
-{
-  pixout OUT;
-
-  half4 vTex = tex2D(baseMap, IN.baseTC.xy) * saturate( IN.distOpac );
-  half4 vFog = GetVolumetricFogColor(IN.posTC);
-  half3 vFinalCol = vTex.xyz * IN.Color.xyz * IN.Color.w;
-  vFinalCol.xyz *= g_CloudColorScale.x;    // needed for HDR
-#ifdef %_RT_HDR_MODE
-  vFinalCol.xyz *= HDRBrightnessAdjust;
-#endif
-  half alpha = vTex.w * IN.Color.w;
-
-  half4 vRes = half4( lerp( vFog.xyz * alpha, vFinalCol.xyz, vFog.w ).xyz, alpha );
-
-  HDROutput( OUT, vRes, 1);
-  return OUT;
-}
-
-pixout CloudScreenImposterPS(vert2fragCSImp IN)
-{
-  pixout OUT;
-
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   DebugOutput(OUT.Color, float4(IN.baseTC.xy, 0, 0));
-   return OUT;
- #endif
-
-  half4 vTex = tex2D(baseMap, IN.baseTC.xy);
-  half4 vFog = IN.fogColor;
-  half alpha = vTex.w;
-  half3 color = ApplyBackLighting( vTex, IN.viewDir.xyz );
-
-  color.xyz *= g_CloudColorScale.x;    // needed for HDR
-#ifdef %_RT_HDR_MODE
-  color.xyz *= HDRBrightnessAdjust;
-#endif
-  color.xyz += IN.Lightning.xyz * alpha;
-
-  float sceneDepth = tex2D( depthMap, IN.sceneDepthTC.xy ).x;
-  float scale = saturate( ( sceneDepth * IN.NearFar.y - IN.linearDepth ) * 0.05 );
-
-  half4 finalColor = half4( lerp( vFog.xyz * alpha, color.xyz, vFog.w ).xyz, alpha );
-  finalColor.xyz = lerp( AvgFogVolumeContrib.xyz * alpha, finalColor.xyz, AvgFogVolumeContrib.w );
-  finalColor *= scale * IN.viewDir.a;
-
-  HDROutput( OUT, finalColor, 1 );
-  return OUT;
+    return OUT;
 }
 
 vert2frag ImposterPostVS(app2vertCloud IN)
 {
-  vert2frag OUT = (vert2frag)0;
+    vert2frag OUT = (vert2frag)0;
 
-  // Position in screen space.
-  float4 vPos = IN.Position;
-  OUT.HPosition = mul(CompMatrix, vPos);
+    OUT.HPosition = mul(CompMatrix, IN.Position);
+    OUT.baseTC.xy = IN.baseTC.xy;
 
-  OUT.baseTC.xy = IN.baseTC.xy; // + PixelOffset.xy * 0.5;
+    return OUT;
+}
 
-  return OUT;
+// Tweakables
+
+float CloudAngularAtten
+<
+    psregister      = PS_REG_PM_4.x;
+    string UIName   = "CloudAngularAtten";
+    string UIWidget = "slider";
+    float UIMin     = 1.0;
+    float UIMax     = 100.0;
+    float UIStep    = 0.25;
+> = 30.0;
+
+float CloudOutlineThreshold
+<
+    psregister      = PS_REG_PM_4.y;
+    string UIName   = "CloudOutlineThreshold";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 1.0;
+    float UIStep    = 0.01;
+> = 0.4;
+
+float CloudOutlineSlope
+<
+    psregister      = PS_REG_PM_4.z;
+    string UIName   = "CloudOutlineSlope";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 20.0;
+    float UIStep    = 0.1;
+> = 1.0;
+
+float CloudBacklightingScale
+<
+    psregister      = PS_REG_PM_4.w;
+    string UIName   = "CloudBacklightingScale";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 5.0;
+    float UIStep    = 0.1;
+> = 1.0;
+
+float HDRBrightnessAdjust
+<
+    psregister      = PS_REG_PM_3.x;
+    string UIName   = "HDRBrightnessAdjust";
+    string UIWidget = "slider";
+    float UIMin     = 0.0;
+    float UIMax     = 5.0;
+    float UIStep    = 0.1;
+> = 1.0;
+
+// Helper Functions
+
+half3 ApplyBackLighting(in half4 cloudColor, in half3 viewDir)
+{
+    half  arg  = 0.5 + (-cloudColor.w + CloudOutlineThreshold) * CloudOutlineSlope;
+    half  mask = saturate(arg);
+    float spec = CloudBacklightingScale * pow(saturate(dot(normalize(viewDir), g_PS_SunLightDir.xyz)), CloudAngularAtten);
+
+    return cloudColor.xyz + cloudColor.w * mask * spec * g_PS_SunColor.xyz;
+}
+
+// Pixel Shaders
+
+pixout ClearPS(vert2fragCloud IN)
+{
+    pixout OUT;
+    OUT.Color = IN.Color;
+    return OUT;
+}
+
+pixout ImposterPS(vert2frag IN)
+{
+    pixout OUT;
+
+    half4 vTex   = tex2D(imposterMap, IN.baseTC.xy);
+    OUT.Color    = vTex;
+
+    return OUT;
+}
+
+pixout2 PanoramaClusterPS(vert2frag IN)
+{
+    pixout2 OUT;
+
+    float3 v0 = -normalize(IN.vCamToPixel);
+    float3 v1 = -cross(v0, IN.ImposterCameraUp);
+    float3 v2 = cross(v1, v0);
+
+    float3x3 matTangent =
+    {
+        v1.x, v1.y, v1.z,
+        v2.x, v2.y, v2.z,
+        v0.x, v0.y, v0.z
+    };
+
+    float3 vCamPosDiff = mul(matTangent, IN.vCamPosDiff);
+
+    half  fDepth01     = tex2D(imposterMap, IN.baseTC).a;
+    float fDepthMeters = lerp(PS_ZRange.x, PS_ZRange.y, fDepth01);
+
+    IN.baseTC.xy += vCamPosDiff.xy / max(1.0, fDepthMeters);
+
+    half4 vTex               = tex2D(imposterMap, IN.baseTC);
+    float fLinearZ_Meters_WS = lerp(PS_ZRange.x, PS_ZRange.y, vTex.a);
+
+    float3 vCamRelPos          = normalize(IN.vCamToPixel) * fLinearZ_Meters_WS;
+    float  NearPlaneLinearDist = dot(CameraFrontVector.xyz, vCamRelPos);
+    float  fRange              = PS_ZRange.w - PS_ZRange.z;
+    float  fNonLinarDist       = (PS_ZRange.z - NearPlaneLinearDist) * PS_ZRange.w / (-fRange * NearPlaneLinearDist);
+
+    OUT.Color = vTex;
+    OUT.Depth = (vTex.a == 1.0) ? 1.0 : min(fNonLinarDist + 0.005, 0.9999);
+
+    return OUT;
+}
+
+pixout_cl CloudPS(vert2fragCloud IN)
+{
+    pixout_cl OUT;
+
+    half4 vTex = tex2D(baseMap, IN.baseTC.xy);
+    OUT.Color  = half4(vTex.xyz * IN.Color.xyz, vTex.w) * IN.Color.w;
+
+    return OUT;
+}
+
+pixout CloudImposterPS(vert2fragImp IN)
+{
+    pixout OUT;
+
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    DebugOutput(OUT.Color, float4(IN.baseTC.xy, 0, 0));
+    return OUT;
+#endif
+
+    half4 vTex      = tex2D(baseMap, IN.baseTC.xy) * saturate(IN.distOpac);
+    half4 vFog      = GetVolumetricFogColor(IN.posTC);
+    half  alpha     = vTex.w;
+    half3 vFinalCol = ApplyBackLighting(vTex, IN.posTC - vfViewPos.xyz);
+
+    vFinalCol.xyz *= g_CloudColorScale.x;
+#ifdef %_RT_HDR_MODE
+    vFinalCol.xyz *= HDRBrightnessAdjust;
+#endif
+    vFinalCol.xyz += IN.Lightning.xyz * alpha;
+
+    half4 vRes = half4(lerp(vFog.xyz * alpha, vFinalCol.xyz, vFog.w).xyz, alpha);
+    vRes.xyz   = lerp(AvgFogVolumeContrib.xyz * vRes.w, vRes.xyz, AvgFogVolumeContrib.w);
+
+    float sceneDepth = DecodeSceneDepth(depthMap, IN.hPosTexProj);
+    float scale      = saturate((sceneDepth - IN.hPosTexProj.w) * 0.05);
+
+    vRes *= scale * IN.Color.a;
+
+    HDROutput(OUT, vRes, 1);
+
+    return OUT;
+}
+
+pixout Cloud_RecursivePS(vert2fragImp IN)
+{
+    pixout OUT;
+
+    half4 vTex      = tex2D(baseMap, IN.baseTC.xy) * saturate(IN.distOpac);
+    half4 vFog      = GetVolumetricFogColor(IN.posTC);
+    half3 vFinalCol = vTex.xyz * IN.Color.xyz * IN.Color.w;
+
+    vFinalCol.xyz *= g_CloudColorScale.x;
+#ifdef %_RT_HDR_MODE
+    vFinalCol.xyz *= HDRBrightnessAdjust;
+#endif
+
+    half alpha = vTex.w * IN.Color.w;
+    half4 vRes = half4(lerp(vFog.xyz * alpha, vFinalCol.xyz, vFog.w).xyz, alpha);
+
+    HDROutput(OUT, vRes, 1);
+
+    return OUT;
+}
+
+pixout CloudScreenImposterPS(vert2fragCSImp IN)
+{
+    pixout OUT;
+
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    DebugOutput(OUT.Color, float4(IN.baseTC.xy, 0, 0));
+    return OUT;
+#endif
+
+    half4 vTex  = tex2D(baseMap, IN.baseTC.xy);
+    half4 vFog  = IN.fogColor;
+    half  alpha = vTex.w;
+    half3 color = ApplyBackLighting(vTex, IN.viewDir.xyz);
+
+    color.xyz *= g_CloudColorScale.x;
+#ifdef %_RT_HDR_MODE
+    color.xyz *= HDRBrightnessAdjust;
+#endif
+    color.xyz += IN.Lightning.xyz * alpha;
+
+    float sceneDepth = tex2D(depthMap, IN.sceneDepthTC.xy).x;
+    float scale      = saturate((sceneDepth * IN.NearFar.y - IN.linearDepth) * 0.05);
+
+    half4 finalColor = half4(lerp(vFog.xyz * alpha, color.xyz, vFog.w).xyz, alpha);
+    finalColor.xyz   = lerp(AvgFogVolumeContrib.xyz * alpha, finalColor.xyz, AvgFogVolumeContrib.w);
+    finalColor      *= scale * IN.viewDir.a;
+
+    HDROutput(OUT, finalColor, 1);
+
+    return OUT;
 }
 
 pixout_cl ImposterPostPS(vert2frag IN)
 {
-  pixout_cl OUT;
+    pixout_cl OUT;
 
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   DebugOutput(OUT.Color, float4(IN.baseTC.xy, 0, 0));
-   return OUT;
- #endif
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    DebugOutput(OUT.Color, float4(IN.baseTC.xy, 0, 0));
+    return OUT;
+#endif
 
-  half4 vTex = tex2D(baseMap, IN.baseTC.xy);
-  half4 vDepth = tex2D(depthMap, IN.baseTC.xy);
-  OUT.Color.xyz = vTex.xyz;
-  OUT.Color.a = vTex.a;
+    half4 vTex = tex2D(baseMap, IN.baseTC.xy);
 
-  return OUT;
+    OUT.Color.xyz = vTex.xyz;
+    OUT.Color.a   = vTex.a;
+
+    return OUT;
 }
 
-//========================================================================
+// Techniques
 
 technique PanoramaCluster
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto PanoramaClusterVS();
+    pass p0
+    {
+        VertexShader = compile vs_Auto PanoramaClusterVS();
+        PixelShader  = compile ps_Auto PanoramaClusterPS();
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = None;
-
-    PixelShader = compile ps_Auto PanoramaClusterPS();
-  }
+        ZEnable      = true;
+        ZWriteEnable = true;
+        CullMode     = None;
+    }
 }
 
 technique Imposter
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto ImposterVS();
+    pass p0
+    {
+        VertexShader = compile vs_Auto ImposterVS();
+        PixelShader  = compile ps_Auto ImposterPS();
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = None;
-
-    PixelShader = compile ps_Auto ImposterPS();
-  }
+        ZEnable      = true;
+        ZWriteEnable = true;
+        CullMode     = None;
+    }
 }
 
 technique ImposterPostProcess
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto ImposterPostVS();
+    pass p0
+    {
+        VertexShader = compile vs_Auto ImposterPostVS();
+        PixelShader  = compile ps_Auto ImposterPostPS();
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = None;
-
-    PixelShader = compile ps_Auto ImposterPostPS();
-  }
+        ZEnable      = true;
+        ZWriteEnable = true;
+        CullMode     = None;
+    }
 }
 
 technique Cloud
 <
-  string Script = "Public;";
+    string Script = "Public;";
 >
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto TransformCloudVS();
+    pass p0
+    {
+        VertexShader = compile vs_Auto TransformCloudVS();
+        PixelShader  = compile ps_Auto CloudPS();
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = None;
-
-    PixelShader = compile ps_Auto CloudPS();
-  }
+        ZEnable      = true;
+        ZWriteEnable = true;
+        CullMode     = None;
+    }
 }
 
 technique Cloud_Recursive
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto TransformImposterVS();
+    pass p0
+    {
+        VertexShader = compile vs_Auto TransformImposterVS();
+        PixelShader  = compile ps_Auto Cloud_RecursivePS();
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = None;
-
-    PixelShader = compile ps_Auto Cloud_RecursivePS();
-  }
+        ZEnable      = true;
+        ZWriteEnable = true;
+        CullMode     = None;
+    }
 }
 
 technique Cloud_Imposter
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto TransformImposterVS();
+    pass p0
+    {
+        VertexShader = compile vs_Auto TransformImposterVS();
+        PixelShader  = compile ps_Auto CloudImposterPS();
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = None;
-
-    PixelShader = compile ps_Auto CloudImposterPS();
-  }
+        ZEnable      = true;
+        ZWriteEnable = true;
+        CullMode     = None;
+    }
 }
 
 technique Cloud_ScreenImposter
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto TransformCSImposterVS();
+    pass p0
+    {
+        VertexShader = compile vs_Auto TransformCSImposterVS();
+        PixelShader  = compile ps_Auto CloudScreenImposterPS();
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = None;
-
-    PixelShader = compile ps_Auto CloudScreenImposterPS();
-  }
+        ZEnable      = true;
+        ZWriteEnable = true;
+        CullMode     = None;
+    }
 }
 
 technique Clear
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto TransformedClearVS();
+    pass p0
+    {
+        VertexShader = compile vs_Auto TransformedClearVS();
+        PixelShader  = compile ps_Auto ClearPS();
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = None;
-
-    PixelShader = compile ps_Auto ClearPS();
-  }
+        ZEnable      = true;
+        ZWriteEnable = true;
+        CullMode     = None;
+    }
 }
-
-/////////////////////// eof ///

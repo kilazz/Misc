@@ -1,275 +1,192 @@
-////////////////////////////////////////////////////////////////////////////
-//
-//  Crytek Engine Source File.
-//  Shader extension
-//  Copyright (C), Crytek Studios, 2001-2004.
-// -------------------------------------------------------------------------
-//  File name:   CommonMotionBlurPass.cfi
-//  Version:     v1.00
-//  Created:     30/01/2006 by Tiago Sousa
-//  Compilers:
-// -------------------------------------------------------------------------
-////////////////////////////////////////////////////////////////////////////
+// Crytek Engine Shader — CommonMotionBlurPass.cfi
+// Motion Blur pass logic (velocity generation).
 
-/// Un-Tweakables //////////////////////
+//===========================================================================
 
 sampler2D sceneMapSampler = sampler_state
 {
-  Texture = $SceneTarget;
-  MinFilter = POINT
-  MagFilter = POINT;
-  MipFilter = POINT;
-  AddressU = Clamp;
-  AddressV = Clamp;
+    Texture   = $SceneTarget;
+    MinFilter = POINT;
+    MagFilter = POINT;
+    MipFilter = POINT;
+    AddressU  = Clamp;
+    AddressV  = Clamp;
 };
 
-///////////////// vertex input/output //////////////////
+//===========================================================================
+// Vertex input/output
+
 struct vert2fragMotionBlur
 {
-  float4 HPosition : POSITION;
-  float4 vVelocity : TEXCOORD0_centroid;
-  float4 vVelocityPrev : TEXCOORD1_centroid;
-  float4 baseTC : TEXCOORD2_centroid;
-
-  float4 vNormalWS : TEXCOORD3_centroid;
-  //float3 vVelocityWS : TEXCOORD4_centroid;
+    float4 HPosition     : POSITION;
+    float4 vVelocity     : TEXCOORD0_centroid;
+    float4 vVelocityPrev : TEXCOORD1_centroid;
+    float4 baseTC        : TEXCOORD2_centroid;
+    float4 vNormalWS     : TEXCOORD3_centroid;
 };
 
 float3x4 MotionBlurData : PI_MotionBlurData;
-float4x4 mProjection : PB_ProjMatrix;
+float4x4 mProjection    : PB_ProjMatrix;
 
-float4x4 mViewI : PB_CameraMatrix_IT; // I
-float4x4 mView : PB_CameraMatrix;
+float4x4 mViewI         : PB_CameraMatrix_IT;
+float4x4 mView          : PB_CameraMatrix;
+float4x4 mViewProjIT    : PB_ViewProjMatrix_IT;
 
-float4x4 mViewProjIT : PB_ViewProjMatrix_IT;
+//===========================================================================
 
 void Matrix_Inst_General_Prev(inout streamPos IN)
 {
-  // Instancing support
- #if %_RT_INSTANCING_ATTR
-  IN.InstMatrix[0] = IN.InstMotionBlurData[0];
-  IN.InstMatrix[1] = IN.InstMotionBlurData[1];
-  IN.InstMatrix[2] = IN.InstMotionBlurData[2];
-  IN.InstMatrix[3] = float4(0, 0, 0, 1);
- #else
-  IN.InstMatrix[0] = MotionBlurData[0];
-  IN.InstMatrix[1] = MotionBlurData[1];
-  IN.InstMatrix[2] = MotionBlurData[2];
-  IN.InstMatrix[3] = float4(0, 0, 0, 1);
+    // Instancing support
+#if %_RT_INSTANCING_ATTR
+    IN.InstMatrix[0] = IN.InstMotionBlurData[0];
+    IN.InstMatrix[1] = IN.InstMotionBlurData[1];
+    IN.InstMatrix[2] = IN.InstMotionBlurData[2];
+    IN.InstMatrix[3] = float4(0, 0, 0, 1);
+#else
+    IN.InstMatrix[0] = MotionBlurData[0];
+    IN.InstMatrix[1] = MotionBlurData[1];
+    IN.InstMatrix[2] = MotionBlurData[2];
+    IN.InstMatrix[3] = float4(0, 0, 0, 1);
 #endif
 
-  // Compose matrixes
-  IN.InstMatrix = mul(mProjection, IN.InstMatrix);
+    // Compose matrices
+    IN.InstMatrix = mul(mProjection, IN.InstMatrix);
 }
 
-// Output previous view space position (If skinning used, position is skinned). Used for motion blur
+// Output previous view space position (If skinning used, position is skinned).
 float4 Pos_Prev_VS_General(float4x4 VPMatrix, inout streamPos IN)
 {
-  float4 HPosition;
+    float4 HPosition;
 
 #if %_RT_SKELETON_SSD
-  #if MESH_SHORT_POS
+    #if MESH_SHORT_POS
     IN.Position.xyz *= MeshScale.xyz;
-  #endif
+    #endif
 #endif
 
-  // Get instanced matrix
-  Matrix_Inst_General_Prev(IN);
+    // Get instanced matrix
+    Matrix_Inst_General_Prev(IN);
 
-  float4x4 MatrixIdentity;
-  MatrixIdentity[0] = float4(1,0,0,0);
-  MatrixIdentity[1] = float4(0,1,0,0);
-  MatrixIdentity[2] = float4(0,0,1,0);
-  MatrixIdentity[3] = float4(0,0,0,1);
+    float4x4 MatrixIdentity;
+    MatrixIdentity[0] = float4(1, 0, 0, 0);
+    MatrixIdentity[1] = float4(0, 1, 0, 0);
+    MatrixIdentity[2] = float4(0, 0, 1, 0);
+    MatrixIdentity[3] = float4(0, 0, 0, 1);
 
-  HPosition = _pos_Modificators(IN.InstMatrix, MatrixIdentity, IN, true, true);
-  //HPosition = mul(IN.InstMatrix, IN.WorldPos);
+    HPosition = _pos_Modificators(IN.InstMatrix, MatrixIdentity, IN, true, true);
 
-  return HPosition;
+    return HPosition;
 }
 
-///////////////// vertex shaders //////////////////
+//===========================================================================
+// Vertex Shader
+
 vert2fragMotionBlur Common_MotionBlurPassVS(app2vertMotionBlur IN)
 {
-  vert2fragMotionBlur OUT;
+    vert2fragMotionBlur OUT;
 #ifndef OPENGL
-  OUT = (vert2fragMotionBlur)0;
+    OUT = (vert2fragMotionBlur)0;
 #endif
 
-  streamPos vertPassPos = (streamPos)0;
-  streamPos_FromMotionBlur(IN, vertPassPos);
-  streamPos vertPassPosPrev = vertPassPos;
+    streamPos vertPassPos = (streamPos)0;
+    streamPos_FromMotionBlur(IN, vertPassPos);
+    streamPos vertPassPosPrev = vertPassPos;
 
-  OUT.baseTC = IN.baseTC;
+    OUT.baseTC = IN.baseTC;
 
-  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
-  float4 HPositionPrev = Pos_Prev_VS_General(g_VS_ViewProjZeroMatr, vertPassPosPrev);
+    OUT.HPosition        = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+    float4 HPositionPrev = Pos_Prev_VS_General(g_VS_ViewProjZeroMatr, vertPassPosPrev);
 
-  OUT.vVelocity = HPosToScreenTC( OUT.HPosition );
-  OUT.vVelocityPrev = HPosToScreenTC( HPositionPrev );
+    OUT.vVelocity     = HPosToScreenTC(OUT.HPosition);
+    OUT.vVelocityPrev = HPosToScreenTC(HPositionPrev);
 
-  // Output world to tangent matrix and world space position
-  float3 worldTangentS = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]) );
-  float3 worldTangentT = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]) );
-  float3 worldTangentN = normalize(cross(worldTangentS, worldTangentT)) * IN.Tangent.w;
+    // Output world to tangent matrix and world space position
+    float3 worldTangentS = normalize(mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]));
+    float3 worldTangentT = normalize(mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]));
+    float3 worldTangentN = normalize(cross(worldTangentS, worldTangentT)) * IN.Tangent.w;
 
-  float4x4 vInstMatrixPrev = 0;
+    float4x4 vInstMatrixPrev = 0;
 
 #if %_RT_INSTANCING_ATTR
-  vInstMatrixPrev[0] = IN.InstMotionBlurData[0];
-  vInstMatrixPrev[1] = IN.InstMotionBlurData[1];
-  vInstMatrixPrev[2] = IN.InstMotionBlurData[2];
-  vInstMatrixPrev[3] = float4(0, 0, 0, 1);
- #else
-  vInstMatrixPrev[0] = MotionBlurData[0];
-  vInstMatrixPrev[1] = MotionBlurData[1];
-  vInstMatrixPrev[2] = MotionBlurData[2];
-  vInstMatrixPrev[3] = float4(0, 0, 0, 1);
+    vInstMatrixPrev[0] = IN.InstMotionBlurData[0];
+    vInstMatrixPrev[1] = IN.InstMotionBlurData[1];
+    vInstMatrixPrev[2] = IN.InstMotionBlurData[2];
+    vInstMatrixPrev[3] = float4(0, 0, 0, 1);
+#else
+    vInstMatrixPrev[0] = MotionBlurData[0];
+    vInstMatrixPrev[1] = MotionBlurData[1];
+    vInstMatrixPrev[2] = MotionBlurData[2];
+    vInstMatrixPrev[3] = float4(0, 0, 0, 1);
 #endif
 
-  // Compose object matrix
-  //vInstMatrixPrev = mul( mViewI, vInstMatrixPrev);
+    float3 vViewWS     = normalize(-vertPassPos.WorldPos.xyz);
+    float3 vPosWS      = vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz;
+    float3 vPrevPosWS  = mul(vInstMatrixPrev, float4(vertPassPosPrev.Position.xyz, 1));
+    float3 vVelocityWS = (vPosWS - vPrevPosWS);
 
-  float3 vViewWS = normalize(-vertPassPos.WorldPos.xyz);
-  float3 vPosWS = vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz;
-  float3 vPrevPosWS =  mul(vInstMatrixPrev, float4(vertPassPosPrev.Position.xyz, 1));
+    float3 vPosVS      = mul(mView, float4(vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz, 1));
+    float3 vPrevPosVS  = mul(vInstMatrixPrev, float4(vertPassPosPrev.Position.xyz, 1));
+    float3 vNormalVS   = normalize(mul(mViewI, float4(worldTangentN, 0)).xyz);
+    float3 vVelocityVS = normalize(vPosVS - vPrevPosVS);
 
-  float3 vVelocityWS = ( vPosWS - vPrevPosWS );
+    OUT.vNormalWS = abs(dot(vNormalVS.xyz, vVelocityVS.xyz)) * saturate(length(vPosVS - vPrevPosVS));
 
-//  OUT.vNormalWS = mul(mViewProjIT, float4(worldTangentN, 1));
-  //OUT.vNormalWS = HPosToScreenTC( OUT.vNormalWS );
+    float3 worldPos = float3(vertPassPos.InstMatrix[0].w, vertPassPos.InstMatrix[1].w, vertPassPos.InstMatrix[2].w);
+    OUT.baseTC.w    = frac(length(worldPos.xyz + g_VS_WorldViewPos.xyz)) + 0.01f;
 
-  float3 vPosVS = mul(mView, float4(vertPassPos.WorldPos.xyz+ g_VS_WorldViewPos.xyz, 1));
-  float3 vPrevPosVS = mul(vInstMatrixPrev, float4(vertPassPosPrev.Position.xyz, 1));
-  float3 vNormalVS = normalize( mul(mViewI, float4(worldTangentN, 0)).xyz );
-  float3 vVelocityVS = normalize( vPosVS - vPrevPosVS );
-
-  OUT.vNormalWS = abs( dot( vNormalVS.xyz, vVelocityVS.xyz ) )* saturate( length( vPosVS - vPrevPosVS  ) ); //vVelocityWS; //
-  //OUT.vNormalWS = 1;
-  ////if( dot( vNormalVS.xyz, vVelocityVS.xyz ) < 0)
-  //  if( vVelocityVS.z < 0)
-  //{
-  ////  OUT.HPosition = HPositionPrev;
-  //  OUT.vNormalWS = 0;
-  //}
-
-  //OUT.HPosition.w += 0.005;
-
-  float3 worldPos = float3(vertPassPos.InstMatrix[0].w, vertPassPos.InstMatrix[1].w, vertPassPos.InstMatrix[2].w);
-  OUT.baseTC.w = frac( length( worldPos.xyz + g_VS_WorldViewPos.xyz) ) + 0.01;
-
-  OUT.baseTC.z = OUT.HPosition.w * g_VS_NearFarClipDist.w;
+    OUT.baseTC.z = OUT.HPosition.w * g_VS_NearFarClipDist.w;
 #if %_RT_NEAREST
-  OUT.baseTC.z *= g_VS_NearFarClipDist.z;
+    OUT.baseTC.z *= g_VS_NearFarClipDist.z;
 #endif
 
-  return OUT;
+    return OUT;
 }
 
-///////////////// pixel shaders //////////////////
+//===========================================================================
+// Pixel Shader
+
 pixout Common_MotionBlurPassPS(vert2fragMotionBlur IN)
 {
-  pixout OUT = (pixout)0;
+    pixout OUT = (pixout)0;
 
-  int nQuality = GetShaderQuality();
-  float2 vDepthID = IN.baseTC.zw;
-
-  float fSamples = 8.0;
-  //if( nQuality == QUALITY_HIGH )
-    //fSamples = 16;
-
-  const float fWeight = (1.0 / fSamples);
-  const float fWeightStep = (2.0 / fSamples);
-
-  float2 vVelocityPrev = ( (IN.vVelocityPrev.xy/IN.vVelocityPrev.w));
-
-  float2 vVelocity = (IN.vVelocity.xy/IN.vVelocity.w);                  // 1 div
-
-  float2 vVelocityDiv = vVelocity;
-
-  float2 vVelocityLerp = vVelocityPrev - vVelocity;                    // 1 sub
-
-//  if( nQuality == QUALITY_HIGH )
-
+    float2 vDepthID       = IN.baseTC.zw;
+    float2 vVelocityPrev  = IN.vVelocityPrev.xy / IN.vVelocityPrev.w;
+    float2 vVelocity      = IN.vVelocity.xy / IN.vVelocity.w;
     float2 vFinalVelocity = vVelocity.xy - vVelocityPrev.xy;
-    float fVelocity = length( vFinalVelocity );
+    float  fVelocity      = length(vFinalVelocity);
 
-    // optimization: if speed to low disable motion blur
-    vFinalVelocity = (fVelocity > 0.001)? vFinalVelocity : 0.0f;
+    // Optimization: if speed is too low, disable motion blur
+    vFinalVelocity = (fVelocity > 0.001f) ? vFinalVelocity : 0.0f;
 
-    float fLenght = length( vFinalVelocity );
+    float fSizeScale  = 1.0f - saturate(vDepthID.x * PS_NearFarClipDist.y / 200.0f);
+    fSizeScale       *= fSizeScale;
+    fSizeScale       *= fSizeScale;
+    fSizeScale       *= fSizeScale;
 
-    float2 vVelNorm = normalize(vFinalVelocity.xy)*0.5+0.5;
+    // Output velocity for post-processing
+    OUT.Color = float4(vFinalVelocity.xy * fSizeScale, vDepthID.xy);
 
-    float2 vEncodedLenght = float2(fLenght/(255.0*255.0), fLenght / 255.0);
-
-    //IN.vCurrPosWS /= IN.vCurrPosWS.w;
-    //IN.vPrevPosWS /= IN.vPrevPosWS.w;
-
-    //  //OUT.vVelocityWS = vPosWS - vPrevPosWS.xyz;
-    //float3 vVelocityWS = normalize( IN.vCurrPosWS.xyz - IN.vPrevPosWS.xyz );
-
-    //IN.vNormalWS /= IN.vNormalWS.w;
-
-    //float3 vNormal = normalize( IN.vNormal );
-    //vDepthID.y = dot((vFinalVelocity.xy), (IN.vNormal.xy))*10;
-
-    //IN.vNormalWS /= IN.vNormalWS.w;
-    //IN.vNormalWS.xyz = normalize( IN.vNormalWS.xyz );
-    //IN.vVelocityWS.xyz = normalize( IN.vVelocityWS.xyz );
-
-    //vDepthID.y = IN.vNormalWS.z; //dot( normalize(vFinalVelocity.xy), normalize(IN.vNormalWS.xy) );
-
-    float fSizeScale = 1 - saturate(vDepthID.x * PS_NearFarClipDist.y / 200);
-    fSizeScale *= fSizeScale;
-    fSizeScale *= fSizeScale;
-    fSizeScale *= fSizeScale;
-
-  //Blurred.xy *= fSizeScale;
-
-    OUT.Color = float4( vFinalVelocity.xy*fSizeScale, vDepthID.xy); // */vVelNorm.xy, fLenght.xx );      // Just output velocity for post processing
-
-    /*
-else
-  {
-    float4 accum = 0;
-    for(float s = -1.0; s < 1.0 ; s += fWeightStep)                    // 1 add
-    {
-      float2 tcFinal =  vVelocityDiv.xy - vVelocityLerp.xy * s;              // 1 mad
-      accum += tex2D(sceneMapSampler, tcFinal );                      // 1 texld, 1 add
-    }
-    accum *= fWeight;                                    // 1 mul
-
-    OUT.Color = accum;
-    OUT.Color.w = 1; // no alpha testing
-  }
-  */
-
-#if %_RT_ALPHATEST
-  //float baseColor = tex2D(diffuseMapSampler, IN.baseTC.xy).w;
-  //clip( baseColor.w - 0.01);
-#endif
-
-  return OUT;
+    return OUT;
 }
 
-//////////////////////////////// technique ////////////////
+//===========================================================================
+// Technique
 
 technique MotionBlurPass
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto Common_MotionBlurPassVS() MotionBlurVS;
-    PixelShader = compile ps_Auto Common_MotionBlurPassPS() MotionBlurPS;
+    pass p0
+    {
+        VertexShader = compile vs_Auto Common_MotionBlurPassVS() MotionBlurVS;
+        PixelShader  = compile ps_Auto Common_MotionBlurPassPS() MotionBlurPS;
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = Back;
+        ZEnable      = true;
+        ZWriteEnable = true;
+        CullMode     = Back;
 
 #if %HAIR_PASS || %LEAVES
-    CullMode = None;
+        CullMode = None;
 #endif
 
-    ZFunc = LEqual;
-  }
+        ZFunc = LEqual;
+    }
 }

@@ -6,7 +6,7 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "NoPreview;"
            "ShaderDrawType = General;"
@@ -28,7 +28,6 @@ float  cViewerColorToWaterPlane;
 
 float4 WaterLevel : PB_WaterLevel;
 
-// Tweakables /////////////////
 
 float BumpScale
 <
@@ -160,11 +159,10 @@ float FoamMultiplier
   float UIStep    = 0.001;
 > = 0.75;
 
-////////////////////////////////////////////////////////////////
 
 sampler2D envMapSamplerRefl
 <
-  string Script = 
+  string Script =
       "RenderOrder=PreProcess;"
       "ProcessOrder=WaterReflection;"
       "RenderCamera=WaterPlaneReflected;"
@@ -189,7 +187,7 @@ sampler2D envMapSamplerRefl
 
 sampler2D envMapSamplerRefr
 <
-  string Script = 
+  string Script =
       "RenderOrder=PreDraw;"
       "RenderCamera=Current;"
       "RenderType=CurScene;"
@@ -246,7 +244,6 @@ sampler2D foamSampler = sampler_state
   AddressV = Wrap;
 };
 
-/////////////////////////////
 
 struct a2v
 {
@@ -274,7 +271,6 @@ struct v2fReflect
 
 };
 
-///////////////// vertex shader //////////////////
 v2fReflect WaterSurfaceVS(a2v IN)
 {
   v2fReflect OUT;
@@ -350,7 +346,6 @@ v2fReflect WaterSurfaceVS(a2v IN)
   return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 pixout WaterSurfacePS(v2fReflect IN)
 {
@@ -363,7 +358,6 @@ pixout WaterSurfacePS(v2fReflect IN)
   cSunShading = ( g_PS_SunColor + g_PS_SkyColor );
 #endif
 
-  /////////////////////////////////////////////////////////////////////
   // Generate normal map from 4 normal map layers
 
   half3 bumpNormal = half3(0,0,1);
@@ -427,7 +421,6 @@ pixout WaterSurfacePS(v2fReflect IN)
 
 #endif
 
-  /////////////////////////////////////////////////////////////////////
   // Compute coeficients
 
   half NdotI= abs(dot(viewVec, bumpNormal.xyz));   // taking absolute value, so that refraction looks correct inside water
@@ -481,7 +474,6 @@ pixout WaterSurfacePS(v2fReflect IN)
 
   float fA = 1;
 
-  /////////////////////////////////////////////////////////////////////
   // water edge softness
   float4 depthLookupTC = IN.projTC;
    float sceneDepth = DecodeSceneDepth( sceneDepthSampler, depthLookupTC );
@@ -539,9 +531,7 @@ pixout WaterSurfacePS(v2fReflect IN)
   return OUT;
 }
 
-////////////////////////////////////////////////////////
 //                Z PASS
-////////////////////////////////////////////////////////
 
 ///////////////// vertex input/output //////////////////
 struct app2vertZ
@@ -555,7 +545,6 @@ struct vert2fragZ
   float4 ZInfo      : TEXCOORD1;
 };
 
-///////////////// vertex shaders //////////////////
 vert2fragZ ZPassVS(app2vertZ IN)
 {
   vert2fragZ OUT = (vert2fragZ)0;
@@ -578,7 +567,6 @@ vert2fragZ ZPassVS(app2vertZ IN)
   return OUT;
 }
 
-///////////////// pixel shaders //////////////////
 pixout ZPassPS(vert2fragZ IN)
 {
   pixout OUT = (pixout)0;
@@ -586,11 +574,10 @@ pixout ZPassPS(vert2fragZ IN)
   return OUT;
 }
 
-//////////////////////////////// technique ////////////////
 
 technique General
 <
-  string Script = 
+  string Script =
         "TechniqueZ=ZPass;"
 >
 {
@@ -623,4 +610,3 @@ technique ZPass
   }
 }
 
-/////////////////////// eof ///

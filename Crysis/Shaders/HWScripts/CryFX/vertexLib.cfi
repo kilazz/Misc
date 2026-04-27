@@ -1,9 +1,7 @@
-////////////////////////////////////////////////////////////////////////////
 //
 //  Crytek Engine Source File.
 //  Shader extension
 //  Copyright (C), Crytek Studios, 2001-2004.
-// -------------------------------------------------------------------------
 //  File name:   VertexLib.cfi
 //  Version:     v1.00
 //  Created:     08/07/2006 by Tiago Sousa
@@ -15,8 +13,6 @@
 //  Notes:
 //    - When adding new features here, make sure it works with instancing
 //
-// -------------------------------------------------------------------------
-////////////////////////////////////////////////////////////////////////////
 
 #if !%TEMP_VEGETATION
 
@@ -75,7 +71,6 @@ sampler2D sceneDepthSamplerAO = sampler_state
 #include "ModificatorVT.cfi"
 #include "ModificatorTC.cfi"
 
-///////////////// General vertex output //////////////////
 
 struct vert2FragGeneral
 {
@@ -111,7 +106,6 @@ struct vert2FragGeneral
   float4 Color      : COLOR0;
 };
 
-///////////////// Shared vertex shader computations //////////////////
 
 void vs_shared_output( in app2vertGeneral IN, inout vert2FragGeneral OUT, bool bUseBump )
 {
@@ -252,4 +246,3 @@ void vs_shared_output( in app2vertGeneral IN, inout vert2FragGeneral OUT, bool b
 
 }
 
-/////////////////////// eof ///

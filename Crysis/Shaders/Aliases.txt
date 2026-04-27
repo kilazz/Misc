@@ -1,3 +1,9 @@
+// ==============================================================================
+// Material Mapping Table
+// ==============================================================================
+
+// clang-format off
+// Column 1: Internal ID | Column 2: Template Name
 TBumpSpec          TemplBumpSpec
 TBumpSpec_NOCM     TemplBumpSpec_NOCM
 TBumpDiffuse_NOCM  TemplBumpDiffuse_NOCM
@@ -7,6 +13,7 @@ tbd_NOCM           TemplBumpDiffuse_NOCM
 no_draw            nodraw
 tbs_GA_CM          TemplBumpSpec_GlossAlpha_EnvCMAmb
 
+// Column 1: Template Name | Column 2: Category | Column 3: ID
 TemplLightDiffuse                     Illum       4101
 TemplBumpDiffuse                      Illum       5101
 TemplModelCommon                      Illum       5101
@@ -26,3 +33,4 @@ TemplPlantsBark                       Vegetation  0
 TerrainWater                          Water       0
 TerrainWater_OnlySky                  Water       0
 TemplGlassCM                          GlassCM     3
+// clang-format on

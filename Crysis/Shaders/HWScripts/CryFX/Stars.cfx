@@ -3,7 +3,7 @@
 
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "ShaderDrawType = General;"
            "ShaderType = Sky;"

@@ -1,5 +1,3 @@
-// todo: cleanup/optimize !
-
 #include "Common.cfi"
 #include "ShadeLib.cfi"
 #include "ModificatorVT.cfi"
@@ -8,7 +6,7 @@
 
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
                 "Public;"
                 "NoPreview;"
                 // Render in decal pass and force zpass rendering to make sure fog volumes work fine
@@ -63,7 +61,6 @@ sampler2D sceneDepthSampler = sampler_state
  AddressV = Clamp;
 };
 
-// Tweakables /////////////////
 
 float OffsetBump
 <
@@ -261,300 +258,247 @@ float SunPosZ
 
 #endif
 
-/////////// Common vertex shader ////////////////
 
 struct vtxOut
 {
-  OUT_P
-  float4 tcBase : TEXCOORDN;
-  float4 vPosTC0 : TEXCOORDN;
-  float4 vPosTC1 : TEXCOORDN;
+    OUT_P
+    float4 tcBase       : TEXCOORDN;
+    float4 vPosTC0      : TEXCOORDN;
+    float4 vPosTC1      : TEXCOORDN;
 
-  float4 vViewOS : TEXCOORDN;
-  float4 vNormalWS   : TEXCOORDN;
+    float4 vViewOS      : TEXCOORDN;
+    float4 vNormalWS    : TEXCOORDN;
 
-  float4 tcScreenPos : TEXCOORDN;
-  float4 vPositionWS : TEXCOORDN;
+    float4 tcScreenPos  : TEXCOORDN;
+    float4 vPositionWS  : TEXCOORDN;
 
-  float4 localFogColor : TEXCOORDN;
+    float4 localFogColor : TEXCOORDN;
 };
 
 vtxOut OuterSphereVS(app2vertGeneral IN)
 {
-  vtxOut OUT = (vtxOut)0;
+    vtxOut OUT = (vtxOut)0;
 
-  streamPos vertPassPos = (streamPos)0;
-  streamPos_FromGeneral(IN, vertPassPos);
+    streamPos vertPassPos = (streamPos)0;
+    streamPos_FromGeneral(IN, vertPassPos);
 
-  // Position in screen space.
-  float4 vPosOrig = IN.Position;
+    // --- ORGANIC MOTION (SINE INTERFERENCE) ---
+    float fPosSum     = frac(vertPassPos.Position.x + vertPassPos.Position.y + vertPassPos.Position.z);
+    float fPhase1     = fPosSum * g_VS_AnimGenParams.y * SpeedMultiplier;
+    float fPhase2     = fPosSum * g_VS_AnimGenParams.y * (SpeedMultiplier * 0.65f) + 1.2f;
 
-  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
-  float3 vNorm = vertPassPos.ObjToTangentSpace[2];
+    // Create a more natural, churning motion
+    float procAnim    = (sin(fPhase1) + cos(fPhase2)) * 0.5f;
+    vertPassPos.Position.xyz += vertPassPos.ObjToTangentSpace[2].xyz * procAnim * VtxAnimScale;
 
-  OUT.vPositionWS.xyz = vertPassPos.WorldPos.xyz;
-  OUT.vPositionWS.w = OUT.HPosition.w;
+    // --- OUTPUTS ---
+    OUT.HPosition    = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
 
-  OUT.vNormalWS.xyz = mul( (const float3x3)vertPassPos.InstMatrix, vNorm);
+    float3 vNorm     = vertPassPos.ObjToTangentSpace[2];
+    OUT.vPositionWS.xyz = vertPassPos.WorldPos.xyz;
+    OUT.vPositionWS.w   = OUT.HPosition.w;
 
-  // output view vector also in object space
-  float3 vViewWS = vertPassPos.WorldPos.xyz;
-  OUT.vViewOS.xyz = mul( (const float3x3)vertPassPos.InstMatrix, vViewWS );
+    OUT.vNormalWS.xyz = mul((const float3x3)vertPassPos.InstMatrix, vNorm);
 
-  const float c_fTillingScale = 0.002;
-  const float c_DetailfTillingScale = 0.01;
+    float3 vViewWS   = vertPassPos.WorldPos.xyz;
+    OUT.vViewOS.xyz  = mul((const float3x3)vertPassPos.InstMatrix, vViewWS);
 
-  // scale movement speed
-  OUT.vPosTC0.w = frac( g_VS_AnimGenParams.y * 0.2 * SpeedMultiplier);
-  OUT.vPosTC0.xyz = vPosOrig.xyz * Tilling * c_fTillingScale + float3(0, 0, OUT.vPosTC0.w );
+    const float c_fTillingScale     = 0.002f;
+    const float c_DetailfTillingScale = 0.01f;
 
-  OUT.vPosTC1.w = frac( g_VS_AnimGenParams.y * 0.2 * DetailSpeedMultiplier);
-  OUT.vPosTC1.xyz = vPosOrig.xyz * Tilling * DetailTilling * c_DetailfTillingScale + float3(0, 0, OUT.vPosTC1.w);
+    // Pre-calculate Tilling offsets
+    float fS1_Offset  = frac(g_VS_AnimGenParams.y * 0.2f * SpeedMultiplier);
+    float fS2_Offset  = frac(g_VS_AnimGenParams.y * 0.2f * DetailSpeedMultiplier);
 
-  OUT.tcBase.xy = IN.baseTC.xy + float2(0, -frac( g_VS_AnimGenParams.y *  DetailSpeedMultiplier));
+    OUT.vPosTC0.w    = fS1_Offset;
+    OUT.vPosTC0.xyz  = IN.Position.xyz * Tilling * c_fTillingScale + float3(0.0f, 0.0f, fS1_Offset);
 
- // OUT.tcBase.w  = OUT.HPosition.w;
+    OUT.vPosTC1.w    = fS2_Offset;
+    OUT.vPosTC1.xyz  = IN.Position.xyz * Tilling * DetailTilling * c_DetailfTillingScale + float3(0.0f, 0.0f, fS2_Offset);
 
-  // Output the screen-space texture coordinates
-  OUT.tcScreenPos = HPosToScreenTC(OUT.HPosition);
+    OUT.tcBase.xy    = IN.baseTC.xy + float2(0.0f, -fS2_Offset);
+    OUT.tcScreenPos  = HPosToScreenTC(OUT.HPosition);
+    OUT.localFogColor = GetVolumetricFogColor(vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz);
 
-  OUT.localFogColor = GetVolumetricFogColor(vertPassPos.WorldPos.xyz + g_VS_WorldViewPos.xyz);
-
-  return OUT;
+    return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 pixout OuterSpherePS(vtxOut IN)
 {
-  pixout OUT;
+    pixout OUT;
 
-   // Debug output
- #if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
-   DebugOutput(OUT.Color, IN.tcBase);
-   return OUT;
- #endif
-
-  int nQuality = GetShaderQuality();
-
-  //float3 vCameraWS =IN.tcScreenPos/IN.tcScreenPos.w;//mul(mUnProject, IN.tcScreenPos);
-  float fDepth = DecodeSceneDepth(sceneDepthSampler, IN.tcScreenPos );
-  float fDistToCam = length(IN.vViewOS.xyz);
-  float3 vViewOS = normalize(IN.vViewOS.xyz);
-  float3 vViewWS = normalize( IN.vPositionWS.xyz  );
-
-  ///////////////////////////////////////////////////////////////////////////////////////////////////
-  // Thickness aproximation
-  ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-  float fDistToHitIn = 0;
-  float fDistToHitOut= 0;
-
-  // biasing to voiding precision artefacts
-  half fBias = 0.001;//saturate( fDistToCam*0.01 );
-  IN.vPositionWS.w -= fBias;
-
-  fDistToHitIn =  max(IN.vPositionWS.w - SurfaceThickness , 0);
-  fDistToHitOut = min(fDepth , IN.vPositionWS.w);
-
-  // compute current thickness
-  float t1 = saturate( ( fDistToHitOut - fDistToHitIn ) /  SurfaceThickness );
-
-  ///////////////////////////////////////////////////////////////////////////////////////////////////
-  // Cloudy/Smooky layers
-  ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-  half fLerp = fDistToCam / DetailDistance;
-
-  // volume accumulation
-  float fVolumeAccum = 0;
-  float fHeight = 0;
-
-  // moving 1st far away layer used as height
-  float fFarDetailOut = tex3D(volumeNoiseSampler, IN.vPosTC0.xyz).w;
-
-  // Add turbulence
-#if !TEXTURE_MATH
-  fHeight = cos( pow((fFarDetailOut*2.0), 3) ) * OffsetBump;
-#else
-  // OuterSphere sampler contains, same math as above, in red channel
-  fHeight = (tex2D( outerSphereSampler, fFarDetailOut ).x*2-1) * OffsetBump;
+#if %_RT_DEBUG0 || %_RT_DEBUG1 || %_RT_DEBUG2 || %_RT_DEBUG3
+    DebugOutput(OUT.Color, IN.tcBase);
+    return OUT;
 #endif
 
-  // static 2nd far away layer, use height for displacement along view direction
-  float fFarDetailIn = tex3D(volumeNoiseSampler, (IN.vPosTC0.xyz - float3(0, 0, IN.vPosTC0.w ) ) * 2.0 + vViewOS.xyz * fHeight).w;
+    int nQuality     = GetShaderQuality();
+    float fDepth     = DecodeSceneDepth(sceneDepthSampler, IN.tcScreenPos);
+    float fDistToCam = length(IN.vViewOS.xyz);
+    float3 vViewOS   = normalize(IN.vViewOS.xyz);
+    float3 vViewWS   = normalize(IN.vPositionWS.xyz);
 
-  // Accumulate both results
-  fVolumeAccum = fFarDetailIn + fFarDetailOut;
+    // --- IMPROVED THICKNESS (Non-linear falloff) ---
+    float fPosWS_W    = IN.vPositionWS.w - 0.001f;
+    float fDistIn     = max(fPosWS_W - SurfaceThickness, 0.0f);
+    float fDistOut    = min(fDepth, fPosWS_W);
 
-  // moving 1st nearby layer used as height
-  float fMidDetailOut = tex3D(volumeNoiseSampler, IN.vPosTC1.xyz).w;
+    // Soften the edges of the thickness for a more gaseous look
+    float t1          = saturate((fDistOut - fDistIn) / SurfaceThickness);
+    t1                = t1 * t1 * (3.0f - 2.0f * t1); // Smoothstep for better transitions
 
-  fHeight = 0;
-  if( nQuality > QUALITY_MEDIUM)
-  {
+    // --- VOLUMETRIC NOISE LAYERS ---
+    half fLerp        = fDistToCam / DetailDistance;
+    float fVolumeAccum = 0.0f;
+    float fHeight      = 0.0f;
 
-  // combine accumulation with height and add turbulence
+    float fFarDetailOut = tex3D(volumeNoiseSampler, IN.vPosTC0.xyz).w;
+
 #if !TEXTURE_MATH
-  fHeight = (cos( pow(((fMidDetailOut*2 + fVolumeAccum)*0.5), 3)  ) )* DetailOffsetBump ;
+    float fNoiseVal = fFarDetailOut * 2.0f;
+    fHeight = (fNoiseVal * fNoiseVal * fNoiseVal) * OffsetBump;
 #else
-  // OuterSphere sampler contains, same math as above, in green channel
-  fHeight = (tex2D( outerSphereSampler, float2(fMidDetailOut, fVolumeAccum*0.5) ).y*2-1) * DetailOffsetBump ;
+    fHeight = (tex2D(outerSphereSampler, fFarDetailOut).x * 2.0f - 1.0f) * OffsetBump;
 #endif
 
-  // static 2nd nearby layer, use height for displacement along view direction
-  float fMidDetailIn = tex3D(volumeNoiseSampler, ( IN.vPosTC1.xyz - float3(0, 0, IN.vPosTC1.w ) ) * 3.2 + vViewOS.xyz * fHeight).w;
+    float fFarDetailIn  = tex3D(volumeNoiseSampler, (IN.vPosTC0.xyz - float3(0.0f, 0.0f, IN.vPosTC0.w)) * 2.0f + vViewOS.xyz * fHeight).w;
+    fVolumeAccum       = fFarDetailIn + fFarDetailOut;
 
-  // Accumulate all results
-  fVolumeAccum = lerp( fMidDetailIn + fMidDetailOut, fVolumeAccum, saturate(fLerp + (fFarDetailIn*2-1)) );
-  }
+    float fMidDetailOut = tex3D(volumeNoiseSampler, IN.vPosTC1.xyz).w;
 
-  float sparks = fVolumeAccum;
-
-  // final result based on tweakable turbulence
+    if (nQuality > QUALITY_MEDIUM)
+    {
 #if !TEXTURE_MATH
-  fVolumeAccum = cos( pow(fVolumeAccum * SmookePuffBias, SmookePuffPow) );
+        float fMidVal = (fMidDetailOut * 2.0f + fVolumeAccum) * 0.5f;
+        fHeight = (fMidVal * fMidVal * fMidVal) * DetailOffsetBump;
 #else
-  // OuterSphere sampler contains, same math as above, in blue channel
-  fVolumeAccum = tex2D( outerSphereSampler, float2(fVolumeAccum * SmookePuffBias*0.25, SmookePuffPow*0.1) ).z*2-1;
+        fHeight = (tex2D(outerSphereSampler, float2(fMidDetailOut, fVolumeAccum * 0.5f)).y * 2.0f - 1.0f) * DetailOffsetBump;
 #endif
 
-  ///////////////////////////////////////////////////////////////////////////////////////////////////
-  // Shading
-  ///////////////////////////////////////////////////////////////////////////////////////////////////
+        float fMidDetailIn = tex3D(volumeNoiseSampler, (IN.vPosTC1.xyz - float3(0.0f, 0.0f, IN.vPosTC1.w)) * 3.2f + vViewOS.xyz * fHeight).w;
+        fVolumeAccum       = lerp(fMidDetailIn + fMidDetailOut, fVolumeAccum, saturate(fLerp + (fFarDetailIn * 2.0f - 1.0f)));
+    }
 
-  float4 cFinal = 0;
-  float3 vProcNormal = IN.vNormalWS.xyz;
+    // --- FINAL TURBULENCE ---
+#if !TEXTURE_MATH
+    fVolumeAccum = cos(pow(fVolumeAccum * SmookePuffBias, SmookePuffPow));
+#else
+    fVolumeAccum = tex2D(outerSphereSampler, float2(fVolumeAccum * SmookePuffBias * 0.25f, SmookePuffPow * 0.1f)).z * 2.0f - 1.0f;
+#endif
 
-  float3 SunDir = g_PS_SunLightDir;
+    // --- LIGHTING & SILVER LINING ---
+    float3 vProcNormal = IN.vNormalWS.xyz;
+    float3 SunDir     = g_PS_SunLightDir;
+
 #if %SUN_POSITION_BFH
-  float3 vSunPos = float3(SunPosX, SunPosY, SunPosZ);
-  SunDir.xyz = normalize( vSunPos.xyz );
+    float3 vSunPos    = float3(SunPosX, SunPosY, SunPosZ);
+    SunDir            = normalize(vSunPos);
 #endif
 
-  float NdotL = dot( vProcNormal.xyz, (SunDir.xyz));
+    float NdotL       = dot(vProcNormal, SunDir);
 #if %INSIDE_GEOMETRY
-  NdotL = saturate(NdotL*0.5+0.5);
+    NdotL             = saturate(NdotL * 0.5f + 0.5f);
 #endif
 
-  float EdotL = saturate( dot( vViewWS.xyz, -SunDir.xyz) );
+    // Silver Lining effect: Brighten edges when looking toward the sun
+    float fEdotL      = saturate(dot(vViewWS, -SunDir));
+    float fSilverLining = pow(fEdotL, SunScattering) * SunMultiplier;
 
-  float fDiffuseK = ( NdotL );
-  float fSunScattering = pow(EdotL, SunScattering) * SunMultiplier;
+    float fDiffuseK   = saturate(NdotL);
+    float3 cAmbient   = g_PS_SkyColor * lerp(GroundColor, 1.0f, saturate(vProcNormal.z));
+    float3 cDiffuse   = (fDiffuseK + fSilverLining) * g_PS_SunColor;
+    float3 cDiffuseTex = lerp(SmookePuffBeginColor, SmookePuffEndColor, saturate(fVolumeAccum));
 
-  float3 cAmbTex = fVolumeAccum * FinalMultiplier;
-
-  fDiffuseK = saturate(NdotL) ;
-
-  float3 cAmbient = g_PS_SkyColor * lerp(GroundColor, 1.0, saturate(vProcNormal.z)) ;
-  float3 cDiffuse = (fDiffuseK +  fSunScattering) * g_PS_SunColor;
-
-  // create diffuse texture
-  float3 cDiffuseTex = lerp(SmookePuffBeginColor, SmookePuffEndColor, saturate(fVolumeAccum));
-  cFinal.xyz = (cAmbient + cDiffuse) * FinalMultiplier * cDiffuseTex * MatDifColor.xyz;
-
-  cFinal.w = saturate(t1);
+    float4 cFinal     = 0.0f;
+    cFinal.xyz        = (cAmbient + cDiffuse) * FinalMultiplier * cDiffuseTex * MatDifColor.xyz;
+    cFinal.w          = saturate(t1);
 
 #if !%_RT_HDR_MODE
-  cFinal.xyz = 1 - exp( - cFinal.xyz );;
+    cFinal.xyz        = 1.0f - exp(-cFinal.xyz);
 #endif
 
 #if %_RT_FOG
-  HDRFogOutput(OUT, cFinal, 1, IN.localFogColor.xyz, IN.localFogColor.w);
+    HDRFogOutput(OUT, cFinal, 1.0f, IN.localFogColor.xyz, IN.localFogColor.w);
 #else
-  HDROutput(OUT, cFinal, 1);
+    HDROutput(OUT, cFinal, 1.0f);
 #endif
 
-  return OUT;
+    return OUT;
 }
 
-//////////////////////////////// technique ////////////////
 
 technique General
 <
-  string Script = 
+  string Script =
 #if !%NO_DEPTH_BFH
         "TechniqueZ=ZPass;"
 #endif
 >
 {
-
   pass p0
   {
-
     VertexShader = compile vs_Auto OuterSphereVS() GeneralVS;
     PixelShader = compile ps_Auto OuterSpherePS() GeneralPS;
 
-    ZEnable = false;
-    ZWriteEnable = false;
+    ZEnable       = false;
+    ZWriteEnable  = false;
 
 #if %INSIDE_GEOMETRY
-    CullMode = Front;
+    CullMode      = Front;
 #else
-    CullMode = Back;
+    CullMode      = Back;
 #endif
 
-    ZFunc = Equal;
-
-    SrcBlend = SRC_ALPHA;
-    DestBlend = ONE_MINUS_SRC_ALPHA;
+    ZFunc         = Equal;
+    SrcBlend      = SRC_ALPHA;
+    DestBlend     = ONE_MINUS_SRC_ALPHA;
     AlphaBlendEnable = true;
-
-   IgnoreMaterialState = true;
+    IgnoreMaterialState = true;
 
 #if %NO_DEPTH_BFH
-    ZEnable = true;
-    ZFunc = LEqual;
+    ZEnable      = true;
+    ZFunc        = LEqual;
 #endif
-
   }
 }
 
-////////////////////////////////////////////////////////
-//                Z PASS
-////////////////////////////////////////////////////////
-
-///////////////// vertex input/output //////////////////
 struct vert2fragZ
 {
-  float4 HPosition : POSITION;
-  float4 ZInfo     : TEXCOORDN;
+    float4 HPosition : POSITION;
+    float4 ZInfo     : TEXCOORDN;
 };
 
-///////////////// vertex shaders //////////////////
 vert2fragZ ZPassVS(app2vertZGeneral IN)
 {
-  vert2fragZ OUT;
+    vert2fragZ OUT;
 #ifndef OPENGL
-  OUT = (vert2fragZ)0;
+    OUT = (vert2fragZ)0;
 #endif
 
-  streamPos vertPassPos = (streamPos)0;
-  streamPos_FromZ(IN, vertPassPos);
+    streamPos vertPassPos = (streamPos)0;
+    streamPos_FromZ(IN, vertPassPos);
 
-  OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+    OUT.HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
 
 #if %_RT_FSAA
-  OUT.ZInfo.xyz = mul(vertPassPos.InstMatrix, vertPassPos.Position).xyz + g_VS_WorldViewPos.xyz;
+    OUT.ZInfo.xyz = mul(vertPassPos.InstMatrix, vertPassPos.Position).xyz + g_VS_WorldViewPos.xyz;
 #endif
 
-  OUT.ZInfo.w = OUT.HPosition.w * g_VS_NearFarClipDist.w;
+    OUT.ZInfo.w = OUT.HPosition.w * g_VS_NearFarClipDist.w;
 
-  return OUT;
+    return OUT;
 }
 
-///////////////// pixel shaders //////////////////
 pixout ZPassPS(vert2fragZ IN)
 {
-  pixout OUT = (pixout)0;
+    pixout OUT = (pixout)0;
+    float fZ   = IN.ZInfo.w;
+    OUT.Color  = EncodeSceneDepthNoAlpha(fZ, 1.0f, IN.ZInfo.xyz);
 
-  float fZ = IN.ZInfo.w;
-  OUT.Color = EncodeSceneDepthNoAlpha(fZ , 1, IN.ZInfo.xyz);
-
-  return OUT;
+    return OUT;
 }
 
-//////////////////////////////// technique ////////////////
 
 technique ZPass
 {
@@ -563,19 +507,16 @@ technique ZPass
     VertexShader = compile vs_Auto ZPassVS() ZVS;
     PixelShader = compile ps_Auto ZPassPS() ZPS;
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    ZFunc = LEqual;
+    ZEnable       = true;
+    ZWriteEnable  = true;
+    ZFunc         = LEqual;
 
 #if %INSIDE_GEOMETRY
-    CullMode = Front;
+    CullMode      = Front;
 #else
-    CullMode = Back;
+    CullMode      = Back;
 #endif
 
     IgnoreMaterialState = true;
   }
-
 }
-
-/////////////////////// eof ///

@@ -8,18 +8,18 @@
 
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
-           "NoPreview;"
-           "ShaderDrawType = Light;"
-           "ShaderType = Particle;"
+    string Script =
+        "NoPreview;"
+        "ShaderDrawType = Light;"
+        "ShaderType = Particle;"
 >;
 
 sampler2D diffuseSampler = sampler_state
 {
-  Texture = $FromObj;
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = LINEAR;
+    Texture     = $FromObj;
+    MinFilter   = LINEAR;
+    MagFilter   = LINEAR;
+    MipFilter   = LINEAR;
 };
 
 #define %NO_MATERIAL

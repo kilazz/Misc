@@ -4,7 +4,7 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "LocalConstants;"
            "ShaderDrawType = Sky;"
@@ -18,7 +18,6 @@ sampler2D skyDomeSamplerMie : register(s0);
 sampler2D skyDomeSamplerRayleigh : register(s1);
 sampler2D moonSampler : register(s2);
 
-/////////////////////////////
 
 struct a2v
 {
@@ -47,7 +46,6 @@ struct v2fZ
   float4 ZInfo     : TEXCOORD0;
 };
 
-///////////////// shader constants //////////////////
 
 float2 SkyDome_TextureSize;
 float2 SkyDome_TexelSize;
@@ -66,7 +64,6 @@ float3 SkyDome_NightMoonColor;
 float4 SkyDome_NightMoonInnerCoronaColorScale;
 float4 SkyDome_NightMoonOuterCoronaColorScale;
 
-///////////////// vertex shader //////////////////
 
 v2f_hdr SkyHDRVS(a2v IN)
 {
@@ -87,7 +84,6 @@ v2f_hdr SkyHDRVS(a2v IN)
   return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 pixout SkyHDRPS(v2f_hdr IN)
 {
@@ -181,7 +177,6 @@ pixout SkyHDRPS(v2f_hdr IN)
   return OUT;
 }
 
-//=============================================================================
 
 v2fZ SkyZVS(a2v IN)
 {
@@ -212,11 +207,10 @@ pixout SkyZPS(v2fZ IN)
   return OUT;
 }
 
-//////////////////////////////// technique ////////////////
 
 technique General
 <
-  string Script = 
+  string Script =
          "TechniqueZ=ZPass;"
 >
 {
@@ -246,4 +240,3 @@ technique ZPass
   }
 }
 
-/////////////////////// eof ///

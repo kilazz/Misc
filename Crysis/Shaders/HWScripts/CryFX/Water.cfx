@@ -7,7 +7,7 @@
 
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "NoPreview;"
            "LocalConstants;"
@@ -42,7 +42,6 @@ float4 WaveParams0 = { PI_FromObject[8], PI_FromObject[9], PI_FromObject[10], PI
 // x: current wave height, yzw unused
 float4 WaveParams1 = { PI_FromObject[12], PI_FromObject[13], PI_FromObject[14], PI_FromObject[15] };
 
-// Tweakables /////////////////
 
 /*
 float BigWavesScale = 2
@@ -151,13 +150,12 @@ float FresnelScale
   float UIStep    = 0.05;
 > = 1.0;
 
-////////////////////////////////////////////////////////////////
 
 sampler2D fftTexSampler : register(s0);
 
 sampler2D envMapSamplerRefl : register(s0)
 <
-  string Script = 
+  string Script =
       "RenderOrder=PreProcess;"
       "ProcessOrder=WaterReflection;"
       "RenderCamera=WaterPlaneReflected;"
@@ -262,7 +260,6 @@ sampler2D waveBumpSampler
   AddressV = Clamp;
 };
 
-/////////////////////////////
 
 struct a2vWater
 {
@@ -371,7 +368,6 @@ void GetWave(inout float3 vPos, in float2 FlowDir, in a2vWater IN, bool bOneSamp
 
   #endif
 
-  //////////////////////////////////////////////////////////////////////////////////////////////////
   // Water ocean animation
 
   // Each wave as ~doubled frequency/phase
@@ -516,7 +512,6 @@ float3 ComputeSurfaceNormal( in float2 vFlowDir, in float3 vPosOrig, in float3 v
   return vNormal;
 }
 
-///////////////// vertex shader //////////////////
 
 v2fWater WaterVS(a2vWater IN)
 {
@@ -680,7 +675,6 @@ if( GetShaderQuality() == QUALITY_LOW )
   return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 half3 BumpGen( in v2fWater IN  )
 {
@@ -877,7 +871,6 @@ pixout WaterPS(v2fWater IN)
 
   half fFoamLuminance = saturate( fFoam -0.85 );                                             // 1 alu
 
-  //////////////////////////////////////////////////////////////////////////////////////////////////
   // Water edge and foam softness
 
   half3 viewVec = normalize(IN.viewVec.xyz);
@@ -891,7 +884,6 @@ pixout WaterPS(v2fWater IN)
   // softIntersect *= saturate( (IN.viewVec.w - PS_NearFarClipDist.x)  * 1.5);
   // foamSoftIntersect *= saturate( (IN.viewVec.w - PS_NearFarClipDist.x)  * 0.75);
 
-   //////////////////////////////////////////////////////////////////////////////////////////////////
   // Get abs( NdotI ) and fresnel term
 
   half NdotI = (dot( viewVec.xyz, vFinalNormal.xyz ) );    // need detail textures rendering for underwater reflection
@@ -907,7 +899,6 @@ pixout WaterPS(v2fWater IN)
 
   half fFresnel= GetFresnel( NdotI , 0, 5) * FresnelScale;
 
-  //////////////////////////////////////////////////////////////////////////////////////////////////
   // Get reflection color
   half2 reflNewst = (IN.envTC.xy/IN.envTC.w) + bumpNormal.xy * (0.33 )*0.5;
 
@@ -920,7 +911,6 @@ pixout WaterPS(v2fWater IN)
     // foam soft isec, also add a bit of foam nearby camera intersections
   half foamSoftIntersect = saturate( (0.1 / saturate(fFoamLuminance)) * (depth) );
 
-  //////////////////////////////////////////////////////////////////////////////////////////////////
   // Get refraction ( using chroma dispersion )
 
    // Compute refraction mask
@@ -1061,11 +1051,10 @@ final = 1;
   return OUT;
 }
 
-//////////////////////////////// technique ////////////////
 
 technique Water
 <
-  string Script = 
+  string Script =
   "TechniqueShadowPass=ShadowPassWater;"
 >
 {
@@ -1100,7 +1089,7 @@ technique Water
 
 technique WaterFFT
 <
-  string Script = 
+  string Script =
   "TechniqueShadowPass=ShadowPassWaterFFT;"
 >
 {
@@ -1134,7 +1123,6 @@ technique WaterFFT
   }
 }
 
-/////////////// Shadow Pass ////////////////////////
 #include "ShadowCommon.cfi"
 #include "CommonShadowPass.cfi"
 vert2fragShadow Water_ShadowVS(a2vWater IN)
@@ -1258,4 +1246,3 @@ technique ShadowPassWaterFFT
   }
 }
 
-/////////////////////// eof ///

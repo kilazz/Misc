@@ -10,15 +10,13 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "ShaderDrawType = General;"
            "ShaderType = FX;"
 >;
 
-/// Common stuff  //////////////////////
 
-////////////////////////////////////////////////////////////////
 
 OPACITYMAP
 ENVIRONMENTMAP
@@ -26,7 +24,7 @@ ENVIRONMENTCUBEMAP
 
 sampler2D screenMapSampler
 <
-  string Script = 
+  string Script =
       "RenderOrder=PreDraw;"
       "RenderCamera=Current;"
       "RenderType=CurScene;"
@@ -45,7 +43,6 @@ sampler2D screenMapSampler
   AddressV = Clamp;
 };
 
-// Shared functions  /////////////////////////////////
 
 // Compute fresnel term, assumes NdotI comes clamped
 half Fresnel( in half NdotI, in half bias, in half power)
@@ -54,17 +51,12 @@ half Fresnel( in half NdotI, in half bias, in half power)
   return bias + (1.0-bias)*pow(facing, power);
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-/// Outer Sphere effect ////////////////////////////////////////////////////////////////////////////
 
 #if %OUTER_SPHERE
 
-// Notes /////////////////////////////////
 // - Lacking zpass/fog support
 
-/// Specific data ////////////////////////
 
-/// Constants ////////////////////////////
 
 float PlasmaScale
 <
@@ -222,7 +214,6 @@ float4 ElectricitySparksColor
   string UIWidget = "color";
 > = {0.0, 0.5, 1.0, 1.0};
 
-/// Samplers ////////////////////////////
 
 sampler3D noiseVolumeMapSampler = sampler_state
 {
@@ -255,7 +246,6 @@ sampler2D lightingMapSampler = sampler_state
   AddressV = Wrap;
 };
 
-///////////////// vertex shader //////////////////
 
 struct v2Frag
 {
@@ -270,7 +260,6 @@ struct v2Frag
   float2 detailPlasmaTC1 : TEXCOORDN;
 };
 
-///////////////// vertex shader //////////////////
 v2Frag OuterSphereVS(app2vertGeneral IN)
 {
   v2Frag OUT = (v2Frag)0;
@@ -317,7 +306,6 @@ v2Frag OuterSphereVS(app2vertGeneral IN)
   return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 pixout OuterSpherePS(v2Frag IN)
 {
@@ -366,19 +354,12 @@ pixout OuterSpherePS(v2Frag IN)
     DestBlend = ONE; \
     AlphaBlendEnable = true; \
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #elif %REFRACTIVE_SCOPE
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-/// Refractive Scope effect ////////////////////////////////////////////////////////////////////////
 
-// Notes /////////////////////////////////
 // - Lacks optimization !
 
-/// Specific data ////////////////////////
 
 float FresnelBias
 <
@@ -474,11 +455,8 @@ float ScopeRefrBumpScale
   float UIStep    = 0.05;
 > = 0.1;
 
-/// Constants ////////////////////////////
 
-/// Samplers //////////////////////////
 
-///////////////// vertex shader //////////////////
 
 struct v2Frag
 {
@@ -492,7 +470,6 @@ struct v2Frag
   float4 normalVec  : TEXCOORDN;
 };
 
-///////////////// vertex shader //////////////////
 v2Frag RefractiveScopeVS(app2vertGeneral IN)
 {
   v2Frag OUT = (v2Frag)0;
@@ -525,7 +502,6 @@ v2Frag RefractiveScopeVS(app2vertGeneral IN)
   return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 pixout RefractiveScopePS(v2Frag IN)
 {
@@ -606,21 +582,14 @@ pixout RefractiveScopePS(v2Frag IN)
     ZWriteEnable = true; \
     CullMode = None; \
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #elif %REFRACTIVE_EXPLOSION
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-/// Refractive explosion effect ////////////////////////////////////////////////////////////////////////
 
-// Notes /////////////////////////////////
 
 float4x4 _ModelView      : PB_View;
 float4x4 _ModelView_IT   : PB_View_IT;
 
-/// Specific data ////////////////////////
 
 float BumpScale
 <
@@ -677,11 +646,8 @@ float RefractionAmount
   float UIStep    = 0.05;
 > = 1.0;
 
-/// Constants ////////////////////////////
 
-/// Samplers ////////////////////////////
 
-///////////////// vertex shader //////////////////
 
 struct v2Frag
 {
@@ -696,7 +662,6 @@ struct v2Frag
   float3 normVec      : TEXCOORDN;
 };
 
-///////////////// vertex shader //////////////////
 v2Frag RefractiveExplVS(app2vertGeneral IN)
 {
   v2Frag OUT = (v2Frag)0;
@@ -739,7 +704,6 @@ v2Frag RefractiveExplVS(app2vertGeneral IN)
   return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 pixout RefractiveExplPS(v2Frag IN)
 {
@@ -804,9 +768,6 @@ pixout RefractiveExplPS(v2Frag IN)
 
 #elif %SCOPE_SIGHT
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-/// Scope sight effect ////////////////////////////////////////////////////////////////////////
 
 float4 SightColor
 <
@@ -816,11 +777,8 @@ float4 SightColor
   string UIWidget = "color";
 > = {1.0, 1.0, 1.0, 1.0};
 
-/// Constants ////////////////////////////
 
-/// Samplers ////////////////////////////
 
-///////////////// vertex shader //////////////////
 
 struct v2Frag
 {
@@ -828,7 +786,6 @@ struct v2Frag
   float2 baseTC    : TEXCOORDN;
 };
 
-///////////////// vertex shader //////////////////
 v2Frag ScopeSightVS(app2vertGeneral IN)
 {
   v2Frag OUT = (v2Frag)0;
@@ -843,7 +800,6 @@ v2Frag ScopeSightVS(app2vertGeneral IN)
   return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 pixout ScopeSightPS(v2Frag IN)
 {
@@ -873,7 +829,6 @@ pixout ScopeSightPS(v2Frag IN)
     DestBlend = ONE_MINUS_SRC_ALPHA; \
     AlphaBlendEnable = true; \
 
-//////////////////////////////// technique ////////////////
 
 #else
 
@@ -887,7 +842,6 @@ struct v2Frag
   float4 HPosition : POSITION;
 };
 
-///////////////// vertex shader //////////////////
 v2Frag DummyVS(a2Vtx IN)
 {
   v2Frag OUT = (v2Frag)0;
@@ -895,7 +849,6 @@ v2Frag DummyVS(a2Vtx IN)
   return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 pixout DummyPS(v2Frag IN)
 {
@@ -913,16 +866,13 @@ pixout DummyPS(v2Frag IN)
     ZWriteEnable = true; \
     CullMode = Back; \
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #endif
 
-//////////////////////////////// technique ////////////////
 
 technique General
 <
-  string Script = 
+  string Script =
         "TechniqueZ=ZPass;"
         "TechniqueCaustics=CausticsPass;"
         "TechniqueMotionBlur=MotionBlurPass;"
@@ -936,11 +886,9 @@ technique General
   }
 }
 
-//===========================================================================
 // Common passes support (zpass/fog)
 
 #include "CommonZPass.cfi"
 #include "CommonCausticsPass.cfi"
 #include "CommonMotionBlurPass.cfi"
 
-/////////////////////// eof ///

@@ -1,67 +1,71 @@
+// Crytek Engine Shader — CommonRAM.cfi
+// Reflectance Ambient Map logic
+
 #ifndef COMMONRAM
 #define COMMONRAM
 
 #ifndef RAM_REFLECTANCEMAP
-
 #define RAM_REFLECTANCEMAP 1
 
 sampler2D RAE_ReflectanceMap = sampler_state
 {
- Texture = $RAE;
-  MinFilter = LINEAR;
-  MagFilter = LINEAR;
-  MipFilter = POINT;
-  AddressU = Clamp;
-  AddressV = Clamp;
+    Texture   = $RAE;
+    MinFilter = LINEAR;
+    MagFilter = LINEAR;
+    MipFilter = POINT;
+    AddressU  = Clamp;
+    AddressV  = Clamp;
 };
 
-#endif
+#endif // RAM_REFLECTANCEMAP
 
-float3  RAE_AmbientColors[6]    :  PI_RAM_AmbientCube;
-float4  RAE_HQAmbientColors[12]  :  PI_RAM_HQAmbientCube;
-float3  RAE_Scale                :  PI_RAM_ToAABBSpaceScale;
-float3  RAE_Translate            :  PI_RAM_ToAABBSpaceTranslate;
+//===========================================================================
+// Globals
 
-half3 RAE_AmbientByNormal(half3  Normal)
+float3 RAE_AmbientColors[6]     : PI_RAM_AmbientCube;
+float4 RAE_HQAmbientColors[12]  : PI_RAM_HQAmbientCube;
+float3 RAE_Scale                : PI_RAM_ToAABBSpaceScale;
+float3 RAE_Translate            : PI_RAM_ToAABBSpaceTranslate;
+
+//===========================================================================
+
+half3 RAE_AmbientByNormal(half3 Normal)
 {
-/*float4  RAE_AmbientColors[6]  =  {  float4(0.f,1.f,0.f,0.f),
-                                  float4(1.f,0.f,0.f,0.f),
-                                  float4(0.f,0.f,1.f,0.f),
-                                  float4(0.f,1.f,1.f,0.f),
-                                  float4(1.f,0.f,1.f,0.f),
-                                  float4(1.f,1.f,0.f,0.f)};*/
+    int3 Idx = (Normal < 0.0f) + int3(0, 2, 4);
+    Normal   = abs(Normal);
 
-  int3 Idx  =  (Normal<0.f)+int3(0,2,4);
-  Normal  =  abs(Normal);
-  return  RAE_AmbientColors[Idx.x].xyz*Normal.x+
-          RAE_AmbientColors[Idx.y].xyz*Normal.y+
-          RAE_AmbientColors[Idx.z].xyz*Normal.z;
+    return RAE_AmbientColors[Idx.x].xyz * Normal.x +
+           RAE_AmbientColors[Idx.y].xyz * Normal.y +
+           RAE_AmbientColors[Idx.z].xyz * Normal.z;
 }
 
-half3 RAE_AmbientByPosNormal(float3 Pos,half3  Normal)
+//===========================================================================
+
+half3 RAE_AmbientByPosNormal(float3 Pos, half3 Normal)
 {
-  Normal.z  =  abs(Normal.z);
-  int3 IdxC  =  (Normal<0.f);
-  IdxC  +=  int3(0,2,4);
-  int3 IdxL  =  (Normal<0.f);
-  IdxL  +=  int3(6,8,10);
+    Normal.z = abs(Normal.z);
 
-  half3  Nrm  =  abs(Normal);
-  Nrm    *=  1.f/dot(half3(1.f,1.f,1.f),Nrm);
+    int3 IdxC = (Normal < 0.0f) + int3(0, 2, 4);
+    int3 IdxL = (Normal < 0.0f) + int3(6, 8, 10);
 
-  float3  Lrp      =  frac((Pos*RAE_Scale+RAE_Translate));
+    half3 Nrm  = abs(Normal);
+    Nrm       *= 1.0f / dot(half3(1.0f, 1.0f, 1.0f), Nrm);
 
-  half4  Lum=  RAE_HQAmbientColors[IdxL.x];
-  half3  Col=lerp(  lerp(Lum.x,Lum.y,Lrp.y),lerp(Lum.z,Lum.w,Lrp.y),Lrp.z)*
-                    RAE_HQAmbientColors[IdxC.x].xyz*Nrm.x;
-  Lum  =  RAE_HQAmbientColors[IdxL.y];
-  Col  +=      lerp(  lerp(Lum.x,Lum.y,Lrp.x),lerp(Lum.z,Lum.w,Lrp.x),Lrp.z)*
-                    RAE_HQAmbientColors[IdxC.y].xyz*Nrm.y;
-  Lum  =  RAE_HQAmbientColors[IdxL.z];
-  Col  +=      lerp(  lerp(Lum.x,Lum.y,Lrp.x),lerp(Lum.z,Lum.w,Lrp.x),Lrp.y)*
-                    RAE_HQAmbientColors[IdxC.z].xyz*Nrm.z;
+    float3 Lrp = frac(Pos * RAE_Scale + RAE_Translate);
 
-  return Col;
+    // X Axis
+    half4 Lum = RAE_HQAmbientColors[IdxL.x];
+    half3 Col = lerp(lerp(Lum.x, Lum.y, Lrp.y), lerp(Lum.z, Lum.w, Lrp.y), Lrp.z) * RAE_HQAmbientColors[IdxC.x].xyz * Nrm.x;
+
+    // Y Axis
+    Lum  = RAE_HQAmbientColors[IdxL.y];
+    Col += lerp(lerp(Lum.x, Lum.y, Lrp.x), lerp(Lum.z, Lum.w, Lrp.x), Lrp.z) * RAE_HQAmbientColors[IdxC.y].xyz * Nrm.y;
+
+    // Z Axis
+    Lum  = RAE_HQAmbientColors[IdxL.z];
+    Col += lerp(lerp(Lum.x, Lum.y, Lrp.x), lerp(Lum.z, Lum.w, Lrp.x), Lrp.y) * RAE_HQAmbientColors[IdxC.z].xyz * Nrm.z;
+
+    return Col;
 }
 
-#endif
+#endif // COMMONRAM

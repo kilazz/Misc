@@ -1,145 +1,126 @@
-////////////////////////////////////////////////////////////////////////////
-//
-//  Crytek Engine Source File.
-//  Shader extension
-//  Copyright (C), Crytek Studios, 2001-2004.
-// -------------------------------------------------------------------------
-//  File name:   CommonZModifyPass.cfi
-//  Version:     v1.00
-//  Created:     23/11/2004 by Tiago Sousa
-//  Compilers:
-//  Description: Common/Shared passes bettwen shaders. Should be included after
-//    main shader technique
-//
-//  NOTE: ALWAYS MAKE SURE VERTEX INPUTS MATCH CORRECTLY BEFORE INCLUDING THIS!
-//  TODO: Add support for texture modifiers, since Illum and others require it
-//  "Common_" name convention - for shader sharing in cache files
-//
-//
-// -------------------------------------------------------------------------
-////////////////////////////////////////////////////////////////////////////
+// Crytek Engine Source File.
+// Description: Common/Shared passes between shaders. Should be included after main shader technique.
+// NOTE: ALWAYS MAKE SURE VERTEX INPUTS MATCH CORRECTLY BEFORE INCLUDING THIS!
+// TODO: Add support for texture modifiers, since Illum and others require it.
+// "Common_" name convention - for shader sharing in cache files
 
-//float4 AlphaTest : AlphaTest;    // .w=AlphaTest value, .x=GBuffer value(0..1)
+// AlphaTest: .w=AlphaTest value, .x=GBuffer value(0..1)
 
-////////////////////////////////////////////////////////
-//                Z PASS
-////////////////////////////////////////////////////////
+// Z PASS
 
-///////////////// vertex input/output //////////////////
 struct vert2fragZModify
 {
-  float4 HPosition : POSITION;
-  float2 ZInfo      : TEXCOORD0;
+    float4 HPosition : POSITION;
+    float2 ZInfo     : TEXCOORD0;
 #if !%TEMP_TERRAIN
-  float4 baseTC     : TEXCOORD1;
+    float4 baseTC    : TEXCOORD1;
 #endif
 };
 
-///////////////// vertex shaders //////////////////
 vert2fragZModify Common_ZPassModifyVS(app2vertGeneral IN)
 <
-  ResetRTFlag '%_RT_INSTANCING_ATTR'
-  (
-    ResetRT = %_RT_INSTANCING_ROT
-  )
-  ResetRTFlag '%_RT_SKELETON_SSD'
-  (
-    ResetRT = %_RT_MORPHTARGET
-    ResetRT = %_RT_SHAPEDEFORM
-    ResetRT = %_RT_SPHERICAL
-  )
+    ResetRTFlag '%_RT_INSTANCING_ATTR'
+    (
+        ResetRT = %_RT_INSTANCING_ROT
+    )
+    ResetRTFlag '%_RT_SKELETON_SSD'
+    (
+        ResetRT = %_RT_MORPHTARGET
+        ResetRT = %_RT_SHAPEDEFORM
+        ResetRT = %_RT_SPHERICAL
+    )
 >
 {
-  vert2fragZModify OUT;
+    vert2fragZModify OUT;
+
 #ifndef OPENGL
-  OUT = (vert2fragZModify)0;
+    OUT = (vert2fragZModify)0;
 #endif
 
-  float4 vPos = IN.Position;
-  float4x4 InstMatrix;
+    float4 vPos = IN.Position;
+    float4x4 InstMatrix;
 
 #if %TEMP_TERRAIN
-  OUT.HPosition = pos_VS_Terrain(vPos, IN.Normal, fTerrainOffset, vpMatrix, InstMatrix, IN);
+    OUT.HPosition = pos_VS_Terrain(vPos, IN.Normal, fTerrainOffset, vpMatrix, InstMatrix, IN);
 #else
-  TANG_MATR
-  float3 vNorm = objToTangentSpace[2];
- #if %TEMP_VEGETATION
-  OUT.HPosition = pos_VS_Vegetation(vPos, vNorm, vpMatrix, InstMatrix, IN, objToTangentSpace);
- #else
-  OUT.HPosition = Pos_VS_General(vPos, vNorm, vpMatrix, InstMatrix, IN);
- #endif
+    TANG_MATR
+    float3 vNorm = objToTangentSpace[2];
+    #if %TEMP_VEGETATION
+    OUT.HPosition = pos_VS_Vegetation(vPos, vNorm, vpMatrix, InstMatrix, IN, objToTangentSpace);
+    #else
+    OUT.HPosition = Pos_VS_General(vPos, vNorm, vpMatrix, InstMatrix, IN);
+    #endif
 #endif
 
 #if !%TEMP_TERRAIN
-  float4 baseTC = IN.baseTC;
- #if %_RT_MORPHBUDDY
-  baseTC = lerp(baseTC, IN.baseTC8, IN.MorphWeights.x);
- #endif
-  _TCModify(baseTC, OUT.baseTC, vPos, vNorm, TS_DIFFUSE);
+    float4 baseTC = IN.baseTC;
+    #if %_RT_MORPHBUDDY
+    baseTC = lerp(baseTC, IN.baseTC8, IN.MorphWeights.x);
+    #endif
+
+    _TCModify(baseTC, OUT.baseTC, vPos, vNorm, TS_DIFFUSE);
 #endif
 
-  OUT.ZInfo.x = OUT.HPosition.z;
+    OUT.ZInfo.x = OUT.HPosition.z;
 
 #if %_RT_G16R16F
-  OUT.ZInfo.y = OUT.HPosition.w * NearFarClipDist.w;
+    OUT.ZInfo.y = OUT.HPosition.w * NearFarClipDist.w;
 #else
-  OUT.ZInfo.y = OUT.HPosition.w;
+    OUT.ZInfo.y = OUT.HPosition.w;
 #endif
 
-  return OUT;
+    return OUT;
 }
 
-///////////////// pixel shaders //////////////////
 pixout Common_ZPassModifyPS(vert2fragZModify IN)
 {
-  pixout OUT = (pixout)0;
+    pixout OUT = (pixout)0;
 
-  float fZ = IN.ZInfo.y;
+    float fZ = IN.ZInfo.y;
 #if %_RT_NEAREST
-  fZ *= NearFarClipDist.z;
+    fZ *= NearFarClipDist.z;
 #endif
 
-  // test
-  fZ *=20.0f;
+    // test
+    fZ *= 20.0f;
 
 #if %TEMP_TERRAIN
-  OUT.Color = EncodeSceneDepthNoAlpha(fZ, 0);
+    OUT.Color = EncodeSceneDepthNoAlpha(fZ, 0);
 #elif %TEMP_VEGETATION
- #if %LEAVES || %GRASS
-   float baseColor = GetTexture2D(diffuseMapSampler, IN.baseTC.xy).w;
-   OUT.Color = EncodeSceneDepthWithAlpha(IN.ZInfo.y, baseColor, AlphaTest.w);
- #else
-   OUT.Color = EncodeSceneDepthWithAlpha(IN.ZInfo.y, 1.0, 1.0);
- #endif
+    #if %LEAVES || %GRASS
+    float baseColor = GetTexture2D(diffuseMapSampler, IN.baseTC.xy).w;
+    OUT.Color = EncodeSceneDepthWithAlpha(IN.ZInfo.y, baseColor, AlphaTest.w);
+    #else
+    OUT.Color = EncodeSceneDepthWithAlpha(IN.ZInfo.y, 1.0f, 1.0f);
+    #endif
 #else
- #if %_RT_ALPHATEST
-  float baseColor = tex2D(diffuseMapSampler, IN.baseTC.xy).w;
-  OUT.Color = EncodeSceneDepthWithAlpha(fZ, baseColor, AlphaTest.w);
- #else
-  OUT.Color = EncodeSceneDepthNoAlpha(fZ, 1);
- #endif
+    #if %_RT_ALPHATEST
+    float baseColor = tex2D(diffuseMapSampler, IN.baseTC.xy).w;
+    OUT.Color = EncodeSceneDepthWithAlpha(fZ, baseColor, AlphaTest.w);
+    #else
+    OUT.Color = EncodeSceneDepthNoAlpha(fZ, 1.0f);
+    #endif
 #endif
-  return OUT;
-}
 
-//////////////////////////////// technique ////////////////
+    return OUT;
+}
 
 technique ZPassModify
 {
-  pass p0
-  {
-    VertexShader = compile vs_Auto Common_ZPassModifyVS() ZVS;
-    PixelShader = compile ps_Auto Common_ZPassModifyPS() ZPS;
+    pass p0
+    {
+        VertexShader = compile vs_Auto Common_ZPassModifyVS() ZVS;
+        PixelShader  = compile ps_Auto Common_ZPassModifyPS() ZPS;
 
-    Zenable = true;
-    ZFunc = Equal;
-    ZWriteEnable = false;
-    CullMode = Back;
+        ZEnable      = true;
+        ZFunc        = Equal;
+        ZWriteEnable = false;
+        CullMode     = Back;
 
 #if %TEMP_VEGETATION
-  #if %GRASS || %LEAVES
-    CullMode = None;
-  #endif
+    #if %GRASS || %LEAVES
+        CullMode = None;
+    #endif
 #endif
-  }
+    }
 }

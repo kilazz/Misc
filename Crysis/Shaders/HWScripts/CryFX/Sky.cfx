@@ -4,7 +4,7 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "ShaderDrawType = Sky;"
            "ShaderType = Sky;"
@@ -21,7 +21,6 @@ sampler2D whiteSampler = sampler_state
   MipFilter = LINEAR;
 };
 
-/////////////////////////////
 
 struct a2v
 {
@@ -42,7 +41,6 @@ struct v2fZ
   float4 ZInfo     : TEXCOORD0;
 };
 
-///////////////// vertex shader //////////////////
 v2f SkyVS(a2v IN)
 {
   v2f OUT = (v2f)0;
@@ -75,7 +73,6 @@ v2fZ SkyZVS(a2v IN)
   return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 pixout SkyPS(v2f IN)
 {
@@ -114,11 +111,10 @@ pixout SkyZPS(v2fZ IN)
   return OUT;
 }
 
-//////////////////////////////// technique ////////////////
 
 technique General
 <
-  string Script = 
+  string Script =
          "TechniqueZ=ZPass;"
 >
 {
@@ -148,4 +144,3 @@ technique ZPass
   }
 }
 
-/////////////////////// eof ///

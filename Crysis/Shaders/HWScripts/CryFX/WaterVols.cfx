@@ -6,7 +6,7 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "NoPreview;"
            "ShaderDrawType = General;"
@@ -28,7 +28,6 @@ float  cViewerColorToWaterPlane;
 
 float4 WaterLevel : PB_WaterLevel;
 
-// Tweakables /////////////////
 
 float BumpScale
 <
@@ -115,11 +114,10 @@ float RefrBumpScale
   float UIStep    = 0.1;
 > = 0.1;
 
-////////////////////////////////////////////////////////////////
 
 sampler2D envMapSamplerRefl
 <
-  string Script = 
+  string Script =
       "RenderOrder=PreProcess;"
       "ProcessOrder=WaterReflection;"
       "RenderCamera=PlaneReflected;"
@@ -196,7 +194,6 @@ sampler2D waterVolumeHeightSampler
   AddressV = Wrap;
 };
 
-/////////////////////////////
 
 struct a2v
 {
@@ -219,7 +216,6 @@ struct v2fReflect
 #endif
 };
 
-///////////////// vertex shader //////////////////
 v2fReflect WaterSurfaceVS(a2v IN)
 {
   v2fReflect OUT;
@@ -311,7 +307,6 @@ v2fReflect WaterSurfaceVS(a2v IN)
   return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 float GetSceneDepth(in float4 screenProj)
 {
@@ -336,9 +331,7 @@ pixout WaterSurfacePS(v2fReflect IN)
   int nQuality = GetShaderQuality();
   half3 viewVec= normalize(-IN.viewVec.xyz);
 
-  //////////////////////////////////////////////////////////////////////////////////////////////////
   // generate bump
-  //////////////////////////////////////////////////////////////////////////////////////////////////
 
   half3 bumpNormal = half3(0,0,1);
   half fVariation = 1;
@@ -410,9 +403,7 @@ pixout WaterSurfacePS(v2fReflect IN)
   float3 vn= bumpNormal;
   float3 vReflect = ( 2*dot(viewVec,vn)*vn - viewVec );
 
-  //////////////////////////////////////////////////////////////////////////////////////////////////
   // water edge softness
-  //////////////////////////////////////////////////////////////////////////////////////////////////
 
   float fA = 1;
   float4 depthLookupTC = IN.projTC;
@@ -421,9 +412,7 @@ pixout WaterSurfacePS(v2fReflect IN)
    float depth = max( sceneDepth - waterDepth, 0 ) / dot( viewVec, cameraFrontVector );
    half softIntersect = saturate( SoftIntersectionFactor * depth );
 
-  //////////////////////////////////////////////////////////////////////////////////////////////////
   // Get reflection
-  //////////////////////////////////////////////////////////////////////////////////////////////////
 
   half2 vProject = IN.projTC.xy/ IN.projTC.w;
 
@@ -454,18 +443,14 @@ pixout WaterSurfacePS(v2fReflect IN)
 
 #endif
 
-  //////////////////////////////////////////////////////////////////////////////////////////////////
   // Compute coeficients
-  //////////////////////////////////////////////////////////////////////////////////////////////////
 
   half NdotI= (dot(viewVec, bumpNormal.xyz));   // taking absolute value, so that refraction looks correct inside water
   half fInsideReflection = (1 - saturate(1000.0 * (NdotI+0.1)));
   NdotI= abs(NdotI);   // taking absolute value, so that refraction looks correct inside water
   half fFresnel= ReflectionAmount * GetFresnelTex(NdotI, FresnelBias).w;
 
-  //////////////////////////////////////////////////////////////////////////////////////////////////
   // Get refraction
-  //////////////////////////////////////////////////////////////////////////////////////////////////
 
   half2 refrNewst = vProject; // reduce refraction near beaches
 
@@ -506,9 +491,7 @@ pixout WaterSurfacePS(v2fReflect IN)
     refractColor.xyz = tex2D(screenMapSampler, refrNewst + refrTC * 1.15 ).xyz;
   }
 
-  //////////////////////////////////////////////////////////////////////////////////////////////////
   // Compute sun specular
-  //////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if %SUN_SHINE
 
@@ -532,9 +515,7 @@ pixout WaterSurfacePS(v2fReflect IN)
 
 #endif
 
-  //////////////////////////////////////////////////////////////////////////////////////////////////
   // Final composition
-  //////////////////////////////////////////////////////////////////////////////////////////////////
 
   // Compute final water color
   //half3 final = lerp(refractColor.xyz,  reflectColor, saturate( fFresnel)) ;
@@ -544,9 +525,7 @@ pixout WaterSurfacePS(v2fReflect IN)
   if( nQuality > QUALITY_LOW )
     fA *= saturate((IN.projTC.w- PS_NearFarClipDist.x) *5);;
 
-  //////////////////////////////////////////////////////////////////////////////////////////////////
   // Blend fog
-  //////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if %_RT_FOG && !%NO_VERTEX_FOG
 
@@ -569,9 +548,7 @@ pixout WaterSurfacePS(v2fReflect IN)
   return OUT;
 }
 
-////////////////////////////////////////////////////////
 //                Z PASS
-////////////////////////////////////////////////////////
 
 ///////////////// vertex input/output //////////////////
 struct app2vertZ
@@ -585,7 +562,6 @@ struct vert2fragZ
   float4 ZInfo      : TEXCOORD1;
 };
 
-///////////////// vertex shaders //////////////////
 vert2fragZ ZPassVS(app2vertZ IN)
 {
   vert2fragZ OUT = (vert2fragZ)0;
@@ -608,7 +584,6 @@ vert2fragZ ZPassVS(app2vertZ IN)
   return OUT;
 }
 
-///////////////// pixel shaders //////////////////
 pixout ZPassPS(vert2fragZ IN)
 {
   pixout OUT = (pixout)0;
@@ -616,11 +591,10 @@ pixout ZPassPS(vert2fragZ IN)
   return OUT;
 }
 
-//////////////////////////////// technique ////////////////
 
 technique General
 <
-  string Script = 
+  string Script =
         "TechniqueZ=ZPass;"
 >
 {
@@ -653,4 +627,3 @@ technique ZPass
   }
 }
 
-/////////////////////// eof ///

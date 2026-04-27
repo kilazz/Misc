@@ -2,9 +2,10 @@
 #include "ModificatorVT.cfi"
 #include "ModificatorTC.cfi"
 
+// Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "NoPreview;"
            "LocalConstants;"
@@ -14,10 +15,10 @@ float Script : STANDARDSGLOBAL
 >;
 
 /// Un-Tweakables //////////////////////
-float4x4 mViewProj : PI_Composite; // view projection matrix
-float4x4 mViewProjI : PB_UnProjMatrix;  // invert( view projection matrix )
-float4x4 mWorldT : PI_TransObjMatrix;
-float4x4 mCamera : PB_CameraMatrix_I;
+float4x4 mViewProj   : PI_Composite;     // view projection matrix
+float4x4 mViewProjI  : PB_UnProjMatrix;  // invert( view projection matrix )
+float4x4 mWorldT     : PI_TransObjMatrix;
+float4x4 mCamera     : PB_CameraMatrix_I;
 
 float4 g_fWaterLevel : PB_WaterLevel;
 
@@ -28,161 +29,157 @@ float4x4 mReflProj : PI_TexMatrix
 
 struct a2vWater
 {
-  float4 Position : POSITION;
+    float4 Position : POSITION;
 };
 
 struct v2fWaterBottom
 {
-  float4 Position  : POSITION;
+    float4 Position : POSITION;
 };
 
 struct v2fWaterBottomZpass
 {
-  float4 Position  : POSITION;
-  float4 ZInfo     : TEXCOORD0_centroid;
+    float4 Position : POSITION;
+    float4 ZInfo    : TEXCOORD0_centroid;
 };
 
-// Get vertex from screen space into world spasace
-void GetGridVertexPos( inout float4 vPos )
+// Get vertex from screen space into world space
+void GetGridVertexPos(inout float4 vPos)
 {
-  const float fGridQuadSize = 1.0 / (200.0);
-  vPos.xy = ((vPos.xy  + fGridQuadSize)* 2 - 1);
-  //vPos.xy = vPos.xy* 2 - 1;
+    const float fGridQuadSize = 1.0f / 200.0f;
 
-  // BFH: make sure edges go out of screen - todo: find better solution for this
-  //vPos.xy *= (1.0 +  fGridQuadSize*10);
-  vPos.xy *= 2.0;
+    // Coordinate transformation to NDC
+    vPos.xy = (vPos.xy + fGridQuadSize) * 2.0f - 1.0f;
+    vPos.xy *= 2.0f;
 
-  // BFH: make sure edges go out of screen - todo: find better solution for this
-  //vPos.y *= 1.1;
+    vPos.z = 0.0f;
+    vPos.w = 1.0f;
 
-  vPos.z = 0.0;
-  vPos.w = 1.0;
-  float4 vPosWS = mul( mViewProjI, vPos );
-  vPosWS /= vPosWS.w;
+    // Unproject to world space
+    float4 vPosWS = mul(mViewProjI, vPos);
+    vPosWS      /= vPosWS.w;
 
-  float3 view = g_VS_WorldViewPos.xyz - float3(vPosWS.xy, 0);
- float fDirSign = sign(view.z); // make sure to invert sign when bellow water
+    float3 vViewPos = g_VS_WorldViewPos.xyz - float3(vPosWS.xy, 0.0f);
+    float  fDirSign = sign(vViewPos.z);
 
-  // get z plane intersections
-  float2 z_isecs = float2( max(fDirSign*g_VS_WorldViewPos.z - fDirSign*vPosWS.z, 0.05 / g_VS_NearFarClipDist.y),
-                           fDirSign*g_VS_WorldViewPos.z );
-  //z_isecs *= fDirSign;
-  //z_isecs = max(z_isecs, 0.00001);
+    // Z-plane intersection calculation
+    float  fNearClip = 0.05f / g_VS_NearFarClipDist.y;
+    float2 z_isecs   = float2(max(fDirSign * g_VS_WorldViewPos.z - fDirSign * vPosWS.z, fNearClip),
+                              fDirSign * g_VS_WorldViewPos.z);
 
-  // clamp t just in case
-  float  t = min( z_isecs.y / z_isecs.x, g_VS_NearFarClipDist.y * 5.0 );
+    float fT = min(z_isecs.y / z_isecs.x, g_VS_NearFarClipDist.y * 5.0f);
 
-  // project vertex along ray direction
-  float2 vRayDir = (vPosWS.xy - g_VS_WorldViewPos.xy);
-  vPos.xy = g_VS_WorldViewPos.xy + vRayDir.xy * t;
-
-  vPos.z = 0;
+    // Project vertex along ray direction
+    float2 vRayDir = vPosWS.xy - g_VS_WorldViewPos.xy;
+    vPos.xy        = g_VS_WorldViewPos.xy + vRayDir * fT;
+    vPos.z         = 0.0f;
 }
-
-///////////////// Ocean bottom  //////////////////
 
 v2fWaterBottom OceanBottomVS(a2vWater IN)
 {
-  v2fWaterBottom OUT;
+    v2fWaterBottom OUT;
+
 #ifndef OPENGL
-  OUT = (v2fWaterBottom)1;
+    OUT = (v2fWaterBottom)0;
 #endif
-  // Position in screen space.
-  float4 vPos =IN.Position;
-  GetGridVertexPos( vPos );
-  vPos.z = 0;
-  vPos.w =1;
 
-  OUT.Position = mul(mViewProj, vPos);                                                           // 4 alu
-  OUT.Position.w -= 0.01;
+    float4 vPos = IN.Position;
 
-  return OUT;
+    GetGridVertexPos(vPos);
+
+    vPos.z = 0.0f;
+    vPos.w = 1.0f;
+
+    OUT.Position   = mul(mViewProj, vPos);
+    OUT.Position.w -= 0.01f;
+
+    return OUT;
 }
 
-pixout OceanBottomPS( v2fWaterBottom IN )
+pixout OceanBottomPS(v2fWaterBottom IN)
 {
-  pixout OUT = (pixout) 0;
-  OUT.Color.xyz = float3(0,0,0);
-  OUT.Color.w = 1;
-  return OUT;
+    pixout OUT = (pixout)0;
+
+    OUT.Color.xyz = float3(0.0f, 0.0f, 0.0f);
+    OUT.Color.w   = 1.0f;
+
+    return OUT;
 }
 
 v2fWaterBottomZpass OceanBottomZpassVS(a2vWater IN)
 {
-  v2fWaterBottomZpass OUT;
-#ifndef OPENGL
-  OUT = (v2fWaterBottomZpass)1;
-#endif
-  // Position in screen space.
-  float4 vPos =IN.Position;
-  GetGridVertexPos( vPos );
-  vPos.z = 00;
-  vPos.w =1;
+    v2fWaterBottomZpass OUT;
 
-  OUT.Position = mul(mViewProj, vPos);                                                           // 4 alu
+#ifndef OPENGL
+    OUT = (v2fWaterBottomZpass)0;
+#endif
+
+    float4 vPos = IN.Position;
+
+    GetGridVertexPos(vPos);
+
+    vPos.z = 0.0f;
+    vPos.w = 1.0f;
+
+    OUT.Position = mul(mViewProj, vPos);
 
 #if %_RT_FSAA
-  OUT.ZInfo.yzw = vPos;
+    OUT.ZInfo.yzw = vPos;
 #endif
-  OUT.ZInfo.x = OUT.Position.w * g_VS_NearFarClipDist.w;
 
-  OUT.Position.w -= 0.01;
+    OUT.ZInfo.x    = OUT.Position.w * g_VS_NearFarClipDist.w;
+    OUT.Position.w -= 0.01f;
 
-  return OUT;
+    return OUT;
 }
 
-pixout OceanBottomZpassPS( v2fWaterBottomZpass IN )
+pixout OceanBottomZpassPS(v2fWaterBottomZpass IN)
 {
-  pixout OUT = (pixout) 1;
-  float fZ = IN.ZInfo.x;
+    pixout OUT = (pixout)0;
 
-  #if !%_RT_FSAA
-    OUT.Color = EncodeSceneDepthNoAlpha(fZ, 0, half3(0,0,0));
-  #else
-    OUT.Color = EncodeSceneDepthNoAlpha(fZ, 0, IN.ZInfo.yzw);
-  #endif
+    float fZ = IN.ZInfo.x;
 
-  return OUT;
+#if !%_RT_FSAA
+    OUT.Color = EncodeSceneDepthNoAlpha(fZ, 0.0f, half3(0.0f, 0.0f, 0.0f));
+#else
+    OUT.Color = EncodeSceneDepthNoAlpha(fZ, 0.0f, IN.ZInfo.yzw);
+#endif
+
+    return OUT;
 }
-
-//////////////////////////////// technique ////////////////
 
 technique General
 <
-  string Script = 
+  string Script =
   "TechniqueZ=ZPass;"
 >
 {
-  pass p0
-  {
+    pass p0
+    {
+        ZEnable           = true;
+        ZFunc             = Equal;
+        ZWriteEnable      = false;
+        CullMode          = None;
+        IgnoreMaterialState = true;
+        SrcBlend          = ONE;
+        DestBlend         = ZERO;
+        AlphaBlendEnable  = false;
 
-    ZEnable = true;
-    ZFunc = Equal;
-    ZWriteEnable = false;
-    CullMode = None;
-    IgnoreMaterialState = true;
-    SrcBlend = ONE;
-    DestBlend = ZERO; //ONE_MINUS_SRC_ALPHA;
-    AlphaBlendEnable = false;
-    //ColorWriteEnable = RED|GREEN|BLUE;
-
-    VertexShader = compile vs_Auto OceanBottomVS() GeneralVS;
-    PixelShader = compile ps_Auto OceanBottomPS() GeneralPS;
-  }
+        VertexShader = compile vs_Auto OceanBottomVS() GeneralVS;
+        PixelShader  = compile ps_Auto OceanBottomPS() GeneralPS;
+    }
 }
 
 technique ZPass
 {
-  pass p0
-  {
+    pass p0
+    {
+        ZEnable           = true;
+        ZWriteEnable      = true;
+        CullMode          = None;
+        IgnoreMaterialState = true;
 
-    ZEnable = true;
-    ZWriteEnable = true;
-    CullMode = None;
-    IgnoreMaterialState = true;
-
-    VertexShader = compile vs_Auto OceanBottomZpassVS() ZVS;
-    PixelShader = compile ps_Auto OceanBottomZpassPS() ZPS;
-  }
+        VertexShader = compile vs_Auto OceanBottomZpassVS() ZVS;
+        PixelShader  = compile ps_Auto OceanBottomZpassPS() ZPS;
+    }
 }

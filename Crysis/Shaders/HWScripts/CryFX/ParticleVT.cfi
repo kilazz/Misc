@@ -4,60 +4,52 @@ float4 CameraFrontVector : PB_CameraFront;
 
 struct app2vertParticleGeneral
 {
-  float4 Position  : POSITION; //in object space
-  float2 baseTC    : TEXCOORD0;
-  float4 Color     : COLOR0;
-  float4 Expansion : COLOR1;
-  float4 ScreenRot : PSIZE0;
+    float4 Position     : POSITION;
+    float2 baseTC       : TEXCOORD0;
+    float4 Color        : COLOR0;
+    float4 Expansion    : COLOR1;
+    float4 ScreenRot    : PSIZE0;
 };
 
-// add other required stuff here
 struct vert2FragParticleGeneral
 {
-  float4 Position  : POSITION;  //in projection space
+    float4 Position     : POSITION;
 
 #ifdef %_RT_SOFT_PARTICLE
-  float4 hPosTexProj  : TEXCOORDN;
-  float4 particleFade : TEXCOORDN;
+    float4 hPosTexProj  : TEXCOORDN;
+    float4 particleFade : TEXCOORDN;
 #endif
 };
 
 void Particle_Setup_General(inout float4 vPos, float4x4 mViewProj, inout app2vertParticleGeneral IN, out vert2FragParticleGeneral OUT)
 {
-  //////////////////////////////////////////////////////
-  // coord expansion.
+    float3 r = CameraRightVector.xyz * IN.ScreenRot.x + CameraUpVector.xyz * IN.ScreenRot.y;
+    float3 u = CameraRightVector.xyz * IN.ScreenRot.z + CameraUpVector.xyz * IN.ScreenRot.w;
 
-  float3 r = CameraRightVector.xyz * IN.ScreenRot.x + CameraUpVector.xyz * IN.ScreenRot.y;
-  float3 u = CameraRightVector.xyz * IN.ScreenRot.z + CameraUpVector.xyz * IN.ScreenRot.w;
+    vPos.xyz += r * IN.Expansion.x + u * IN.Expansion.y;
 
-  vPos.xyz += r * IN.Expansion.x + u * IN.Expansion.y;
+    OUT.Position = mul(mViewProj, vPos);
 
-  // Position in screen space.
-  OUT.Position = mul(mViewProj, vPos);
-
-  //////////////////////////////////////////////////////////////////////
-  // soft particle setup
-
-  #ifdef %_RT_SOFT_PARTICLE
+#ifdef %_RT_SOFT_PARTICLE
     OUT.hPosTexProj = HPosToScreenTC(OUT.Position);
 
-    float size = sqrt( abs(IN.ScreenRot.x*IN.ScreenRot.w - IN.ScreenRot.y*IN.ScreenRot.z) );
-    float4 newPos = float4( vPos.xyz + size * CameraFrontVector.xyz, 1.0 );
+    float  size      = sqrt(abs(IN.ScreenRot.x * IN.ScreenRot.w - IN.ScreenRot.y * IN.ScreenRot.z));
+    float4 newPos    = float4(vPos.xyz + size * CameraFrontVector.xyz, 1.0f);
 
-    float hNewPosZ = dot( mViewProj[ 2 ], newPos );
-    float hNewPosW = dot( mViewProj[ 3 ], newPos );
-    OUT.Position.z = OUT.Position.w *( hNewPosZ / hNewPosW );
+    float2 hNewPosZW = float2(dot(mViewProj[2], newPos), dot(mViewProj[3], newPos));
 
-    if( hNewPosW < g_VS_NearFarClipDist.x && hNewPosW + size > g_VS_NearFarClipDist.x )
-      OUT.Position.z = 0;
+    OUT.Position.z   = OUT.Position.w * (hNewPosZW.x / hNewPosZW.y);
 
-    float particleThicknessInv = 1.0 / ( 2.0 * size );
-    float scaleCamera = ( hNewPosW + size - g_VS_NearFarClipDist.x ) * 2.0 * particleThicknessInv;
-    OUT.particleFade.x = scaleCamera;
-    OUT.particleFade.y = particleThicknessInv;
-    OUT.particleFade.z = size;
-    OUT.particleFade.w = hNewPosW;
-  #endif
+    // Branchless clipping plane intersection test
+    float clipPlane     = g_VS_NearFarClipDist.x;
+    float clipIntersect = (hNewPosZW.y < clipPlane) && ((hNewPosZW.y + size) > clipPlane) ? 0.0f : 1.0f;
+
+    OUT.Position.z     *= clipIntersect;
+
+    // Vectorized assignment and simplified ALU math
+    OUT.particleFade    = float4((hNewPosZW.y + size - clipPlane) / size,
+                                 0.5f / size,
+                                 size,
+                                 hNewPosZW.y);
+#endif
 }
-
-//========================================================================

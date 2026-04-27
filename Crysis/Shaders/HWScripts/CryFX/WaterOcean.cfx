@@ -1,17 +1,15 @@
 #include "Common.cfi"
 #include "ModificatorVT.cfi"
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
 //TODO:
 // - SunShine on water shall be improved, looks terrible.
 // - Clean up and optimize
 // - Make sure to map properly texels->pixels
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "NoPreview;"
            "ShaderDrawType = Custom;"
@@ -33,7 +31,6 @@ float4 WaterLevel : PB_WaterLevel;
 float4 WaterParams = { 0, 0, 0.066, 0.5};
 float4 PI_AmbientOpacity : PI_AmbientOpacity;
 
-/// Tweakables //////////////////////
 
 float BumpScale
 <
@@ -90,7 +87,6 @@ float SunShinePow
   float UIStep    = 0.05;
 > = 32.0;
 
-//==============================================================================
 
 float4 FresnelMinColor
 <
@@ -124,7 +120,6 @@ float4 WaterMaxColor
   string UIWidget = "color";
 > = {0.16, 0.38, 0.45, 1};
 
-//=========================================================================
 
 float ParamDepth
 <
@@ -225,11 +220,10 @@ float ParamSuppressSmallWavesFactor
   float UIStep    = 0.000000001;
 > = 0.00001;
 
-//========================================================================================
 
 sampler2D envMapSamplerRefl
 <
-  string Script = 
+  string Script =
       "RenderOrder=PreProcess;"
       "ProcessOrder=WaterReflection;"
       "RenderCamera=WaterPlaneReflected;"
@@ -254,7 +248,7 @@ sampler2D envMapSamplerRefl
 
 sampler2D envMapSamplerRefr
 <
-  string Script = 
+  string Script =
       "RenderOrder=PreDraw;"
       "RenderCamera=Current;"
       "RenderType=CurScene;"
@@ -317,7 +311,6 @@ half Fresnel(half NdotI, half bias, half power)
   return bias + pow(facing, power);  // opt: removed (1-bias) mul
 }
 
-///////////////// vertex shader //////////////////
 v2fReflect WaterOceanVS(a2v IN)
 {
   v2fReflect OUT = (v2fReflect)0;
@@ -421,9 +414,7 @@ pixout WaterOceanPS(v2fReflect IN)
   return OUT;
 }
 
-//======================================================================================
 
-///////////////// vertex shader //////////////////
 v2fRefract WaterOceanRefractVS(a2v IN)
 {
   v2fRefract OUT = (v2fRefract)0;
@@ -550,7 +541,6 @@ pixout WaterOceanRefractPS(v2fRefract IN)
 #if %SUN_SHINE
   // Add sun specular term
 
-  //////////////////////////////////////////////////////////////
   // Sun glow/shine
   half selfshadowK=(vCam.z<0) ? 0:1;
   half3 sunNormal = normal.xyz;
@@ -575,7 +565,6 @@ pixout WaterOceanRefractPS(v2fRefract IN)
   return OUT;
 }
 
-//======================================================================================
 
 struct app2vertZ
 {
@@ -629,11 +618,10 @@ pixout ZPassPS(vert2fragZ IN)
   return OUT;
 }
 
-//======================================================================================
 
 technique Refraction
 <
-  string Script = 
+  string Script =
         "TechniqueZ=ZPass;"
 >
 {
@@ -705,4 +693,3 @@ technique ZPass
   }
 }
 
-/////////////////////// eof ///

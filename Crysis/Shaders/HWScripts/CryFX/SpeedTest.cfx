@@ -5,7 +5,7 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
            "Public;"
            "ShaderDrawType = General;"
 >;
@@ -19,7 +19,6 @@ sampler2D TexSampler = sampler_state
 DIFFUSEMAP
 SHADOWOCCLUDEMAP
 
-/////////////////////////////
 
 struct a2v
 {
@@ -36,7 +35,6 @@ struct v2f
   float4 shadowTC   : TEXCOORDN;
 };
 
-///////////////// vertex shader //////////////////
 v2f SpeedTestVS(a2v IN)
 {
   v2f OUT = (v2f)0;
@@ -49,7 +47,6 @@ v2f SpeedTestVS(a2v IN)
   return OUT;
 }
 
-///////////////// pixel shader //////////////////
 
 pixout SpeedTestPS(v2f IN)
 {
@@ -70,11 +67,10 @@ pixout SpeedTestPS(v2f IN)
   return OUT;
 }
 
-//////////////////////////////// technique ////////////////
 
 technique General
 <
-  string Script = 
+  string Script =
         "TechniqueZ=ZPass;"
         "TechniqueShadowGen=ShadowGen;"
 #ifdef D3D10
@@ -102,4 +98,3 @@ technique General
 #endif
 #include "CommonShadowPass.cfi"
 
-/////////////////////// eof ///

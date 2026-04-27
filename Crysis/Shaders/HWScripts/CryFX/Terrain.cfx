@@ -7,7 +7,7 @@
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
 <
-  string Script = 
+  string Script =
 #if %DETAIL_BUMP_MAPPING
            "DetailBumpMapping;"
 #endif
@@ -15,8 +15,6 @@ float Script : STANDARDSGLOBAL
            "ShaderType = Terrain;"
 >;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////// Custom shading pass structure /////////////////////////////////////
 
 struct fragPassCustom
 {
@@ -33,7 +31,6 @@ struct fragLightPassCustom
 
 #include "ShadeLib.cfi"
 
-//=============================================================
 
 /// Un-Tweakables //////////////////////
 
@@ -46,9 +43,7 @@ float4x4 LayerTexGen      : PB_TerrainLayerGen;
 
 //float3 Tangent           = {PB_FromRE[16], PB_FromRE[17], PB_FromRE[18]};
 
-//=========================================================================
 
-// Tweakables /////////////////
 #if %ENVCMSPEC
   // EnvMap amount
   float EnvMapAmount
@@ -176,7 +171,6 @@ float SelfShadowStrength
   > = 0.0;
 #endif
 
-///////////////////////////////
 // Samplers
 sampler2D baseMapSampler = sampler_state
 {
@@ -223,7 +217,6 @@ sampler2D envMapSampler = sampler_state
 samplerCUBE envMapSamplerCUBE = sampler_state
 { Texture = $EnvironmentCubeMap; };
 
-//==========================================================================
 
 struct vert2fragTerrain
 {
@@ -264,7 +257,6 @@ struct vert2fragLayer
 
 #include "vertexLib.cfi"
 
-///////////////// terrain vertex shader //////////////////
 vert2fragTerrain TerrainVS(app2vertGeneral IN)
 {
   vert2fragTerrain OUT = (vert2fragTerrain)1;
@@ -308,9 +300,7 @@ vert2fragTerrain TerrainVS(app2vertGeneral IN)
   return OUT;
 }
 
-//===================================================================================
 
-///////////////// terrain vertex shader //////////////////
 vert2fragLayer TerrainLayerVS(app2vertGeneral IN)
 {
   vert2fragLayer OUT;
@@ -430,8 +420,6 @@ vert2fragLayer TerrainLayerVS(app2vertGeneral IN)
   return OUT;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void frag_unify_parameters( inout fragPass pPass )
 {
@@ -472,8 +460,6 @@ void frag_unify_parameters( inout fragPass pPass )
 
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void frag_unify(inout fragPass pPass, in vert2fragLayer IN)
 {
@@ -499,8 +485,6 @@ void frag_unify(inout fragPass pPass, in vert2fragLayer IN)
 
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void GetRotationTerrain( half3 n, out half3x3 rotMat )
 {
@@ -579,8 +563,6 @@ void frag_custom_begin(inout fragPass pPass)
   pPass.pCustom.fDiffuseAlpha = fAlpha;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 // Lighting
 void frag_custom_per_light(inout fragPass pPass, inout fragLightPass pLight)
 {
@@ -612,8 +594,6 @@ void frag_custom_per_light(inout fragPass pPass, inout fragLightPass pLight)
     pPass.cSpecularAcc += cSpecular * cK;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void frag_custom_ambient(inout fragPass pPass, inout half3 cAmbient)
 {
@@ -626,8 +606,6 @@ void frag_custom_ambient(inout fragPass pPass, inout half3 cAmbient)
   pPass.cAmbientAcc += cAmbient.xyz;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void frag_custom_end(inout fragPass pPass, inout half3 cFinal)
 {
@@ -636,12 +614,9 @@ void frag_custom_end(inout fragPass pPass, inout half3 cFinal)
 #endif
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "fragLib.cfi"
 
-///////////////// terrain pixel shader //////////////////
 pixout TerrainPS(vert2fragTerrain IN)
 {
   pixout OUT = (pixout)0;
@@ -732,11 +707,10 @@ pixout TerrainLayerPS(vert2fragLayer IN)
   return OUT;
 }
 
-//////////////////////////////// technique ////////////////
 
 technique General
 <
-  string Script = 
+  string Script =
         "NoLights;"
         "TechniqueZ=ZPass;"
         "TechniqueShadowGen=ShadowGen;"
@@ -785,7 +759,6 @@ technique Layer
   }
 }
 
-//////////////////////////////// Common techniques ////////////////
 
 #include "CommonZPass.cfi"
 #include "CommonCausticsPass.cfi"
@@ -793,4 +766,3 @@ technique Layer
 #include "CommonShadowGenPass.cfi"
 #include "CommonShadowPass.cfi"
 
-/////////////////////// eof ///
