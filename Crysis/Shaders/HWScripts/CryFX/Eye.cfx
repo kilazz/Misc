@@ -299,7 +299,14 @@ technique General
         ZEnable      = true;
         ZWriteEnable = true;
         CullMode     = Back;
-        ZFunc        = #if !%EYE_OVERLAY LEqual #else Less #endif;
+
+#if !%EYE_OVERLAY
+        SrcBlend = SRC_ALPHA;
+        DestBlend = ONE_MINUS_SRC_ALPHA;
+        ZFunc = LEqual;
+#else
+        ZFunc = Less;
+#endif
     }
 }
 
