@@ -74,8 +74,7 @@ Dolby Vision on Windows **only works through the official Windows Media Foundati
 Third-party players like VLC, MPC-HC, or PotPlayer **will NOT work** (they will fall back to HDR10 or show purple/green tinted colors).
 
 1. Ensure **HDR** is turned ON in Windows Display Settings.
-2. Open the native Windows **Movies & TV** app and play a local Dolby Vision `.mp4` file, OR open the official **Netflix** app (requires Premium UHD subscription).
-3. **Success:** A small **Dolby Vision logo** will briefly pop up in the top-right corner of your screen when playback starts. The colors should look dense, accurate, and highlights will be properly mapped!
+2. Open the native Windows **Movies & TV** app and play a local Dolby Vision `.mp4` file, OR open the official **Netflix** app.
 
 ---
 
