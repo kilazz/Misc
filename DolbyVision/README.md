@@ -14,6 +14,7 @@ By default, Dolby Vision is restricted to certified devices via encrypted ICC pr
 * **Windows 10 / 11** (with HDR enabled in Display Settings).
 
 * [HEVC Video Extensions][HEVCVideoExtensions]
+* [HEVC Video Extensions from Device Manufacturer][HEVCVideoExtensionsfromDeviceManufacturer]
 * [Dolby Vision Extensions][DolbyVisionExtensions]
 * [Dolby Vision][DolbyVision]
 * [CRU][CRU]
@@ -66,8 +67,7 @@ Restart your PC to ensure all changes take effect.
 ---
 
 ## 🎬 Testing & Verification
-Dolby Vision on Windows **only works through the official Windows Media Foundation API**.
-Third-party players like VLC, MPC-HC, or PotPlayer **will NOT work** (they will fall back to HDR10 or show purple/green tinted colors).
+Dolby Vision on Windows **Windows Media Foundation API**.
 
 1. Ensure **HDR** is turned ON in Windows Display Settings.
 2. Open the native Windows **Movies & TV** app and play a local Dolby Vision `.mp4` file, OR open the official **Netflix** app.
@@ -91,9 +91,10 @@ This is a Dolby VSVDB (Version 2) payload based on the LG C1 profile, but heavil
 
 
 
-[HEVCVideoExtensions]:   https://apps.microsoft.com/detail/9nmzlz57r3t7
-[DolbyVisionExtensions]: https://apps.microsoft.com/detail/9pltg1lwphlf
-[DolbyVision]:           https://apps.microsoft.com/detail/9mvmz93n61t9
-[CRU]:                   https://customresolutionutility.net
-[AWEDIDEditor]:          https://www.analogway.com/products/aw-edid-editor
-[dvfw.netlify.app]:      https://dvfw.netlify.app
+[HEVCVideoExtensions]:                       https://apps.microsoft.com/detail/9nmzlz57r3t7
+[HEVCVideoExtensionsfromDeviceManufacturer]: https://apps.microsoft.com/detail/9n4wgh0z6vhq
+[DolbyVisionExtensions]:                     https://apps.microsoft.com/detail/9pltg1lwphlf
+[DolbyVision]:                               https://apps.microsoft.com/detail/9mvmz93n61t9
+[CRU]:                                       https://customresolutionutility.net
+[AWEDIDEditor]:                              https://www.analogway.com/products/aw-edid-editor
+[dvfw.netlify.app]:                          https://dvfw.netlify.app
