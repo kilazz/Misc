@@ -4,7 +4,6 @@
 
 This guide explains how to enable true **Low-Latency Dolby Vision (LLDV)** on standard SDR or basic HDR10 monitors (e.g., 300 nits VA/IPS panels) on Windows 11.
 By default, Dolby Vision is restricted to certified devices via encrypted ICC profiles and hardware EDID tags. By spoofing the EDID and using a Windows Registry override, we can force the GPU (Player-led LLDV) to do the heavy lifting. The GPU will process the Dolby Vision metadata, tone-map it perfectly to your monitor's actual peak brightness, and send a standard HDR signal to your screen.
-No washed-out colors, no crushed blacks, no blown-out highlights!
 
 ## 🧠 How It Works
 1. **LLDV (Low-Latency Dolby Vision):** Instead of the monitor decoding Dolby Vision, we tell Windows that the monitor only supports "Low-Latency" mode. This forces the GPU (NVIDIA/AMD/Intel) to decode the Dolby Vision signal and do the tone mapping.
