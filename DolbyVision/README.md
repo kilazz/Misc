@@ -6,7 +6,7 @@ This guide explains how to enable true **Low-Latency Dolby Vision (LLDV)** on st
 By default, Dolby Vision is restricted to certified devices via encrypted ICC profiles and hardware EDID tags. By spoofing the EDID and using a Windows Registry override, we can force the GPU (Player-led LLDV) to do the heavy lifting. The GPU will process the Dolby Vision metadata, tone-map it perfectly to your monitor's actual peak brightness, and send a standard HDR signal to your screen.
 No washed-out colors, no crushed blacks, no blown-out highlights!
 
-## 🧠 How It Works (The Science)
+## 🧠 How It Works
 1. **LLDV (Low-Latency Dolby Vision):** Instead of the monitor decoding Dolby Vision, we tell Windows that the monitor only supports "Low-Latency" mode. This forces the GPU (NVIDIA/AMD/Intel) to decode the Dolby Vision signal and do the tone mapping.
 2. **EDID Spoofing:** We inject a custom **Dolby Vendor-Specific Video Data Block (VSVDB)** into your monitor's firmware memory (EDID) using CRU and AW EDID Editor.
 3. **Registry Override (`EDRMaxLuminance`):** Standard Dolby Vision profiles assume you have an 400+ nits display. If you apply that to a 300 nits monitor, highlights will clip. We use a Windows Media Foundation registry hack to hard-limit the OS tone mapping to exactly **300 nits**.
