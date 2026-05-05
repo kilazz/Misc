@@ -95,6 +95,6 @@ This is a Dolby VSVDB (Version 2) payload based on the LG C1 profile, but heavil
 [HEVCVideoExtensions]:   https://apps.microsoft.com/detail/9nmzlz57r3t7
 [DolbyVisionExtensions]: https://apps.microsoft.com/detail/9pltg1lwphlf
 [DolbyVision]:           https://apps.microsoft.com/detail/9mvmz93n61t9
-[CRU]:                   https://www.monitortests.com/forum/Thread-Custom-Resolution-Utility-CRU
+[CRU]:                   https://customresolutionutility.net
 [AWEDIDEditor]:          https://www.analogway.com/products/aw-edid-editor
 [dvfw.netlify.app]:      https://dvfw.netlify.app
