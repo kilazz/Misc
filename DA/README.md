@@ -41,7 +41,6 @@ No washed-out colors, no crushed blacks, no blown-out highlights!
 4. Click the `Add new CEA Block` dropdown and select **Vendor-Specific Video**.
 5. On the right panel, set the **IEEE OUI** to `53318` (or select *Dolby Laboratories* / `00 D0 46`).
 6. In the **Payload (HEX String)** box, paste the following custom LLDV payload:
-text
    ```
    480347825e6d95
    ```
@@ -58,8 +57,6 @@ text
 To prevent Dolby Vision from over-brightening the image and causing highlight clipping on a 300-nit monitor, we must tell the Windows Media Foundation API to cap the tone mapping at 300 nits.
 
 Open **Command Prompt (CMD)** or **PowerShell** as Administrator and run these two commands:
-
-cmd
 ```
 REG ADD "HKEY_LOCAL_MACHINE\Software\Microsoft\Windows Media Foundation\SVR" /f
 REG ADD "HKEY_LOCAL_MACHINE\Software\Microsoft\Windows Media Foundation\SVR" /v EDRMaxLuminance /t REG_DWORD /d 300 /f
