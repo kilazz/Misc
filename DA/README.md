@@ -11,10 +11,13 @@ No washed-out colors, no crushed blacks, no blown-out highlights!
 
 ## 🛠️ Prerequisites
 * **Windows 10 / 11** (with HDR enabled in Display Settings).
-* **HEVC Video Extensions** & **Dolby Vision Extensions** (installed from the Microsoft Store).
-* **[Custom Resolution Utility (CRU)](https://www.monitortests.com/forum/Thread-Custom-Resolution-Utility-CRU)**
-* **AW EDID Editor** (https://www.analogway.com/products/aw-edid-editor).
-* **dvfw.netlify.app** (or you can use[dvfw.netlify.app](https://dvfw.netlify.app/) to the payload).
+
+* **[HEVC Video Extensions][HEVCVideoExtensions]**
+* **[Dolby Vision Extensions][DolbyVisionExtensions]**
+* **[Dolby Vision][DolbyVision]**
+* **[CRU][CRU]**
+* **[AW EDID Editor][AWEDIDEditor]**
+* **[dvfw.netlify.app][dvfw.netlify.app]**
 ---
 
 ## 🚀 Step-by-Step Guide
@@ -84,5 +87,16 @@ This is a Dolby VSVDB (Version 2) payload based on the LG C1 profile, but heavil
 * `82`: Interface Mode. This bit forces **Standard + Low-Latency (LLDV)** mode, commanding the GPU to handle the tone-mapping.
 * `5e6d95`: Color primaries (Rx, Ry, Gx, Gy, Bx, By). This matches ~100% sRGB / ~85% DCI-P3, which is the physical limit of most standard VA/IPS panels.
 
+
+
 1. Make sure you are using the official Netflix App or the "Movies & TV" app. Browsers (Chrome/Edge) do not support the Windows DV API.
-2. Yes! Because we forced the `LLDV` flag in the EDID, the desktop GPU takes over the processing. It bypasses the old laptop requirement of needing an Intel iGPU to handle the Dolby Vision license.
+2. Because we forced the `LLDV` flag in the EDID, the desktop GPU takes over the processing. It bypasses the old laptop requirement of needing an Intel iGPU to handle the Dolby Vision license.
+
+
+
+[HEVCVideoExtensions]:   https://apps.microsoft.com/detail/9nmzlz57r3t7
+[DolbyVisionExtensions]: https://apps.microsoft.com/detail/9pltg1lwphlf
+[DolbyVision]:           https://apps.microsoft.com/detail/9mvmz93n61t9
+[CRU]:                   https://www.monitortests.com/forum/Thread-Custom-Resolution-Utility-CRU
+[AWEDIDEditor]:          https://www.analogway.com/products/aw-edid-editor
+[dvfw.netlify.app]:      https://dvfw.netlify.app
