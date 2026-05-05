@@ -46,13 +46,6 @@ HS27S17(SKG2718) > 300 nit
 
 480347825e6d95 > Target Max PQ v2 2575 (320.26 cd/m^2)
 
-(HEX 3F) =  275.80 nit
-(HEX 47) = ~298    nit
-(HEX 4F) = ~325    nit
-(HEX 57) = ~385    nit
-
-
-
 PQConfig_SDC421B.dv > DolbyVision_CMDEF.icm > PQ_Tuning_Only_ICM_Generic
 
 PQConfig_SDC421B.dv > DVB1 blob
