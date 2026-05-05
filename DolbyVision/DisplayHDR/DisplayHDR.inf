@@ -3,10 +3,10 @@
 ; ==========================================================
 [Version]
 Signature   = "$WINDOWS NT$"
-;Class       = Monitor
-;ClassGuid   = {4D36E96E-E325-11CE-BFC1-08002BE10318}
-Class       = Extension
-ClassGuid   = {E2F84CE7-8EFA-411C-AA69-97454CA4CB57}
+Class       = Monitor
+ClassGuid   = {4D36E96E-E325-11CE-BFC1-08002BE10318}
+;Class       = Extension
+;ClassGuid   = {E2F84CE7-8EFA-411C-AA69-97454CA4CB57}
 Provider    = %ProviderName%
 ExtensionId = {0F3C38CF-7ADB-4C6E-B025-7E0002357A91}
 DriverVer   = 05/04/2026, 1.0.0.0
@@ -14,97 +14,129 @@ CatalogFile = DisplayHDR.cat
 PnpLockdown = 1
 
 [Manufacturer]
-;%ProviderName% = Generic_Monitors,NTamd64
-%ProviderName% = DeviceExtensions,NTamd64
+%ProviderName% = Generic_Monitors,NTamd64.10.0...19041
+;%ProviderName% = DeviceExtensions,NTamd64.10.0...19041
 
-; LIST OF PROFILES (Displayed during installation)
-;[Generic_Monitors.NTamd64]
-;; Base Profiles
-;%Name_SDR_ACM%       = Inst_SDR_ACM,       MONITOR\GEN_SDR_ACM
-;%Name_VESA%          = Inst_VESA,          MONITOR\GEN_VESA
-;%Name_DV%            = Inst_DV,            MONITOR\GEN_DV
-;%Name_VESA_DV%       = Inst_VESA_DV,       MONITOR\GEN_VESA_DV
-;
-;; VESA DisplayHDR 1.0
-;%Name_400_10%        = Inst_400_10,        MONITOR\GEN_10_400
-;%Name_600_10%        = Inst_600_10,        MONITOR\GEN_10_600
-;%Name_1000_10%       = Inst_1000_10,       MONITOR\GEN_10_1000
-;%Name_1400_10%       = Inst_1400_10,       MONITOR\GEN_10_1400
-;
-;; VESA DisplayHDR 1.0 True Black
-;%Name_400_10_TB%     = Inst_400_10_TB,     MONITOR\GEN_10_400_TB
-;%Name_500_10_TB%     = Inst_500_10_TB,     MONITOR\GEN_10_500_TB
-;
-;; VESA DisplayHDR 1.0 Dolby Vision
-;%Name_400_10_DV%     = Inst_400_10_DV,     MONITOR\GEN_10_400_DV
-;%Name_600_10_DV%     = Inst_600_10_DV,     MONITOR\GEN_10_600_DV
-;%Name_1000_10_DV%    = Inst_1000_10_DV,    MONITOR\GEN_10_1000_DV
-;
-;; VESA DisplayHDR 1.0 True Black Dolby Vision
-;%Name_400_10_TB_DV%  = Inst_400_10_TB_DV,  MONITOR\GEN_10_400_TB_DV
-;%Name_500_10_TB_DV%  = Inst_500_10_TB_DV,  MONITOR\GEN_10_500_TB_DV
-;
-;; VESA DisplayHDR 1.1
-;%Name_400_11%        = Inst_400_11,        MONITOR\GEN_11_400
-;%Name_500_11%        = Inst_500_11,        MONITOR\GEN_11_500
-;%Name_600_11%        = Inst_600_11,        MONITOR\GEN_11_600
-;%Name_1000_11%       = Inst_1000_11,       MONITOR\GEN_11_1000
-;%Name_1400_11%       = Inst_1400_11,       MONITOR\GEN_11_1400
-;%Name_2000_11%       = Inst_2000_11,       MONITOR\GEN_11_2000
-;
-;; VESA DisplayHDR 1.1 True Black
-;%Name_400_11_TB%     = Inst_400_11_TB,     MONITOR\GEN_11_400_TB
-;%Name_500_11_TB%     = Inst_500_11_TB,     MONITOR\GEN_11_500_TB
-;%Name_600_11_TB%     = Inst_600_11_TB,     MONITOR\GEN_11_600_TB
-;%Name_1000_11_TB%    = Inst_1000_11_TB,    MONITOR\GEN_11_1000_TB
-;
-;; VESA DisplayHDR 1.1 Dolby Vision
-;%Name_400_11_DV%     = Inst_400_11_DV,     MONITOR\GEN_11_400_DV
-;%Name_500_11_DV%     = Inst_500_11_DV,     MONITOR\GEN_11_500_DV
-;%Name_600_11_DV%     = Inst_600_11_DV,     MONITOR\GEN_11_600_DV
-;%Name_1000_11_DV%    = Inst_1000_11_DV,    MONITOR\GEN_11_1000_DV
-;%Name_2000_11_DV%    = Inst_2000_11_DV,    MONITOR\GEN_11_2000_DV
-;
-;; VESA DisplayHDR 1.1 True Black Dolby Vision
-;%Name_400_11_TB_DV%  = Inst_400_11_TB_DV,  MONITOR\GEN_11_400TB_DV
-;%Name_500_11_TB_DV%  = Inst_500_11_TB_DV,  MONITOR\GEN_11_500TB_DV
-;%Name_600_11_TB_DV%  = Inst_600_11_TB_DV,  MONITOR\GEN_11_600TB_DV
-;%Name_1000_11_TB_DV% = Inst_1000_11_TB_DV, MONITOR\GEN_11_1000TB_DV
-;
-;; VESA DisplayHDR 1.2
-;%Name_400_12%        = Inst_400_12,        MONITOR\GEN_12_400
-;%Name_500_12%        = Inst_500_12,        MONITOR\GEN_12_500
-;%Name_600_12%        = Inst_600_12,        MONITOR\GEN_12_600
-;%Name_1000_12%       = Inst_1000_12,       MONITOR\GEN_12_1000
-;%Name_1400_12%       = Inst_1400_12,       MONITOR\GEN_12_1400
-;
-;; VESA DisplayHDR 1.2 True Black
-;%Name_400_12_TB%     = Inst_400_12_TB,     MONITOR\GEN_12_400_TB
-;%Name_500_12_TB%     = Inst_500_12_TB,     MONITOR\GEN_12_500_TB
-;%Name_600_12_TB%     = Inst_600_12_TB,     MONITOR\GEN_12_600_TB
-;%Name_1000_12_TB%    = Inst_1000_12_TB,    MONITOR\GEN_12_1000_TB
-;%Name_1400_12_TB%    = Inst_1400_12_TB,    MONITOR\GEN_12_1400_TB
-;
-;; VESA DisplayHDR 1.2 Dolby Vision
-;%Name_400_12_DV%     = Inst_400_12_DV,     MONITOR\GEN_12_400_DV
-;%Name_500_12_DV%     = Inst_500_12_DV,     MONITOR\GEN_12_500_DV
-;%Name_600_12_DV%     = Inst_600_12_DV,     MONITOR\GEN_12_600_DV
-;%Name_1000_12_DV%    = Inst_1000_12_DV,    MONITOR\GEN_12_1000_DV
-;%Name_1400_12_DV%    = Inst_1400_12_DV,    MONITOR\GEN_12_1400_DV
-;
-;; VESA DisplayHDR 1.2 True Black Dolby Vision
-;%Name_400_12_TB_DV%  = Inst_400_12_TB_DV,  MONITOR\GEN_12_400_TB_DV
-;%Name_500_12_TB_DV%  = Inst_500_12_TB_DV,  MONITOR\GEN_12_500_TB_DV
-;%Name_600_12_TB_DV%  = Inst_600_12_TB_DV,  MONITOR\GEN_12_600_TB_DV
-;%Name_1000_12_TB_DV% = Inst_1000_12_TB_DV, MONITOR\GEN_12_1000_TB_DV
-;%Name_1400_12_TB_DV% = Inst_1400_12_TB_DV, MONITOR\GEN_12_1400_TB_DV
-
-[DeviceExtensions.NTamd64]
+ LIST OF PROFILES (Displayed during installation)
+[Generic_Monitors.NTamd64.10.0...19041]
 ; Display EDRMaxLuminance = 300 SKG2718
-%Device_ExtDesc% = Inst_400_12_TB_DV,MONITOR\SKG2718
+%Name_400_12_TB_DV%  = Inst_Test,          MONITOR\SKG2718
 
-;[DestinationDirs]
-;DefaultDestDir = 13
+; Base Profiles
+%Name_SDR_ACM%       = Inst_SDR_ACM,       MONITOR\GEN_SDR_ACM
+%Name_VESA%          = Inst_VESA,          MONITOR\GEN_VESA
+%Name_DV%            = Inst_DV,            MONITOR\GEN_DV
+%Name_VESA_DV%       = Inst_VESA_DV,       MONITOR\GEN_VESA_DV
+
+; VESA DisplayHDR 1.0
+%Name_400_10%        = Inst_400_10,        MONITOR\GEN_10_400
+%Name_600_10%        = Inst_600_10,        MONITOR\GEN_10_600
+%Name_1000_10%       = Inst_1000_10,       MONITOR\GEN_10_1000
+%Name_1400_10%       = Inst_1400_10,       MONITOR\GEN_10_1400
+
+; VESA DisplayHDR 1.0 True Black
+%Name_400_10_TB%     = Inst_400_10_TB,     MONITOR\GEN_10_400_TB
+%Name_500_10_TB%     = Inst_500_10_TB,     MONITOR\GEN_10_500_TB
+
+; VESA DisplayHDR 1.0 Dolby Vision
+%Name_400_10_DV%     = Inst_400_10_DV,     MONITOR\GEN_10_400_DV
+%Name_600_10_DV%     = Inst_600_10_DV,     MONITOR\GEN_10_600_DV
+%Name_1000_10_DV%    = Inst_1000_10_DV,    MONITOR\GEN_10_1000_DV
+
+; VESA DisplayHDR 1.0 True Black Dolby Vision
+%Name_400_10_TB_DV%  = Inst_400_10_TB_DV,  MONITOR\GEN_10_400_TB_DV
+%Name_500_10_TB_DV%  = Inst_500_10_TB_DV,  MONITOR\GEN_10_500_TB_DV
+
+; VESA DisplayHDR 1.1
+%Name_400_11%        = Inst_400_11,        MONITOR\GEN_11_400
+%Name_500_11%        = Inst_500_11,        MONITOR\GEN_11_500
+%Name_600_11%        = Inst_600_11,        MONITOR\GEN_11_600
+%Name_1000_11%       = Inst_1000_11,       MONITOR\GEN_11_1000
+%Name_1400_11%       = Inst_1400_11,       MONITOR\GEN_11_1400
+%Name_2000_11%       = Inst_2000_11,       MONITOR\GEN_11_2000
+
+; VESA DisplayHDR 1.1 True Black
+%Name_400_11_TB%     = Inst_400_11_TB,     MONITOR\GEN_11_400_TB
+%Name_500_11_TB%     = Inst_500_11_TB,     MONITOR\GEN_11_500_TB
+%Name_600_11_TB%     = Inst_600_11_TB,     MONITOR\GEN_11_600_TB
+%Name_1000_11_TB%    = Inst_1000_11_TB,    MONITOR\GEN_11_1000_TB
+
+; VESA DisplayHDR 1.1 Dolby Vision
+%Name_400_11_DV%     = Inst_400_11_DV,     MONITOR\GEN_11_400_DV
+%Name_500_11_DV%     = Inst_500_11_DV,     MONITOR\GEN_11_500_DV
+%Name_600_11_DV%     = Inst_600_11_DV,     MONITOR\GEN_11_600_DV
+%Name_1000_11_DV%    = Inst_1000_11_DV,    MONITOR\GEN_11_1000_DV
+%Name_2000_11_DV%    = Inst_2000_11_DV,    MONITOR\GEN_11_2000_DV
+
+; VESA DisplayHDR 1.1 True Black Dolby Vision
+%Name_400_11_TB_DV%  = Inst_400_11_TB_DV,  MONITOR\GEN_11_400TB_DV
+%Name_500_11_TB_DV%  = Inst_500_11_TB_DV,  MONITOR\GEN_11_500TB_DV
+%Name_600_11_TB_DV%  = Inst_600_11_TB_DV,  MONITOR\GEN_11_600TB_DV
+%Name_1000_11_TB_DV% = Inst_1000_11_TB_DV, MONITOR\GEN_11_1000TB_DV
+
+; VESA DisplayHDR 1.2
+%Name_400_12%        = Inst_400_12,        MONITOR\GEN_12_400
+%Name_500_12%        = Inst_500_12,        MONITOR\GEN_12_500
+%Name_600_12%        = Inst_600_12,        MONITOR\GEN_12_600
+%Name_1000_12%       = Inst_1000_12,       MONITOR\GEN_12_1000
+%Name_1400_12%       = Inst_1400_12,       MONITOR\GEN_12_1400
+
+; VESA DisplayHDR 1.2 True Black
+%Name_400_12_TB%     = Inst_400_12_TB,     MONITOR\GEN_12_400_TB
+%Name_500_12_TB%     = Inst_500_12_TB,     MONITOR\GEN_12_500_TB
+%Name_600_12_TB%     = Inst_600_12_TB,     MONITOR\GEN_12_600_TB
+%Name_1000_12_TB%    = Inst_1000_12_TB,    MONITOR\GEN_12_1000_TB
+%Name_1400_12_TB%    = Inst_1400_12_TB,    MONITOR\GEN_12_1400_TB
+
+; VESA DisplayHDR 1.2 Dolby Vision
+%Name_400_12_DV%     = Inst_400_12_DV,     MONITOR\GEN_12_400_DV
+%Name_500_12_DV%     = Inst_500_12_DV,     MONITOR\GEN_12_500_DV
+%Name_600_12_DV%     = Inst_600_12_DV,     MONITOR\GEN_12_600_DV
+%Name_1000_12_DV%    = Inst_1000_12_DV,    MONITOR\GEN_12_1000_DV
+%Name_1400_12_DV%    = Inst_1400_12_DV,    MONITOR\GEN_12_1400_DV
+
+; VESA DisplayHDR 1.2 True Black Dolby Vision
+%Name_400_12_TB_DV%  = Inst_400_12_TB_DV,  MONITOR\GEN_12_400_TB_DV
+%Name_500_12_TB_DV%  = Inst_500_12_TB_DV,  MONITOR\GEN_12_500_TB_DV
+%Name_600_12_TB_DV%  = Inst_600_12_TB_DV,  MONITOR\GEN_12_600_TB_DV
+%Name_1000_12_TB_DV% = Inst_1000_12_TB_DV, MONITOR\GEN_12_1000_TB_DV
+%Name_1400_12_TB_DV% = Inst_1400_12_TB_DV, MONITOR\GEN_12_1400_TB_DV
+
+;[DeviceExtensions.NTamd64.10.0...19041]
+; Display EDRMaxLuminance = 300 SKG2718
+;%Device_ExtDesc% = Inst_Test,MONITOR\SKG2718
+
+[DestinationDirs]
+DefaultDestDir = 13
+
+[Inst_Test]
+DelReg    = DEL_AddReg
+AddReg    = DisplayHDRLevel_400_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg,FSPPro_AddReg,ICM_AddReg
+CopyFiles = ICM_CopyFiles
+
+[DEL_AddReg]
+HKR,,ICMProfile
+
+[ICM_AddReg]
+HKR,,ICMProfile,,"DolbyVision_CMDEF.icm"
+
+[ICM_CopyFiles]
+DolbyVision_CMDEF.icm
+
+[SourceDisksFiles]
+DolbyVision_CMDEF.icm = 222
+
+[SourceDisksNames]
+222 = %DiskName%,,
+
+[Inst_Test.Services]
+AddService = monitor,0x00000002,Monitor_Service_Install
+
+[Monitor_Service_Install]
+ServiceType   = 1
+StartType     = 3
+ErrorControl  = 1
+ServiceBinary = %12%\monitor.sys
 
 ; INSTALLATION SECTIONS
 [Inst_SDR_ACM]
@@ -286,6 +318,10 @@ HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,6363AA90-A651-4154-A9E1-2D765C08E68F,
 HKR,,MicrosoftApprovedAcmSupport,%REG_DWORD%,0x1
 HKR,,EnableIntegratedPanelAcmByDefault,%REG_DWORD%,0x0
 
+[FSPPro_AddReg]
+; AMD FreeSync Premium Pro
+HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,F9310F0E-93B2-4A58-8642-17358D8CB2E3
+
 ; KEYS 1.0
 [DisplayHDRLevel_400_10_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,20C5A9AF-CD1A-42B1-AA71-4C96A273DEF1
@@ -369,7 +405,9 @@ HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,A88282F2-289F-4A36-823A-F83CB2538B2C
 
 [Strings]
 ProviderName       = "VESA DisplayHDR"
-Device_ExtDesc     = "HDR Metadata Extension"
+;Device_ExtDesc     = "HDR Metadata Extension"
+
+DiskName           = "Monitor installation"
 
 ; Profiles
 Name_SDR_ACM       = "Display SDR (with Advanced Color Mgmt)"
