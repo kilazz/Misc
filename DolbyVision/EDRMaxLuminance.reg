@@ -1,2 +1,4 @@
-REG ADD "HKEY_LOCAL_MACHINE\Software\Microsoft\Windows Media Foundation\SVR" /f
-REG ADD "HKEY_LOCAL_MACHINE\Software\Microsoft\Windows Media Foundation\SVR" /v EDRMaxLuminance /t REG_DWORD /d 300 /f
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Media Foundation\SVR]
+"EDRMaxLuminance"=dword:0000012c
