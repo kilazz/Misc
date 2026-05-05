@@ -116,6 +116,9 @@ CopyFiles = ICM_CopyFiles
 
 [DEL_AddReg]
 HKR,,ICMProfile
+HKR,,DisplayHdrLevel
+HKR,,MicrosoftApprovedAcmSupport
+HKR,,EnableIntegratedPanelAcmByDefault
 
 [ICM_AddReg]
 HKR,,ICMProfile,,"DolbyVision_CMDEF.icm"
@@ -482,5 +485,5 @@ Name_1400_12_TB_DV = "VESA DisplayHDR 1400 1.2 True Black Dolby Vision"
 
 ; Registry Data Types
 REG_DWORD           = 0x00010001
-REG_MULTI_SZ        = 0x00010000
+;REG_MULTI_SZ        = 0x00010000
 REG_MULTI_SZ_APPEND = 0x00010008
