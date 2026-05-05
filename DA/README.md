@@ -9,17 +9,17 @@ No washed-out colors, no crushed blacks, no blown-out highlights!
 ## 🧠 How It Works (The Science)
 1. **LLDV (Player-Led Dolby Vision):** Instead of the monitor decoding Dolby Vision, we tell Windows that the monitor only supports "Low-Latency" mode. This forces the GPU (NVIDIA/AMD/Intel) to decode the Dolby Vision signal and do the tone mapping.
 2. **EDID Spoofing:** We inject a custom **Dolby Vendor-Specific Video Data Block (VSVDB)** into your monitor's firmware memory (EDID) using CRU and AW EDID Editor.
-3. **Registry Override (`EDRMaxLuminance`):** Standard Dolby Vision profiles assume you have an 800+ nits display. If you apply that to a 300 nits monitor, highlights will clip. We use a Windows Media Foundation registry hack to hard-limit the OS tone mapping to exactly **300 nits**.
+3. **Registry Override (`EDRMaxLuminance`):** Standard Dolby Vision profiles assume you have an 400+ nits display. If you apply that to a 300 nits monitor, highlights will clip. We use a Windows Media Foundation registry hack to hard-limit the OS tone mapping to exactly **300 nits**.
 
 ## 🛠️ Prerequisites
 * **Windows 10 / 11** (with HDR enabled in Display Settings).
 
-* **[HEVC Video Extensions][HEVCVideoExtensions]**
-* **[Dolby Vision Extensions][DolbyVisionExtensions]**
-* **[Dolby Vision][DolbyVision]**
-* **[CRU][CRU]**
-* **[AW EDID Editor][AWEDIDEditor]**
-* **[dvfw.netlify.app][dvfw.netlify.app]**
+* [HEVC Video Extensions][HEVCVideoExtensions]
+* [Dolby Vision Extensions][DolbyVisionExtensions]
+* [Dolby Vision][DolbyVision]
+* [CRU][CRU]
+* [AW EDID Editor][AWEDIDEditor]
+* [dvfw.netlify.app][dvfw.netlify.app]
 ---
 
 ## 🚀 Step-by-Step Guide
