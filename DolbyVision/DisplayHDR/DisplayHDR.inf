@@ -17,7 +17,6 @@ PnpLockdown = 1
 %ProviderName% = Generic_Monitors,NTamd64.10.0...19041
 ;%ProviderName% = DeviceExtensions,NTamd64.10.0...19041
 
- LIST OF PROFILES (Displayed during installation)
 [Generic_Monitors.NTamd64.10.0...19041]
 ; Display EDRMaxLuminance = 300 SKG2718
 %Name_400_12_TB_DV%  = Inst_Test,          MONITOR\SKG2718
