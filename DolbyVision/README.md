@@ -23,7 +23,7 @@ By default, Dolby Vision is restricted to certified devices via encrypted ICC pr
 
 ## 🚀 Step-by-Step Guide
 
-### Free up EDID Space
+### Step 1: Free up EDID Space
 *The Dolby Vision block requires 12 bytes of memory. Most monitors don't have free space in their EDID, so we need to delete useless data.*
 
 1. Open **CRU.exe** as Administrator.
@@ -33,7 +33,7 @@ By default, Dolby Vision is restricted to certified devices via encrypted ICC pr
 5. You should now see `(18 bytes left)`. Click **OK** to close the Extension Block window.
 6. Click **Export...** (bottom left) and save the file to your Desktop as `monitor.bin`.
 
-### Inject the Dolby Vision Block
+### Step 2: Inject the Dolby Vision Block
 1. Open **AW EDID Editor**.
 2. Go to `File -> Open` and load your `monitor.bin`.
 3. On the left sidebar, expand **CEA Extension**.
@@ -46,7 +46,7 @@ By default, Dolby Vision is restricted to certified devices via encrypted ICC pr
    *(**Note:** This specific HEX is mathematically calculated for a **~320 nits** peak brightness display. See the "Payload Breakdown" section below for details).*
 7. Go to `File -> Save As...` and save it to your Desktop as `monitor_dv.bin`.
 
-### Flash the Modded EDID
+### Step 3: Flash the Modded EDID
 1. Open **CRU.exe** again.
 2. Click **Import...** (bottom left) and select your new `monitor_dv.bin` file.
 3. Click **OK** to close CRU.
