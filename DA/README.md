@@ -82,11 +82,11 @@ Third-party players like VLC, MPC-HC, or PotPlayer **will NOT work** (they will 
 Where did `480347825e6d95` come from?
 
 This is a Dolby VSVDB (Version 2) payload based on the LG C1 profile, but heavily modified for low-nits monitors.
-* `48`: Version bits and DM bits.
-* `03`: Minimum luminance (0.005 nits).
-* `47`: **The Magic Byte.** This controls the Target Max PQ (Brightness). `0x47` corresponds to Dolby's PQ Index **8**. According to the SMPTE ST-2084 PQ curve, Index 8 equals exactly **320.26 cd/m² (nits)**. This perfectly matches a standard 300-nit PC monitor without severe clipping.
-* `82`: Interface Mode. This bit forces **Standard + Low-Latency (LLDV)** mode, commanding the GPU to handle the tone-mapping.
-* `5e6d95`: Color primaries (Rx, Ry, Gx, Gy, Bx, By). This matches ~100% sRGB / ~85% DCI-P3, which is the physical limit of most standard VA/IPS panels.
+* `48`     : Version bits and DM bits.
+* `03`     : Minimum luminance (0.005 nits).
+* `47`     : This controls the Target Max PQ (Brightness). `0x47` corresponds to Dolby's PQ Index **8**. According to the SMPTE ST-2084 PQ curve, Index 8 equals exactly **320.26 cd/m² (nits)**. This perfectly matches a standard 300-nit PC monitor without severe clipping.
+* `82`     : Interface Mode. This bit forces **Standard + Low-Latency (LLDV)** mode, commanding the GPU to handle the tone-mapping.
+* `5e6d95` : Color primaries (Rx, Ry, Gx, Gy, Bx, By). This matches ~100% sRGB / ~85% DCI-P3, which is the physical limit of most standard VA/IPS panels.
 
 
 
