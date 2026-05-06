@@ -90,11 +90,7 @@ Make sure you are using the official Netflix App or the "Movies & TV" app. Brows
 
 ---
 
-### 📺 HDMI Black Screen/Green Tint/No DV
-If you are connecting your display via HDMI and experience a black screen or the system falls back to HDR10, you are likely hitting a **Driver Signature Match** issue.
-
-**The Cause:** GPU drivers (NVIDIA/AMD) have a hardcoded list of payloads for popular TVs. If the payload is a perfect match, the driver forces "TV-led" mode, which is often broken on PC HDMI.
-
+### 📺 HDMI
 **The Fix (Manual Signature Break):**
 You must slightly alter your HEX payload to force the driver into generic **Player-led (LLDV)** mode.
 1. Take your 14-character payload (e.g., `480376825e6d95`).
