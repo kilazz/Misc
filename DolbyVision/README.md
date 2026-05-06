@@ -103,15 +103,17 @@ You must slightly alter your HEX payload to force the driver into generic **Play
    - `76` $\rightarrow$ `77`
    - `60` $\rightarrow$ `61`
    - `9e` $\rightarrow$ `9f`
-4. Your new payload becomes `480377825e6d95`. 
+4. Your new payload becomes `480377825e6d95`.
 5. Update this in CRU and restart the driver. This bypasses the driver's block-list without affecting visual brightness.
 
 ---
 
+48433719 //UxAccOptimization
+49793372 //DolbyVisionAndUpdatedHdrUx
+54586575 //DolbyVisionVSVDBv4_Support
 ```
-.\vivetool.exe /enable /id:48433719
-.\vivetool.exe /enable /id:49793372 //HDR Setting > "Use Dolby Vision mode"
-.\vivetool.exe /enable /id:54586575 //DolbyVisionVSVDBv4_Support
+.\vivetool.exe /enable /id:48433719,49793372
+.\vivetool.exe /enable /id:48433719,54586575
 ```
 
 
