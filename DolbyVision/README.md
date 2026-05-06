@@ -108,10 +108,9 @@ You must slightly alter your HEX payload to force the driver into generic **Play
 
 ---
 
-HDR Setting > "Use Dolby Vision mode"
 ```
-.\vivetool.exe /enable /id:49793372
-.\vivetool.exe /enable /id:54586575
+.\vivetool.exe /enable /id:49793372 //HDR Setting > "Use Dolby Vision mode"
+.\vivetool.exe /enable /id:54586575 //DolbyVisionVSVDBv4_Support
 ```
 
 
