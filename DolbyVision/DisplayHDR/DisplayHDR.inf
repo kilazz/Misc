@@ -104,7 +104,7 @@ PnpLockdown = 1
 
 [Inst_Test]
 DelReg = DEL_AddReg
-AddReg = DisplayHDRLevel_400_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg,FSPPro_AddReg
+AddReg = DisplayHDRLevel_400_12_AddReg,VESA_AddReg,DV_AddReg,FS2_AddReg,ACM_AddReg
 
 [DEL_AddReg]
 HKR,,DisplayHdrLevel
@@ -291,7 +291,7 @@ HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,6363AA90-A651-4154-A9E1-2D765C08E68F,
 HKR,,MicrosoftApprovedAcmSupport,%REG_DWORD%,0x1
 HKR,,EnableIntegratedPanelAcmByDefault,%REG_DWORD%,0x0
 
-[FSPPro_AddReg]
+[FS2_AddReg]
 ; AMD FreeSync Premium Pro
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,F9310F0E-93B2-4A58-8642-17358D8CB2E3
 
