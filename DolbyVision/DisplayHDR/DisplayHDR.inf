@@ -3,8 +3,6 @@
 ; ==========================================================
 [Version]
 Signature   = "$WINDOWS NT$"
-;Class       = Monitor
-;ClassGuid   = {4D36E96E-E325-11CE-BFC1-08002BE10318}
 Class       = Extension
 ClassGuid   = {E2F84CE7-8EFA-411C-AA69-97454CA4CB57}
 Provider    = %ProviderName%
@@ -14,89 +12,7 @@ CatalogFile = DisplayHDR.cat
 PnpLockdown = 1
 
 [Manufacturer]
-;%ProviderName% = Generic_Monitors,NTamd64.10.0...19041
 %ProviderName% = DeviceExtensions,NTamd64.10.0...19041
-
-;[Generic_Monitors.NTamd64.10.0...19041]
-;; Base Profiles
-;%Name_SDR_ACM%       = Inst_SDR_ACM,       MONITOR\GEN_SDR_ACM
-;%Name_VESA%          = Inst_VESA,          MONITOR\GEN_VESA
-;%Name_DV%            = Inst_DV,            MONITOR\GEN_DV
-;%Name_VESA_DV%       = Inst_VESA_DV,       MONITOR\GEN_VESA_DV
-;
-;; VESA DisplayHDR 1.0
-;%Name_400_10%        = Inst_400_10,        MONITOR\GEN_10_400
-;%Name_600_10%        = Inst_600_10,        MONITOR\GEN_10_600
-;%Name_1000_10%       = Inst_1000_10,       MONITOR\GEN_10_1000
-;%Name_1400_10%       = Inst_1400_10,       MONITOR\GEN_10_1400
-;
-;; VESA DisplayHDR 1.0 True Black
-;%Name_400_10_TB%     = Inst_400_10_TB,     MONITOR\GEN_10_400_TB
-;%Name_500_10_TB%     = Inst_500_10_TB,     MONITOR\GEN_10_500_TB
-;
-;; VESA DisplayHDR 1.0 Dolby Vision
-;%Name_400_10_DV%     = Inst_400_10_DV,     MONITOR\GEN_10_400_DV
-;%Name_600_10_DV%     = Inst_600_10_DV,     MONITOR\GEN_10_600_DV
-;%Name_1000_10_DV%    = Inst_1000_10_DV,    MONITOR\GEN_10_1000_DV
-;
-;; VESA DisplayHDR 1.0 True Black Dolby Vision
-;%Name_400_10_TB_DV%  = Inst_400_10_TB_DV,  MONITOR\GEN_10_400_TB_DV
-;%Name_500_10_TB_DV%  = Inst_500_10_TB_DV,  MONITOR\GEN_10_500_TB_DV
-;
-;; VESA DisplayHDR 1.1
-;%Name_400_11%        = Inst_400_11,        MONITOR\GEN_11_400
-;%Name_500_11%        = Inst_500_11,        MONITOR\GEN_11_500
-;%Name_600_11%        = Inst_600_11,        MONITOR\GEN_11_600
-;%Name_1000_11%       = Inst_1000_11,       MONITOR\GEN_11_1000
-;%Name_1400_11%       = Inst_1400_11,       MONITOR\GEN_11_1400
-;%Name_2000_11%       = Inst_2000_11,       MONITOR\GEN_11_2000
-;
-;; VESA DisplayHDR 1.1 True Black
-;%Name_400_11_TB%     = Inst_400_11_TB,     MONITOR\GEN_11_400_TB
-;%Name_500_11_TB%     = Inst_500_11_TB,     MONITOR\GEN_11_500_TB
-;%Name_600_11_TB%     = Inst_600_11_TB,     MONITOR\GEN_11_600_TB
-;%Name_1000_11_TB%    = Inst_1000_11_TB,    MONITOR\GEN_11_1000_TB
-;
-;; VESA DisplayHDR 1.1 Dolby Vision
-;%Name_400_11_DV%     = Inst_400_11_DV,     MONITOR\GEN_11_400_DV
-;%Name_500_11_DV%     = Inst_500_11_DV,     MONITOR\GEN_11_500_DV
-;%Name_600_11_DV%     = Inst_600_11_DV,     MONITOR\GEN_11_600_DV
-;%Name_1000_11_DV%    = Inst_1000_11_DV,    MONITOR\GEN_11_1000_DV
-;%Name_2000_11_DV%    = Inst_2000_11_DV,    MONITOR\GEN_11_2000_DV
-;
-;; VESA DisplayHDR 1.1 True Black Dolby Vision
-;%Name_400_11_TB_DV%  = Inst_400_11_TB_DV,  MONITOR\GEN_11_400TB_DV
-;%Name_500_11_TB_DV%  = Inst_500_11_TB_DV,  MONITOR\GEN_11_500TB_DV
-;%Name_600_11_TB_DV%  = Inst_600_11_TB_DV,  MONITOR\GEN_11_600TB_DV
-;%Name_1000_11_TB_DV% = Inst_1000_11_TB_DV, MONITOR\GEN_11_1000TB_DV
-;
-;; VESA DisplayHDR 1.2
-;%Name_400_12%        = Inst_400_12,        MONITOR\GEN_12_400
-;%Name_500_12%        = Inst_500_12,        MONITOR\GEN_12_500
-;%Name_600_12%        = Inst_600_12,        MONITOR\GEN_12_600
-;%Name_1000_12%       = Inst_1000_12,       MONITOR\GEN_12_1000
-;%Name_1400_12%       = Inst_1400_12,       MONITOR\GEN_12_1400
-;
-;; VESA DisplayHDR 1.2 True Black
-;%Name_400_12_TB%     = Inst_400_12_TB,     MONITOR\GEN_12_400_TB
-;%Name_500_12_TB%     = Inst_500_12_TB,     MONITOR\GEN_12_500_TB
-;%Name_600_12_TB%     = Inst_600_12_TB,     MONITOR\GEN_12_600_TB
-;%Name_1000_12_TB%    = Inst_1000_12_TB,    MONITOR\GEN_12_1000_TB
-;%Name_1400_12_TB%    = Inst_1400_12_TB,    MONITOR\GEN_12_1400_TB
-;
-;; VESA DisplayHDR 1.2 Dolby Vision
-;%Name_400_12_DV%     = Inst_400_12_DV,     MONITOR\GEN_12_400_DV
-;%Name_500_12_DV%     = Inst_500_12_DV,     MONITOR\GEN_12_500_DV
-;%Name_600_12_DV%     = Inst_600_12_DV,     MONITOR\GEN_12_600_DV
-;%Name_1000_12_DV%    = Inst_1000_12_DV,    MONITOR\GEN_12_1000_DV
-;%Name_1400_12_DV%    = Inst_1400_12_DV,    MONITOR\GEN_12_1400_DV
-;
-;; VESA DisplayHDR 1.2 True Black Dolby Vision
-;%Name_400_12_TB_DV%  = Inst_400_12_TB_DV,  MONITOR\GEN_12_400_TB_DV
-;%Name_500_12_TB_DV%  = Inst_500_12_TB_DV,  MONITOR\GEN_12_500_TB_DV
-;%Name_600_12_TB_DV%  = Inst_600_12_TB_DV,  MONITOR\GEN_12_600_TB_DV
-;%Name_1000_12_TB_DV% = Inst_1000_12_TB_DV, MONITOR\GEN_12_1000_TB_DV
-;%Name_1400_12_TB_DV% = Inst_1400_12_TB_DV, MONITOR\GEN_12_1400_TB_DV
 
 [DeviceExtensions.NTamd64.10.0...19041]
 ; Display EDRMaxLuminance = 300 SKG2718
@@ -104,178 +20,12 @@ PnpLockdown = 1
 
 [Inst_Test]
 DelReg = DEL_AddReg
-AddReg = VESA_400_12_AddReg,VESA_AddReg,DV_AddReg,FS2_AddReg,ACM_AddReg
+AddReg = VESA_AddReg,DV_AddReg,FS2_AddReg,ACM_AddReg
 
 [DEL_AddReg]
 HKR,,DisplayHdrLevel
 HKR,,MicrosoftApprovedAcmSupport
 HKR,,EnableIntegratedPanelAcmByDefault
-
-; INSTALLATION SECTIONS
-[Inst_SDR_ACM]
-AddReg = ACM_AddReg
-
-[Inst_VESA]
-AddReg = VESA_AddReg,ACM_AddReg
-
-[Inst_DV]
-AddReg = DV_AddReg,ACM_AddReg
-
-[Inst_VESA_DV]
-AddReg = VESA_AddReg,DV_AddReg,ACM_AddReg
-
-; Inst 1.0
-[Inst_400_10]
-AddReg = VESA_400_10_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_400_10_TB]
-AddReg = VESA_400_10_TB_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_400_10_DV]
-AddReg = VESA_400_10_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_400_10_TB_DV]
-AddReg = VESA_400_10_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_500_10_TB]
-AddReg = VESA_500_10_TB_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_500_10_TB_DV]
-AddReg = VESA_500_10_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_600_10]
-AddReg = VESA_600_10_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_600_10_DV]
-AddReg = VESA_600_10_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_1000_10]
-AddReg = VESA_1000_10_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_1000_10_DV]
-AddReg = VESA_1000_10_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_1400_10]
-AddReg = VESA_1400_10_AddReg,VESA_AddReg,ACM_AddReg
-
-; Inst 1.1
-[Inst_400_11]
-AddReg = VESA_400_11_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_400_11_TB]
-AddReg = VESA_400_11_TB_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_400_11_DV]
-AddReg = VESA_400_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_400_11_TB_DV]
-AddReg = VESA_400_11_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_500_11]
-AddReg = VESA_500_11_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_500_11_TB]
-AddReg = VESA_500_11_TB_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_500_11_DV]
-AddReg = VESA_500_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_500_11_TB_DV]
-AddReg = VESA_500_11_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_600_11]
-AddReg = VESA_600_11_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_600_11_TB]
-AddReg = VESA_600_11_TB_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_600_11_DV]
-AddReg = VESA_600_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_600_11_TB_DV]
-AddReg = VESA_600_11_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_1000_11]
-AddReg = VESA_1000_11_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_1000_11_TB]
-AddReg = VESA_1000_11_TB_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_1000_11_DV]
-AddReg = VESA_1000_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_1000_11_TB_DV]
-AddReg = VESA_1000_11_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_1400_11]
-AddReg = VESA_1400_11_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_2000_11]
-AddReg = VESA_2000_11_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_2000_11_DV]
-AddReg = VESA_2000_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-; Inst 1.2
-[Inst_400_12]
-AddReg = VESA_400_12_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_400_12_TB]
-AddReg = VESA_400_12_TB_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_400_12_DV]
-AddReg = VESA_400_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_400_12_TB_DV]
-AddReg = VESA_400_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_500_12]
-AddReg = VESA_500_12_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_500_12_TB]
-AddReg = VESA_500_12_TB_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_500_12_DV]
-AddReg = VESA_500_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_500_12_TB_DV]
-AddReg = VESA_500_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_600_12]
-AddReg = VESA_600_12_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_600_12_TB]
-AddReg = VESA_600_12_TB_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_600_12_DV]
-AddReg = VESA_600_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_600_12_TB_DV]
-AddReg = VESA_600_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_1000_12]
-AddReg = VESA_1000_12_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_1000_12_TB]
-AddReg = VESA_1000_12_TB_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_1000_12_DV]
-AddReg = VESA_1000_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_1000_12_TB_DV]
-AddReg = VESA_1000_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_1400_12]
-AddReg = VESA_1400_12_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_1400_12_TB]
-AddReg = VESA_1400_12_TB_AddReg,VESA_AddReg,ACM_AddReg
-
-[Inst_1400_12_DV]
-AddReg = VESA_1400_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
-
-[Inst_1400_12_TB_DV]
-AddReg = VESA_1400_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 ; MODULES AND TECHNOLOGIES
 [VESA_AddReg]
@@ -295,7 +45,7 @@ HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,F9310F0E-93B2-4A58-8642-17358D8CB2E3
 HKR,,MicrosoftApprovedAcmSupport,%REG_DWORD%,0x1
 HKR,,EnableIntegratedPanelAcmByDefault,%REG_DWORD%,0x0
 
-; KEYS 1.0
+; KEYS 1.0 Certificate
 [VESA_400_10_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,20C5A9AF-CD1A-42B1-AA71-4C96A273DEF1
 
@@ -314,7 +64,7 @@ HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,78137DFC-3400-412E-B0AF-08120754623A
 [VESA_1400_10_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,670A25C9-E253-4AC9-A517-D97C8338C0D4
 
-; KEYS 1.1
+; KEYS 1.1 Certificate
 [VESA_400_11_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,0D710BC2-6368-4EB2-A829-CBBD45CE3BD2
 
@@ -345,7 +95,7 @@ HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,3CA0903F-99E0-46FB-9BEC-DE023507BEF0
 [VESA_2000_11_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,80931144-16F1-4710-91F4-2E66713B134D
 
-; KEYS 1.2
+; KEYS 1.2 Certificate
 [VESA_400_12_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,86884BBC-78EC-4EA7-A0CD-72A73CC15726
 
@@ -380,78 +130,6 @@ HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,A88282F2-289F-4A36-823A-F83CB2538B2C
 ProviderName       = "VESA DisplayHDR"
 Device_ExtDesc     = "HDR Metadata Extension"
 
-; Profiles
-Name_SDR_ACM       = "Display SDR (with Advanced Color Mgmt)"
-Name_VESA          = "VESA DisplayHDR Profile"
-Name_DV            = "Dolby Vision Profile"
-Name_VESA_DV       = "VESA DisplayHDR Dolby Vision Profile"
-
-; Version 1.0
-Name_400_10        = "VESA DisplayHDR 400 1.0"
-Name_600_10        = "VESA DisplayHDR 600 1.0"
-Name_1000_10       = "VESA DisplayHDR 1000 1.0"
-Name_1400_10       = "VESA DisplayHDR 1400 1.0"
-
-Name_400_10_TB     = "VESA DisplayHDR 400 1.0 True Black"
-Name_500_10_TB     = "VESA DisplayHDR 500 1.0 True Black"
-
-Name_400_10_DV     = "VESA DisplayHDR 400 1.0 Dolby Vision"
-Name_600_10_DV     = "VESA DisplayHDR 600 1.0 Dolby Vision"
-Name_1000_10_DV    = "VESA DisplayHDR 1000 1.0 Dolby Vision"
-
-Name_400_10_TB_DV  = "VESA DisplayHDR 400 1.0 True Black Dolby Vision"
-Name_500_10_TB_DV  = "VESA DisplayHDR 500 1.0 True Black Dolby Vision"
-
-; Version 1.1
-Name_400_11        = "VESA DisplayHDR 400 1.1"
-Name_500_11        = "VESA DisplayHDR 500 1.1"
-Name_600_11        = "VESA DisplayHDR 600 1.1"
-Name_1000_11       = "VESA DisplayHDR 1000 1.1"
-Name_1400_11       = "VESA DisplayHDR 1400 1.1"
-Name_2000_11       = "VESA DisplayHDR 2000 1.1"
-
-Name_400_11_TB     = "VESA DisplayHDR 400 1.1 True Black"
-Name_500_11_TB     = "VESA DisplayHDR 500 1.1 True Black"
-Name_600_11_TB     = "VESA DisplayHDR 600 1.1 True Black"
-Name_1000_11_TB    = "VESA DisplayHDR 1000 1.1 True Black"
-
-Name_400_11_DV     = "VESA DisplayHDR 400 1.1 Dolby Vision"
-Name_500_11_DV     = "VESA DisplayHDR 500 1.1 Dolby Vision"
-Name_600_11_DV     = "VESA DisplayHDR 600 1.1 Dolby Vision"
-Name_1000_11_DV    = "VESA DisplayHDR 1000 1.1 Dolby Vision"
-Name_2000_11_DV    = "VESA DisplayHDR 2000 1.1 Dolby Vision"
-
-Name_400_11_TB_DV  = "VESA DisplayHDR 400 1.1 True Black Dolby Vision"
-Name_500_11_TB_DV  = "VESA DisplayHDR 500 1.1 True Black Dolby Vision"
-Name_600_11_TB_DV  = "VESA DisplayHDR 600 1.1 True Black Dolby Vision"
-Name_1000_11_TB_DV = "VESA DisplayHDR 1000 1.1 True Black Dolby Vision"
-
-; Version 1.2
-Name_400_12        = "VESA DisplayHDR 400 1.2"
-Name_500_12        = "VESA DisplayHDR 500 1.2"
-Name_600_12        = "VESA DisplayHDR 600 1.2"
-Name_1000_12       = "VESA DisplayHDR 1000 1.2"
-Name_1400_12       = "VESA DisplayHDR 1400 1.2"
-
-Name_400_12_TB     = "VESA DisplayHDR 400 1.2 True Black"
-Name_500_12_TB     = "VESA DisplayHDR 500 1.2 True Black"
-Name_600_12_TB     = "VESA DisplayHDR 600 1.2 True Black"
-Name_1000_12_TB    = "VESA DisplayHDR 1000 1.2 True Black"
-Name_1400_12_TB    = "VESA DisplayHDR 1400 1.2 True Black"
-
-Name_400_12_DV     = "VESA DisplayHDR 400 1.2 Dolby Vision"
-Name_500_12_DV     = "VESA DisplayHDR 500 1.2 Dolby Vision"
-Name_600_12_DV     = "VESA DisplayHDR 600 1.2 Dolby Vision"
-Name_1000_12_DV    = "VESA DisplayHDR 1000 1.2 Dolby Vision"
-Name_1400_12_DV    = "VESA DisplayHDR 1400 1.2 Dolby Vision"
-
-Name_400_12_TB_DV  = "VESA DisplayHDR 400 1.2 True Black Dolby Vision"
-Name_500_12_TB_DV  = "VESA DisplayHDR 500 1.2 True Black Dolby Vision"
-Name_600_12_TB_DV  = "VESA DisplayHDR 600 1.2 True Black Dolby Vision"
-Name_1000_12_TB_DV = "VESA DisplayHDR 1000 1.2 True Black Dolby Vision"
-Name_1400_12_TB_DV = "VESA DisplayHDR 1400 1.2 True Black Dolby Vision"
-
 ; Registry Data Types
 REG_DWORD           = 0x00010001
-;REG_MULTI_SZ        = 0x00010000
 REG_MULTI_SZ_APPEND = 0x00010008
