@@ -3,23 +3,25 @@
 # Dolby Vision for Unsupported Monitors on Windows (LLDV EDID Spoofing)
 
 This guide explains how to enable true **Low-Latency Dolby Vision (LLDV)** on standard SDR or basic HDR10 monitors (e.g., 300 nits VA/IPS panels) on Windows 11.
-By default, Dolby Vision is restricted to certified devices via encrypted ICC profiles and hardware EDID tags. By spoofing the EDID and using a Windows Registry override, we can force the GPU (Player-led LLDV) to do the heavy lifting. The GPU will process the Dolby Vision metadata, tone-map it perfectly to your monitor's actual peak brightness, and send a standard HDR signal to your screen.
+By default, Dolby Vision is restricted to certified devices via encrypted ICC profiles and hardware EDID tags. By spoofing the EDID and using a Windows Registry override, we can force the GPU (LLDV) to do the heavy lifting. The GPU will process the Dolby Vision metadata, tone-map it perfectly to your monitor's actual peak brightness, and send a standard HDR signal to your screen.
+
+> ⚠️ **DISCLAIMER:** Playing with EDID settings can occasionally cause a "black screen" when your display driver restarts. If this happens and the screen doesn't recover, simply restart your PC in **Safe Mode** and run `reset-all.exe` from the CRU folder to revert all changes safely.
 
 ## 🧠 How It Works
 1. **LLDV (Low-Latency Dolby Vision):** Instead of the monitor decoding Dolby Vision, we tell Windows that the monitor only supports "Low-Latency" mode. This forces the GPU (NVIDIA/AMD/Intel) to decode the Dolby Vision signal and do the tone mapping.
 2. **EDID Spoofing:** We inject a custom **Vendor-Specific Video Data Block (VSVDB)** into your monitor's firmware memory (EDID) using CRU and AW EDID Editor.
-3. **Registry Override (`EDRMaxLuminance`):** Standard Dolby Vision profiles assume you have an 400+ nits display. If you apply that to a 300 nits monitor, highlights will clip. We use a Windows Media Foundation registry hack to hard-limit the OS tone mapping to exactly **300 nits**.
+3. **Registry Override (`EDRMaxLuminance`):** VESA profiles assume you have 400+ nits display. If you apply that to a 300 nits monitor, highlights will clip. We use a Windows Media Foundation registry hack to hard-limit the OS tone mapping to exactly **300 nits**.
 
 ## 🛠️ Prerequisites
 * **Windows 10 / 11** (with HDR enabled in Display Settings).
-
 * [HEVC Video Extensions][HEVCVideoExtensions]
 * [HEVC Video Extensions from Device Manufacturer][HEVCVideoExtensionsfromDeviceManufacturer]
 * [Dolby Vision Extensions][DolbyVisionExtensions]
 * [Dolby Vision][DolbyVision]
-* [CRU][CRU]
+* [Custom Resolution Utility (CRU)][CRU]
 * [AW EDID Editor][AWEDIDEditor]
 * [dvfw.netlify.app][dvfw.netlify.app]
+
 ---
 
 ## 🚀 Step-by-Step Guide
@@ -54,7 +56,7 @@ By default, Dolby Vision is restricted to certified devices via encrypted ICC pr
 4. In the CRU folder, run `restart64.exe`. Your screen will flicker black a few times as the GPU driver restarts and reads the new Dolby Vision EDID.
 
 ### The 300-Nits Registry Hack
-To prevent Dolby Vision from over-brightening the image and causing highlight clipping on a 300-nit monitor, we must tell the Windows Media Foundation API to cap the tone mapping at 300 nits.
+To prevent standard HDR processing from over-brightening the image and causing highlight clipping on a 300-nit monitor, we must tell the Windows Media Foundation API to cap the tone mapping at 300 nits.
 
 Open **Command Prompt (CMD)** or **PowerShell** as Administrator and run these two commands:
 ```
@@ -77,7 +79,7 @@ Dolby Vision on Windows works only through the Windows Media Foundation API.
 ## 🔍 Payload Breakdown (For Geeks)
 Where did `480347825e6d95` come from?
 
-This is a Dolby VSVDB (Version 2) payload based on the LG C1 profile, but heavily modified for low-nits monitors.
+This is a Dolby VSVDB (Version 2) payload based on the LG C1 profile, but heavily modified for low-nits monitors:
 * `48`     : Version bits and DM bits.
 * `03`     : Minimum luminance (0.005 nits).
 * `47`     : This controls the Target Max PQ (Brightness). `0x47` corresponds to Dolby's PQ Index **8**. According to the SMPTE ST-2084 PQ curve, Index 8 equals exactly **320.26 cd/m² (nits)**. This perfectly matches a standard 300-nit PC monitor without severe clipping.
@@ -95,6 +97,6 @@ This is a Dolby VSVDB (Version 2) payload based on the LG C1 profile, but heavil
 [HEVCVideoExtensionsfromDeviceManufacturer]: https://apps.microsoft.com/detail/9n4wgh0z6vhq
 [DolbyVisionExtensions]:                     https://apps.microsoft.com/detail/9pltg1lwphlf
 [DolbyVision]:                               https://apps.microsoft.com/detail/9mvmz93n61t9
-[CRU]:                                       https://customresolutionutility.net
+[CRU]:                                       https://www.monitortests.com/forum/Thread-Custom-Resolution-Utility-CRU
 [AWEDIDEditor]:                              https://www.analogway.com/products/aw-edid-editor
 [dvfw.netlify.app]:                          https://dvfw.netlify.app
