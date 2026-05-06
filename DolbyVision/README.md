@@ -106,12 +106,14 @@ You must slightly alter your HEX payload to force the driver into generic **Play
 4. Your new payload becomes `480377825e6d95`. 
 5. Update this in CRU and restart the driver. This bypasses the driver's block-list without affecting visual brightness.
 
+---
 
 HDR Setting > "Use Dolby Vision mode"
 ```
 .\vivetool.exe /enable /id:49793372
 .\vivetool.exe /enable /id:54586575
 ```
+
 
 
 [HEVCVideoExtensions]:                       https://apps.microsoft.com/detail/9nmzlz57r3t7
