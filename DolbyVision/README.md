@@ -44,7 +44,7 @@ By default, Dolby Vision is restricted to certified devices via encrypted ICC pr
 5. On the right panel, set the **IEEE OUI** to `53318` (or select *Dolby Laboratories* / `00 D0 46`).
 6. In the **Payload (HEX String)** box, paste the following custom LLDV payload:
    ```
-   480347825e6d95
+   480347825e6d95 or 480339825e6d95
    ```
    *(**Note:** This specific HEX is mathematically calculated for a **~320 nits** peak brightness display. See the "Payload Breakdown" section below for details).*
 7. Go to `File -> Save As...` and save it to your Desktop as `monitor_dv.bin`.
@@ -87,6 +87,26 @@ This is a Dolby VSVDB (Version 2) payload based on the LG C1 profile, but heavil
 * `5e6d95` : Color primaries (Rx, Ry, Gx, Gy, Bx, By). This matches ~100% sRGB / ~85% DCI-P3, which is the physical limit of most standard VA/IPS panels.
 
 Make sure you are using the official Netflix App or the "Movies & TV" app. Browsers (Chrome/Edge) do not support the Windows DV API.
+
+---
+
+### 📺 HDMI Black Screen/Green Tint/No DV
+If you are connecting your display via HDMI and experience a black screen or the system falls back to HDR10, you are likely hitting a **Driver Signature Match** issue.
+
+**The Cause:** GPU drivers (NVIDIA/AMD) have a hardcoded list of payloads for popular TVs. If the payload is a perfect match, the driver forces "TV-led" mode, which is often broken on PC HDMI.
+
+**The Fix (Manual Signature Break):**
+You must slightly alter your HEX payload to force the driver into generic **Player-led (LLDV)** mode.
+1. Take your 14-character payload (e.g., `480376825e6d95`).
+2. Locate the **3rd byte** (the 5th and 6th characters). In this example, it is `76`.
+3. Change this value by **1 bit** (usually by adding 1 to make an even number odd).
+   - `76` $\rightarrow$ `77`
+   - `60` $\rightarrow$ `61`
+   - `9e` $\rightarrow$ `9f`
+4. Your new payload becomes `480377825e6d95`. 
+5. Update this in CRU and restart the driver. This bypasses the driver's block-list without affecting visual brightness.
+
+
 
 [HEVCVideoExtensions]:                       https://apps.microsoft.com/detail/9nmzlz57r3t7
 [HEVCVideoExtensionsfromDeviceManufacturer]: https://apps.microsoft.com/detail/9n4wgh0z6vhq
