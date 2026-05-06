@@ -104,7 +104,7 @@ PnpLockdown = 1
 
 [Inst_Test]
 DelReg = DEL_AddReg
-AddReg = DisplayHDRLevel_400_12_AddReg,VESA_AddReg,DV_AddReg,FS2_AddReg,ACM_AddReg
+AddReg = VESA_400_12_AddReg,VESA_AddReg,DV_AddReg,FS2_AddReg,ACM_AddReg
 
 [DEL_AddReg]
 HKR,,DisplayHdrLevel
@@ -126,254 +126,254 @@ AddReg = VESA_AddReg,DV_AddReg,ACM_AddReg
 
 ; Inst 1.0
 [Inst_400_10]
-AddReg = DisplayHDRLevel_400_10_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_400_10_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_400_10_TB]
-AddReg = DisplayHDRLevel_400_10_TB_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_400_10_TB_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_400_10_DV]
-AddReg = DisplayHDRLevel_400_10_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_400_10_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_400_10_TB_DV]
-AddReg = DisplayHDRLevel_400_10_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_400_10_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_500_10_TB]
-AddReg = DisplayHDRLevel_500_10_TB_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_500_10_TB_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_500_10_TB_DV]
-AddReg = DisplayHDRLevel_500_10_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_500_10_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_600_10]
-AddReg = DisplayHDRLevel_600_10_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_600_10_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_600_10_DV]
-AddReg = DisplayHDRLevel_600_10_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_600_10_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_1000_10]
-AddReg = DisplayHDRLevel_1000_10_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_1000_10_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_1000_10_DV]
-AddReg = DisplayHDRLevel_1000_10_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_1000_10_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_1400_10]
-AddReg = DisplayHDRLevel_1400_10_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_1400_10_AddReg,VESA_AddReg,ACM_AddReg
 
 ; Inst 1.1
 [Inst_400_11]
-AddReg = DisplayHDRLevel_400_11_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_400_11_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_400_11_TB]
-AddReg = DisplayHDRLevel_400_11_TB_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_400_11_TB_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_400_11_DV]
-AddReg = DisplayHDRLevel_400_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_400_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_400_11_TB_DV]
-AddReg = DisplayHDRLevel_400_11_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_400_11_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_500_11]
-AddReg = DisplayHDRLevel_500_11_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_500_11_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_500_11_TB]
-AddReg = DisplayHDRLevel_500_11_TB_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_500_11_TB_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_500_11_DV]
-AddReg = DisplayHDRLevel_500_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_500_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_500_11_TB_DV]
-AddReg = DisplayHDRLevel_500_11_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_500_11_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_600_11]
-AddReg = DisplayHDRLevel_600_11_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_600_11_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_600_11_TB]
-AddReg = DisplayHDRLevel_600_11_TB_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_600_11_TB_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_600_11_DV]
-AddReg = DisplayHDRLevel_600_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_600_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_600_11_TB_DV]
-AddReg = DisplayHDRLevel_600_11_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_600_11_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_1000_11]
-AddReg = DisplayHDRLevel_1000_11_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_1000_11_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_1000_11_TB]
-AddReg = DisplayHDRLevel_1000_11_TB_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_1000_11_TB_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_1000_11_DV]
-AddReg = DisplayHDRLevel_1000_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_1000_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_1000_11_TB_DV]
-AddReg = DisplayHDRLevel_1000_11_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_1000_11_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_1400_11]
-AddReg = DisplayHDRLevel_1400_11_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_1400_11_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_2000_11]
-AddReg = DisplayHDRLevel_2000_11_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_2000_11_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_2000_11_DV]
-AddReg = DisplayHDRLevel_2000_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_2000_11_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 ; Inst 1.2
 [Inst_400_12]
-AddReg = DisplayHDRLevel_400_12_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_400_12_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_400_12_TB]
-AddReg = DisplayHDRLevel_400_12_TB_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_400_12_TB_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_400_12_DV]
-AddReg = DisplayHDRLevel_400_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_400_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_400_12_TB_DV]
-AddReg = DisplayHDRLevel_400_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_400_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_500_12]
-AddReg = DisplayHDRLevel_500_12_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_500_12_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_500_12_TB]
-AddReg = DisplayHDRLevel_500_12_TB_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_500_12_TB_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_500_12_DV]
-AddReg = DisplayHDRLevel_500_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_500_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_500_12_TB_DV]
-AddReg = DisplayHDRLevel_500_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_500_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_600_12]
-AddReg = DisplayHDRLevel_600_12_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_600_12_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_600_12_TB]
-AddReg = DisplayHDRLevel_600_12_TB_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_600_12_TB_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_600_12_DV]
-AddReg = DisplayHDRLevel_600_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_600_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_600_12_TB_DV]
-AddReg = DisplayHDRLevel_600_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_600_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_1000_12]
-AddReg = DisplayHDRLevel_1000_12_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_1000_12_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_1000_12_TB]
-AddReg = DisplayHDRLevel_1000_12_TB_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_1000_12_TB_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_1000_12_DV]
-AddReg = DisplayHDRLevel_1000_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_1000_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_1000_12_TB_DV]
-AddReg = DisplayHDRLevel_1000_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_1000_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_1400_12]
-AddReg = DisplayHDRLevel_1400_12_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_1400_12_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_1400_12_TB]
-AddReg = DisplayHDRLevel_1400_12_TB_AddReg,VESA_AddReg,ACM_AddReg
+AddReg = VESA_1400_12_TB_AddReg,VESA_AddReg,ACM_AddReg
 
 [Inst_1400_12_DV]
-AddReg = DisplayHDRLevel_1400_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_1400_12_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
 [Inst_1400_12_TB_DV]
-AddReg = DisplayHDRLevel_1400_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
+AddReg = VESA_1400_12_TB_AddReg,VESA_AddReg,DV_AddReg,ACM_AddReg
 
-; MODULES AND TECHNOLOGIES (GUIDs)
+; MODULES AND TECHNOLOGIES
 [VESA_AddReg]
 ; VESA DisplayHDR Certificate
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,E55026B6-496B-4ACC-B371-A1211D829ABD
 
 [DV_AddReg]
-; Dolby Vision Support
+; Dolby Vision Certificate
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,6363AA90-A651-4154-A9E1-2D765C08E68F,4DDABBE3-5BC1-4F5C-9AA8-D611BC96F6ED
+
+[FS2_AddReg]
+; AMD FreeSync Premium Pro Certificate
+HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,F9310F0E-93B2-4A58-8642-17358D8CB2E3
 
 [ACM_AddReg]
 ; Auto Color Management (ACM) for Windows 11
 HKR,,MicrosoftApprovedAcmSupport,%REG_DWORD%,0x1
 HKR,,EnableIntegratedPanelAcmByDefault,%REG_DWORD%,0x0
 
-[FS2_AddReg]
-; AMD FreeSync Premium Pro
-HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,F9310F0E-93B2-4A58-8642-17358D8CB2E3
-
 ; KEYS 1.0
-[DisplayHDRLevel_400_10_AddReg]
+[VESA_400_10_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,20C5A9AF-CD1A-42B1-AA71-4C96A273DEF1
 
-[DisplayHDRLevel_400_10_TB_AddReg]
+[VESA_400_10_TB_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,1A6CBAFB-15FF-4CF0-AD75-12360E9B9F4A
 
-[DisplayHDRLevel_500_10_TB_AddReg]
+[VESA_500_10_TB_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,86413F8C-0CDB-4D49-81F7-06BB64A8FED1
 
-[DisplayHDRLevel_600_10_AddReg]
+[VESA_600_10_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,D4C5928E-9488-46AF-8DA8-4F996EE4177F
 
-[DisplayHDRLevel_1000_10_AddReg]
+[VESA_1000_10_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,78137DFC-3400-412E-B0AF-08120754623A
 
-[DisplayHDRLevel_1400_10_AddReg]
+[VESA_1400_10_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,670A25C9-E253-4AC9-A517-D97C8338C0D4
 
 ; KEYS 1.1
-[DisplayHDRLevel_400_11_AddReg]
+[VESA_400_11_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,0D710BC2-6368-4EB2-A829-CBBD45CE3BD2
 
-[DisplayHDRLevel_400_11_TB_AddReg]
+[VESA_400_11_TB_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,FB4CB49B-F5A8-4084-800C-EB38E9CA16DE
 
-[DisplayHDRLevel_500_11_AddReg]
+[VESA_500_11_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,C47B4522-B803-47B0-831F-2ED63B56CE79
 
-[DisplayHDRLevel_500_11_TB_AddReg]
+[VESA_500_11_TB_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,3B6DAA9E-3794-4D85-897E-93AE990D275D
 
-[DisplayHDRLevel_600_11_AddReg]
+[VESA_600_11_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,7134A821-9254-4AF4-9973-95B3FCF720CC
 
-[DisplayHDRLevel_600_11_TB_AddReg]
+[VESA_600_11_TB_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,9AD0FB30-006E-49FE-AA15-8F65F28A476B
 
-[DisplayHDRLevel_1000_11_AddReg]
+[VESA_1000_11_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,C624859D-304A-4DE8-86DC-8BE82B79527A
 
-[DisplayHDRLevel_1000_11_TB_AddReg]
+[VESA_1000_11_TB_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,9C5D5F59-1FA8-4D2B-87DD-2E3B2BFF37D5
 
-[DisplayHDRLevel_1400_11_AddReg]
+[VESA_1400_11_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,3CA0903F-99E0-46FB-9BEC-DE023507BEF0
 
-[DisplayHDRLevel_2000_11_AddReg]
+[VESA_2000_11_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,80931144-16F1-4710-91F4-2E66713B134D
 
 ; KEYS 1.2
-[DisplayHDRLevel_400_12_AddReg]
+[VESA_400_12_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,86884BBC-78EC-4EA7-A0CD-72A73CC15726
 
-[DisplayHDRLevel_400_12_TB_AddReg]
+[VESA_400_12_TB_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,F0DD8B25-7AB3-4ADB-804A-13D3FA901580
 
-[DisplayHDRLevel_500_12_AddReg]
+[VESA_500_12_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,EDCB5221-FB58-4FA6-8822-30B13F11C386
 
-[DisplayHDRLevel_500_12_TB_AddReg]
+[VESA_500_12_TB_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,E7E7349F-EF0A-4EF7-A561-C8F633F27463
 
-[DisplayHDRLevel_600_12_AddReg]
+[VESA_600_12_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,81FB67D4-F5CE-472B-8132-FE18529A1D5D
 
-[DisplayHDRLevel_600_12_TB_AddReg]
+[VESA_600_12_TB_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,2EC6BF0A-4FBE-4C0F-9091-05D43E3F14A5
 
-[DisplayHDRLevel_1000_12_AddReg]
+[VESA_1000_12_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,295ED55D-DDF4-44BE-AED9-E6D932D65FF4
 
-[DisplayHDRLevel_1000_12_TB_AddReg]
+[VESA_1000_12_TB_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,0E946CCB-FE35-4D22-A7E8-568FB06D145F
 
-[DisplayHDRLevel_1400_12_AddReg]
+[VESA_1400_12_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,77CF999C-6350-455C-822C-93FA72CE8C58
 
-[DisplayHDRLevel_1400_12_TB_AddReg]
+[VESA_1400_12_TB_AddReg]
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,A88282F2-289F-4A36-823A-F83CB2538B2C
 
 [Strings]
