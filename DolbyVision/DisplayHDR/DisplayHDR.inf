@@ -20,7 +20,7 @@ PnpLockdown = 1
 
 [Inst_Test]
 DelReg = DEL_AddReg
-AddReg = VESA_AddReg,DV_AddReg,FS2_AddReg,ACM_AddReg
+AddReg = VESA_400_12_AddReg,VESA_AddReg,DV_AddReg,FS2_AddReg,ACM_AddReg
 
 [DEL_AddReg]
 HKR,,DisplayHdrLevel
@@ -33,12 +33,17 @@ HKR,,EnableIntegratedPanelAcmByDefault
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,E55026B6-496B-4ACC-B371-A1211D829ABD
 
 [DV_AddReg]
-; Dolby Vision Certificate
+; Dolby Vision Certificate 6363AA90-A651-4154-A9E1-2D765C08E68F
+; 4DDABBE3-5BC1-4F5C-9AA8-D611BC96F6ED ?
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,6363AA90-A651-4154-A9E1-2D765C08E68F,4DDABBE3-5BC1-4F5C-9AA8-D611BC96F6ED
 
 [FS2_AddReg]
 ; AMD FreeSync Premium Pro Certificate
 HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,F9310F0E-93B2-4A58-8642-17358D8CB2E3
+
+[NVGSU_AddReg]
+; NVIDIA G-Sync Ultimate Certificate
+HKR,,DisplayHdrLevel,%REG_MULTI_SZ_APPEND%,35FBD985-74F0-4271-AC61-295F11D71AEF
 
 [ACM_AddReg]
 ; Auto Color Management (ACM) for Windows 11
