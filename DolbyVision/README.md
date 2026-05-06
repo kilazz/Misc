@@ -13,12 +13,12 @@ By default, Dolby Vision is restricted to certified devices via encrypted ICC pr
 3. **Registry Override (`EDRMaxLuminance`):** VESA profiles assume you have 400+ nits display. If you apply that to a 300 nits monitor, highlights will clip. We use a Windows Media Foundation registry hack to hard-limit the OS tone mapping to exactly **300 nits**.
 
 ## 🛠️ Prerequisites
-* **Windows 10 / 11** (with HDR enabled in Display Settings).
+* **Windows 10/11** (with HDR enabled in Display Settings).
 * [HEVC Video Extensions][HEVCVideoExtensions]
 * [HEVC Video Extensions from Device Manufacturer][HEVCVideoExtensionsfromDeviceManufacturer]
 * [Dolby Vision Extensions][DolbyVisionExtensions]
 * [Dolby Vision][DolbyVision]
-* [Custom Resolution Utility (CRU)][CRU]
+* [Custom Resolution Utility][CRU]
 * [AW EDID Editor][AWEDIDEditor]
 * [dvfw.netlify.app][dvfw.netlify.app]
 
@@ -86,12 +86,7 @@ This is a Dolby VSVDB (Version 2) payload based on the LG C1 profile, but heavil
 * `82`     : Interface Mode. This bit forces **Standard + Low-Latency (LLDV)** mode, commanding the GPU to handle the tone-mapping.
 * `5e6d95` : Color primaries (Rx, Ry, Gx, Gy, Bx, By). This matches ~100% sRGB / ~85% DCI-P3, which is the physical limit of most standard VA/IPS panels.
 
-
-
-1. Make sure you are using the official Netflix App or the "Movies & TV" app. Browsers (Chrome/Edge) do not support the Windows DV API.
-2. Because we forced the `LLDV` flag in the EDID, the desktop GPU takes over the processing. It bypasses the old laptop requirement of needing an Intel iGPU to handle the Dolby Vision license.
-
-
+Make sure you are using the official Netflix App or the "Movies & TV" app. Browsers (Chrome/Edge) do not support the Windows DV API.
 
 [HEVCVideoExtensions]:                       https://apps.microsoft.com/detail/9nmzlz57r3t7
 [HEVCVideoExtensionsfromDeviceManufacturer]: https://apps.microsoft.com/detail/9n4wgh0z6vhq
